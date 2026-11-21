@@ -20,6 +20,7 @@ permissions:
 
 env:
   VERSION: ${{ inputs.version }}
+  EXPECTED_CERT_SHA256: '91:BC:7B:45:F7:21:2A:ED:01:4C:AE:52:8B:4A:A9:A8:B6:89:C4:B6:5E:BC:B1:1D:49:09:13:B1:D6:D8:62:AF'
 
 jobs:
   preflight:
@@ -128,7 +129,8 @@ jobs:
       - name: Verify signature, package, version and ABI
         run: |
           cp app/build/app/outputs/flutter-apk/app-release.apk "KZCompanion-Android-arm64-v$VERSION.apk"
-          bash scripts/verify-apk.sh "KZCompanion-Android-arm64-v$VERSION.apk" "$VERSION"
+          # EXPECTED_CERT_SHA256 is the public SHA-256 fingerprint of the release certificate.
+          bash scripts/verify-apk.sh "KZCompanion-Android-arm64-v$VERSION.apk" "$VERSION" dev.kzstudio.kzcompanion "$EXPECTED_CERT_SHA256"
 
       - name: Remove signing material
         if: always()

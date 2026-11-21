@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Verifies a release APK: signature valid, NOT the debug key, expected package, version and ARM64-only.
-# Usage: scripts/verify-apk.sh <apk> <expected-version> [expected-package]
+# Usage: scripts/verify-apk.sh <apk> <expected-version> [expected-package] [expected-cert-sha256]
+# The optional fingerprint is hex, with or without colons, any case. It is public information.
 # Needs apksigner and aapt2 (Android build-tools) on PATH, or ANDROID_HOME / ANDROID_SDK_ROOT set.
 set -euo pipefail
-apk="${1:?apk path}"; want_ver="${2:?expected version, e.g. 1.0.0}"; want_pkg="${3:-dev.kzstudio.kzcompanion}"
+apk="${1:?apk path}"; want_ver="${2:?expected version, e.g. 1.0.0}"; want_pkg="${3:-dev.kzstudio.kzcompanion}"; want_fp="${4:-}"
 
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/AppData/Local/Android/Sdk}}"
 bt="$(ls -d "$sdk"/build-tools/*/ 2>/dev/null | sort -V | tail -1 || true)"
@@ -15,6 +16,14 @@ certs="$("$apksigner" verify --verbose --print-certs "$apk")" || { echo "FAIL: s
 echo "$certs" | grep -E "Verified using|Signer #1 certificate (DN|SHA-256)" || true
 if echo "$certs" | grep -qiE "CN=Android Debug|O=Android"; then echo "FAIL: APK is signed with the Android debug key"; exit 1; fi
 echo "$certs" | grep -q "Verified using v2 scheme (APK Signature Scheme v2): true" || { echo "FAIL: no v2 signature"; exit 1; }
+
+if [ -n "$want_fp" ]; then
+  got_fp="$(echo "$certs" | sed -n 's/^\(Signer #1\|V[0-9.]* Signer:\) certificate SHA-256 digest: //p' | head -1 | tr -d ':' | tr 'a-f' 'A-F')"
+  exp_fp="$(echo "$want_fp" | tr -d ':' | tr 'a-f' 'A-F')"
+  [ -n "$got_fp" ] || { echo "FAIL: could not read the signing certificate fingerprint"; exit 1; }
+  [ "$got_fp" = "$exp_fp" ] || { echo "FAIL: signing certificate SHA-256 is $got_fp, expected $exp_fp"; exit 1; }
+  echo "Certificate fingerprint matches the expected release certificate"
+fi
 
 badging="$("$aapt2" dump badging "$apk")"
 pkg="$(echo "$badging" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")"

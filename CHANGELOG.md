@@ -6,7 +6,7 @@ All notable changes to KZ Companion are recorded here. Release entries are writt
 History of the upstream project this was forked from (DroidDeck 1.0 to 1.14.0, by Gabriel Freitas) is kept in
 [CHANGELOG-upstream-DroidDeck.md](CHANGELOG-upstream-DroidDeck.md).
 
-## 1.0.0 (first public release; not yet published)
+## 1.0.0 (2026-11-21)
 
 KZ Companion 1.0.0 is the first release under the KZ Companion name. It replaces the DroidDeck button deck
 with a dashboard and remote control for a Windows PC.
@@ -31,3 +31,6 @@ with a dashboard and remote control for a Windows PC.
 - Traffic between phone and PC is plain HTTP on the local network. No end-to-end encryption.
 - The Windows installer is not code-signed.
 - Apple Music support is unverified. Spotify, OBS and Discord have not been exercised against live services in release testing.
+- CPU temperature and power need the optional PawnIO driver and administrator rights.
+- The Android APK is ARM64-only and release-signed; it cannot be installed over a debug-signed build.
+- The license of the Android app (`app/`) is not settled upstream (Apache-2.0 at the repository root, GPL-3.0 in `app/LICENSE`); see `NOTICE` and `docs/license-audit.md`.
