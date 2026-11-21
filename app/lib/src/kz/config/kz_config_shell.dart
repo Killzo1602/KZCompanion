@@ -5,7 +5,14 @@ import 'package:flutter/material.dart';
 
 /// Configurador do KZ Companion (navegador no próprio PC): aplicativos, integrações e aparência.
 class KzConfigShell extends StatefulWidget {
-  const KzConfigShell({super.key});
+  const KzConfigShell({super.key, this.pages});
+
+  /// Os unicos destinos do configurador do Windows. Buttons, Profiles, o editor do deck antigo e a
+  /// importacao do Stream Deck foram removidos de proposito (546ed96): nao voltam por aqui.
+  static const destinationLabels = ['Applications', 'Integrations', 'Appearance'];
+
+  /// Só para testes: páginas no lugar das reais (que precisam do PC).
+  final List<Widget>? pages;
 
   @override
   State<KzConfigShell> createState() => _KzConfigShellState();
@@ -17,11 +24,12 @@ class _KzConfigShellState extends State<KzConfigShell> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final pages = <Widget>[
-      const AppsConfigPage(),
-      const KzIntegrationsPage(),
-      const KzAppearancePage(),
-    ];
+    final pages = widget.pages ??
+        const <Widget>[
+          AppsConfigPage(),
+          KzIntegrationsPage(),
+          KzAppearancePage(),
+        ];
     return Scaffold(
       body: Row(children: [
         NavigationRail(

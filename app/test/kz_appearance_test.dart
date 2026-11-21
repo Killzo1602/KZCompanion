@@ -76,13 +76,14 @@ void main() {
     await ThemeController.instance.update(const ThemeSettings());
   });
 
-  testWidgets('Integrations lists Discord only, without the old DroidDeck screens', (tester) async {
+  testWidgets('Integrations page lists the catalog, with no old DroidDeck screens', (tester) async {
     await tester.pumpWidget(MaterialApp(
       theme: buildAppTheme(const ThemeSettings(), Brightness.dark),
-      home: KzIntegrationsPage(signalR: SignalRService()),
+      home: KzIntegrationsPage(signalR: SignalRService(), canConfigure: false),
     ));
     expect(find.text('Discord'), findsOneWidget);
-    for (final legacy in ['OBS', 'Tuya', 'Twitch', 'Spotify', 'Home Assistant']) {
+    expect(find.text('Spotify'), findsOneWidget);
+    for (final legacy in ['Buttons', 'Profiles', 'Automations', 'Stream Deck']) {
       expect(find.textContaining(legacy), findsNothing);
     }
   });

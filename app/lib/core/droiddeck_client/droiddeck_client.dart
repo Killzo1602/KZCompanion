@@ -290,6 +290,52 @@ class DroidDeckClient {
     return (r.data as List).map((e) => (e as Map).cast<String, dynamic>()).toList();
   }
 
+  // ---- Integracoes (catalogo) ----
+
+  /// Integracoes que o PC conhece, com o estado real da conexao: [{name, title, connected, account}].
+  Future<List<Map<String, dynamic>>> getIntegrations() async {
+    final r = await _dio.get('/api/integrations');
+    return (r.data as List).map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
+
+  Future<Map<String, dynamic>> getIntegration(String name) async {
+    final r = await _dio.get('/api/integrations/$name');
+    return (r.data as Map).cast<String, dynamic>();
+  }
+
+  /// Grava os campos e inicia o login (no navegador do PC). So o configurador no PC pode chamar.
+  Future<Map<String, dynamic>> configureIntegration(String name, Map<String, String> fields) async {
+    final r = await _dio.post('/api/integrations/$name', data: fields);
+    return (r.data as Map).cast<String, dynamic>();
+  }
+
+  Future<Map<String, dynamic>> logoutIntegration(String name) async {
+    final r = await _dio.delete('/api/integrations/$name');
+    return (r.data as Map).cast<String, dynamic>();
+  }
+
+  Future<void> setObsConfig({required String host, required int port, String? password}) async {
+    await _dio.post('/api/obs/config', data: {
+      'host': host,
+      'port': port,
+      if (password != null && password.isNotEmpty) 'password': password,
+    });
+  }
+
+  Future<Map<String, dynamic>> connectObs() async {
+    final r = await _dio.post('/api/obs/connect');
+    return (r.data as Map).cast<String, dynamic>();
+  }
+
+  Future<Map<String, dynamic>?> getObsState() async {
+    try {
+      final r = await _dio.get('/api/obs/state');
+      return (r.data as Map).cast<String, dynamic>();
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ---- Aplicativos abertos no PC (secao "Running now") ----
 
   Future<List<Map<String, dynamic>>> getRunningApps() async {

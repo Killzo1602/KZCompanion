@@ -75,7 +75,13 @@
 
   <!-- Sem o index.html do configurador, "/" respondia 401 e a janela abria vazia. -->
   <Target Name="RequireWebBuild" BeforeTargets="PrepareForPublish">
-    <Error Condition="!Exists('$(ProjectDir)wwwroot/index.html')" Text="wwwroot/index.html ausente: rode scripts/deploy-web.ps1 (flutter build web) antes de publicar." />
+    <Error Condition="!Exists('$(ProjectDir)wwwroot/index.html')" Text="wwwroot/index.html ausente: rode scripts/publish-windows.ps1 (ou scripts/deploy-web.ps1) antes de publicar." />
+    <!-- wwwroot nao vai para o git e fica velho em silencio: um front-end sem o menu atual (ou com o deck antigo) nao e publicado. -->
+    <PropertyGroup>
+      <KzWebJs>$([System.IO.File]::ReadAllText('$(ProjectDir)wwwroot/main.dart.js'))</KzWebJs>
+      <KzWebStale Condition="!$(KzWebJs.Contains('Integrations')) Or $(KzWebJs.Contains('Import from Stream Deck')) Or $(KzWebJs.Contains('Automations'))">true</KzWebStale>
+    </PropertyGroup>
+    <Error Condition="'$(KzWebStale)' == 'true'" Text="DroidDeck/wwwroot esta velho (sem Integrations, ou com o deck antigo). Rode scripts/publish-windows.ps1." />
   </Target>
 
 </Project>

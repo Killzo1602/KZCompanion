@@ -26,6 +26,8 @@ namespace DroidDeck.Controllers
         [HttpPost("config")]
         public IActionResult Config([FromBody] ObsConfigDto? dto)
         {
+            if (!DroidDeck.Services.ActionPolicy.IsLocal(HttpContext.Connection))
+                return StatusCode(403, new { error = "Credentials are entered on the PC only." });
             var cfg = _obs.LoadConfig();
             if (!string.IsNullOrWhiteSpace(dto?.Host)) cfg.Host = dto!.Host!;
             if (dto?.Port is int p && p > 0) cfg.Port = p;

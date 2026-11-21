@@ -28,6 +28,8 @@ namespace DroidDeck.Controllers
         [HttpPost("config")]
         public IActionResult Config([FromBody] CredsDto? dto)
         {
+            if (!DroidDeck.Services.ActionPolicy.IsLocal(HttpContext.Connection))
+                return StatusCode(403, new { error = "Credentials are entered on the PC only." });
             if (string.IsNullOrWhiteSpace(dto?.ClientId) || string.IsNullOrWhiteSpace(dto?.ClientSecret))
                 return BadRequest(L.T("clientId e clientSecret obrigatórios"));
             _discord.SetCredentials(dto.ClientId!, dto.ClientSecret!);

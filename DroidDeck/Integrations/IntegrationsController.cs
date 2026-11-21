@@ -45,6 +45,9 @@ namespace DroidDeck.Controllers
         public async Task<ActionResult<IntegrationStatus>> Configure(string name, [FromBody] Dictionary<string, string>? fields)
         {
             if (!_integrations.TryGetValue(name, out var i)) return NotFound();
+            // Tokens, senhas e enderecos que o PC vai chamar so se digitam no proprio PC.
+            if (!DroidDeck.Services.ActionPolicy.IsLocal(HttpContext.Connection))
+                return StatusCode(403, new { error = "Credentials are entered on the PC only." });
             try
             {
                 return Ok(Translated(await i.ConfigureAsync(fields ?? new())));
@@ -61,6 +64,8 @@ namespace DroidDeck.Controllers
         public async Task<ActionResult> Logout(string name)
         {
             if (!_integrations.TryGetValue(name, out var i)) return NotFound();
+            if (!DroidDeck.Services.ActionPolicy.IsLocal(HttpContext.Connection))
+                return StatusCode(403, new { error = "Accounts are managed on the PC only." });
             await i.LogoutAsync();
             return Ok(Translated(i.GetStatus()));
         }
