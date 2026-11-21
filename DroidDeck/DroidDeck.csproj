@@ -4,13 +4,14 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <ApplicationIcon>droiddeck.ico</ApplicationIcon>
+    <ApplicationIcon>kzcompanion.ico</ApplicationIcon>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
     <PackageReference Include="LocalStorage" Version="2.1.0" />
     <PackageReference Include="MQTTnet" Version="4.3.7.1207" />
     <PackageReference Include="NAudio" Version="2.2.1" />
@@ -19,7 +20,7 @@
     <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.4" />
     <PackageReference Include="NLog.Extensions.Logging" Version="5.0.0" />
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="10.0.2" />
-    <PackageReference Include="System.Management" Version="8.0.0" />
+    <PackageReference Include="System.Management" Version="10.0.2" />
     <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
@@ -29,7 +30,7 @@
 
   <ItemGroup>
     <!-- Bandeja e janelas carregam o tamanho exato daqui (ver AppIcon.cs). -->
-    <EmbeddedResource Include="droiddeck.ico" LogicalName="DroidDeck.droiddeck.ico" />
+    <EmbeddedResource Include="kzcompanion.ico" LogicalName="DroidDeck.droiddeck.ico" />
     <!-- Um arquivo por idioma, os mesmos do app: o PC acha os idiomas por eles. -->
     <EmbeddedResource Include="..\app\assets\i18n\*.json" LogicalName="i18n.%(Filename).json" />
   </ItemGroup>

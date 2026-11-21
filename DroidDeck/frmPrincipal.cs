@@ -14,7 +14,7 @@ namespace DroidDeck
     public partial class frmPrincipal : Form
     {
         private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        private const string AppRunName = "DroidDeck";
+        private const string AppRunName = "KZCompanion";
         private const string WebUrl = "http://localhost:4787/";
 
         private ToolStripMenuItem _autoStartItem = null!;
@@ -47,7 +47,7 @@ namespace DroidDeck
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            ntiTray.ShowBalloonTip(3000, "DroidDeck", L.Ui("Rodando na bandeja — servidor em {url}", ("url", WebUrl)), ToolTipIcon.Info);
+            ntiTray.ShowBalloonTip(3000, "KZ Companion", L.Ui("Rodando na bandeja — servidor em {url}", ("url", WebUrl)), ToolTipIcon.Info);
 
             if (Program.FirstRunAfterInstall)
                 BeginInvoke(FirstRunSetup);
@@ -71,16 +71,16 @@ namespace DroidDeck
             var answer = MessageBox.Show(
                 L.Ui("Para o celular encontrar e conectar no DroidDeck, o Firewall do Windows precisa liberar as portas {tcp} (TCP) e {udp} (UDP), só para a sua rede local.\n\nLiberar agora? O Windows vai pedir permissão de administrador.",
                     ("tcp", Lib.PairingInfo.Port), ("udp", Lib.FirewallSetup.DiscoveryPort)),
-                "DroidDeck", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                "KZ Companion", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (answer == DialogResult.Yes) AllowFirewall();
         }
 
         private void AllowFirewall()
         {
             if (Lib.FirewallSetup.AddRules())
-                ntiTray.ShowBalloonTip(3000, "DroidDeck", L.Ui("Firewall liberado para a rede local."), ToolTipIcon.Info);
+                ntiTray.ShowBalloonTip(3000, "KZ Companion", L.Ui("Firewall liberado para a rede local."), ToolTipIcon.Info);
             else
-                ntiTray.ShowBalloonTip(5000, "DroidDeck",
+                ntiTray.ShowBalloonTip(5000, "KZ Companion",
                     L.Ui("O firewall não foi alterado. Você pode tentar de novo pelo menu da bandeja."), ToolTipIcon.Warning);
             _firewallItem.Checked = Lib.FirewallSetup.RulesExist();
         }
@@ -109,7 +109,7 @@ namespace DroidDeck
                 catch (Exception ex)
                 {
                     Lib.Log.Error($"Falha ao baixar o adb: {ex.Message}");
-                    ntiTray.ShowBalloonTip(5000, "DroidDeck", L.Ui("Não foi possível baixar o adb. Tente de novo mais tarde."), ToolTipIcon.Warning);
+                    ntiTray.ShowBalloonTip(5000, "KZ Companion", L.Ui("Não foi possível baixar o adb. Tente de novo mais tarde."), ToolTipIcon.Warning);
                     _usbItem.Enabled = true;
                     UpdateUsbItem();
                     return;
@@ -118,7 +118,7 @@ namespace DroidDeck
             }
             Lib.UsbBridge.Enabled = true;
             UpdateUsbItem();
-            ntiTray.ShowBalloonTip(5000, "DroidDeck",
+            ntiTray.ShowBalloonTip(5000, "KZ Companion",
                 L.Ui("Conexão USB ligada. Ligue a depuração USB no celular e aceite o aviso que aparecer nele."), ToolTipIcon.Info);
         }
 
@@ -136,7 +136,7 @@ namespace DroidDeck
         private void OnUpdateReady(string version)
         {
             _updateItem.Text = L.Ui("Reiniciar para atualizar (v{version})", ("version", version));
-            ntiTray.ShowBalloonTip(5000, "DroidDeck",
+            ntiTray.ShowBalloonTip(5000, "KZ Companion",
                 L.Ui("A versão {version} foi baixada e entra na próxima vez que o DroidDeck abrir. Para atualizar agora, use o menu da bandeja.", ("version", version)), ToolTipIcon.Info);
         }
 
@@ -161,7 +161,7 @@ namespace DroidDeck
             if (version == null)
             {
                 _updateItem.Text = L.Ui("Procurar atualização");
-                ntiTray.ShowBalloonTip(3000, "DroidDeck",
+                ntiTray.ShowBalloonTip(3000, "KZ Companion",
                     L.Ui("Você está na versão mais recente ({version}).", ("version", updater.CurrentVersion)), ToolTipIcon.Info);
             }
         }
@@ -208,7 +208,7 @@ namespace DroidDeck
 
             // Copia instalada: procura e aplica atualizacoes. Zip/dev: abre a pagina da release.
             var version = Program.Updater.CurrentVersion;
-            var versionItem = new ToolStripMenuItem(version != null ? $"DroidDeck v{version}" : L.Ui("DroidDeck (sem instalador)"))
+            var versionItem = new ToolStripMenuItem(version != null ? $"KZ Companion v{version}" : L.Ui("DroidDeck (sem instalador)"))
             {
                 Enabled = false,
             };

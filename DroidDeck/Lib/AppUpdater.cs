@@ -16,7 +16,7 @@ namespace DroidDeck.Lib
     /// </summary>
     public class AppUpdater
     {
-        public const string RepoUrl = "https://github.com/ggfto/DroidDeck";
+        public const string RepoUrl = "https://github.com/Killzo1602/KZCompanion";
 
         private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(6);
 

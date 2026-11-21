@@ -62,7 +62,7 @@ namespace DroidDeck
             // Uma instancia so. A segunda nao consegue a porta 4787 mas ficava viva na bandeja,
             // e se pegasse a vez no boot disputaria o pipe do Discord e o push da Tuya com a
             // primeira. DROIDDECK_DATA_DIR separa as instancias de teste.
-            var instanceName = @"Local\DroidDeck.Instance." +
+            var instanceName = @"Local\KZCompanion.Instance." +
                 (Environment.GetEnvironmentVariable("DROIDDECK_DATA_DIR") ?? "default").Replace('\\', '/');
             using var instance = new Mutex(true, instanceName, out var firstInstance);
             if (!firstInstance) return;
@@ -310,3 +310,4 @@ namespace DroidDeck
         }
     }
 }
+

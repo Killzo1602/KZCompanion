@@ -1,11 +1,11 @@
-{
-    "name": "DroidDeck",
-    "short_name": "DroidDeck",
+﻿{
+    "name": "KZ Companion",
+    "short_name": "KZ Companion",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0D0D0F",
-    "theme_color": "#0D0D0F",
-    "description": "DroidDeck — seu deck de botões para o PC.",
+    "background_color": "#101216",
+    "theme_color": "#101216",
+    "description": "KZ Companion — seu deck de botões para o PC.",
     "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
@@ -33,3 +33,4 @@
         }
     ]
 }
+

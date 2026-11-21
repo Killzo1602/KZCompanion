@@ -20,11 +20,11 @@ namespace DroidDeck.Lib
             Environment.GetEnvironmentVariable(DataDirEnvVar) is { Length: > 0 } dir ? dir : null;
 
         public static string LocalDir => Ensure(Override ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DroidDeck"));
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "KZCompanion"));
 
         public static string RoamingDir => Ensure(Override is { } dir
             ? Path.Combine(dir, "Roaming")
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "DroidDeck"));
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "KZCompanion"));
 
         private static string Ensure(string dir)
         {

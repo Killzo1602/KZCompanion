@@ -19,6 +19,8 @@ namespace DroidDeck.Services
         private readonly ILogger<SystemMonitorService> _logger;
         private readonly IHubContext<DeckHub> _hubContext;
         private readonly MediaControlService _media;
+        private readonly HardwareSensors _sensors;
+        private SystemStats? _lastSensors;
         private PerformanceCounter? _cpuCounter;
 
         // Estado para throughput de rede (deltas por segundo).
@@ -38,11 +40,12 @@ namespace DroidDeck.Services
         private List<DiskStat>? _disks;
         private const int GpuRescanEveryTicks = 30;
 
-        public SystemMonitorService(ILogger<SystemMonitorService> logger, IHubContext<DeckHub> hubContext, MediaControlService media)
+        public SystemMonitorService(ILogger<SystemMonitorService> logger, IHubContext<DeckHub> hubContext, MediaControlService media, HardwareSensors sensors)
         {
             _logger = logger;
             _hubContext = hubContext;
             _media = media;
+            _sensors = sensors;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -112,6 +115,18 @@ namespace DroidDeck.Services
                         GpuUsage = SampleGpu(),
                         Disks = tick % DiskEveryTicks == 0 || _disks == null ? (_disks = SampleDisks()) : _disks,
                     };
+
+                    // Sensores (LibreHardwareMonitor) a cada 2 s; nos outros ticks repete a última leitura.
+                    if (tick % 2 == 0 || _lastSensors == null)
+                    {
+                        var s = new SystemStats();
+                        _sensors.Fill(s);
+                        _lastSensors = s;
+                    }
+                    var ls = _lastSensors;
+                    stats.CpuTemp = ls.CpuTemp; stats.CpuPower = ls.CpuPower; stats.GpuTemp = ls.GpuTemp;
+                    stats.GpuHotspot = ls.GpuHotspot; stats.GpuPower = ls.GpuPower; stats.SsdTemp = ls.SsdTemp;
+                    stats.Drives = ls.Drives; stats.Fans = ls.Fans;
 
                     // Broadcast to clients listening on "ReceiveSystemStats"
                     await _hubContext.Clients.All.SendAsync("ReceiveSystemStats", stats, cancellationToken: stoppingToken);

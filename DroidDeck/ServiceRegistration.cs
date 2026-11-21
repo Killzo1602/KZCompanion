@@ -15,6 +15,8 @@ namespace DroidDeck
         public static IServiceCollection AddDeckCore(this IServiceCollection services)
         {
             services.AddSingleton<IAudioControlService, AudioControlService>();
+            services.AddSingleton<AppLibrary>();
+            services.AddSingleton<HardwareSensors>();
             services.AddSingleton<IAppActivator, AppActivator>();
             services.AddSingleton<MediaControlService>();
             services.AddSingleton<StreamDeckConfigService>();
