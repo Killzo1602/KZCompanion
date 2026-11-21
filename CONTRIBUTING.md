@@ -32,7 +32,7 @@ To produce a Windows build that includes a fresh web configurator, use `scripts\
 ## Pull requests
 
 - Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`...).
-  Versions and the changelog are generated from them.
+  They keep the history readable and feed the changelog and release notes.
 - Keep `dotnet test`, `flutter analyze` and `flutter test` green. Say so in the PR if a test cannot run on your machine.
 - User-facing text goes through `tr("...")` in the app and `L.T("...")` / `L.Ui("...")` on the PC, so it can be translated.
 - Actions that run code or reach the network from the PC must be listed as privileged in `ActionPolicy`.

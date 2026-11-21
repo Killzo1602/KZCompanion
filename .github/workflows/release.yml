@@ -1,51 +1,57 @@
 name: Release
 
-# Disparo MANUAL (Actions -> Release -> Run workflow). O semantic-release decide a
-# versão a partir dos commits (feat -> minor, fix -> patch, BREAKING -> major),
-# gera o CHANGELOG, cria a tag + a Release e anexa o backend (.zip) e o app (.apk).
+# Manual only: Actions -> Release -> Run workflow, with the version to publish (for example 1.0.0).
+#
+# Safety rules enforced here:
+#   * the tag v<version> must not exist yet, and docs/release-notes/v<version>.md must exist;
+#   * the Android release keystore secrets must exist; a build that would be debug-signed fails;
+#   * the Windows front-end is rebuilt from source and compared byte for byte with what the installer contains;
+#   * the release is created as a DRAFT, the annotated tag is pushed, and only then is it published.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without the v (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
 
 permissions:
   contents: write
-  issues: write
-  pull-requests: write
+
+env:
+  VERSION: ${{ inputs.version }}
 
 jobs:
-  # O instalador (Velopack) precisa saber a versao ANTES de empacotar, mas quem decide a
-  # versao e o semantic-release, la no fim. O dry-run calcula a mesma versao sem publicar.
-  version:
-    name: Próxima versão
+  preflight:
+    name: Preflight
     runs-on: ubuntu-24.04
-    outputs:
-      version: ${{ steps.next.outputs.version }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-
-      - run: npm install
-
-      - id: next
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check version, tag and release notes
         run: |
-          npx semantic-release --dry-run | tee dry-run.log
-          version=$(grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+' dry-run.log || true)
-          echo "Próxima versão: ${version:-nenhuma}"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::version must look like 1.0.0"; exit 1; }
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then echo "::error::tag v$VERSION already exists"; exit 1; fi
+          [ -f "docs/release-notes/v$VERSION.md" ] || { echo "::error::docs/release-notes/v$VERSION.md is missing"; exit 1; }
+          grep -q "^version: $VERSION+" app/pubspec.yaml || { echo "::error::app/pubspec.yaml version is not $VERSION"; exit 1; }
 
-  backend:
-    name: Backend (Windows .exe)
-    needs: version
+      - name: Check Android signing secrets exist
+        env:
+          A: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          B: ${{ secrets.ANDROID_KEY_ALIAS }}
+          C: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          D: ${{ secrets.ANDROID_STORE_PASSWORD }}
+        run: |
+          for n in A B C D; do
+            [ -n "${!n}" ] || { echo "::error::an ANDROID_* signing secret is missing. Run scripts/new-android-keystore.ps1 (see docs/android-signing.md)."; exit 1; }
+          done
+
+  windows:
+    name: Windows installer
+    needs: preflight
     runs-on: windows-latest
-    env:
-      # Sem commit que gere release, empacota com uma versao qualquer: nada e publicado.
-      VERSION: ${{ needs.version.outputs.version || '0.0.0' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -54,54 +60,35 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Build do configurador web
-        working-directory: app
-        run: |
-          flutter pub get
-          flutter build web --release
-
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '8.0.x'
 
-      - name: Testes (uma release nunca sai com teste quebrado)
+      - name: Backend tests (a release never ships with a failing test)
         run: dotnet test DroidDeck.sln -c Release --filter "Category!=RequiresDesktop"
 
-      - name: Publish self-contained (win-x64)
-        run: dotnet publish DroidDeck/DroidDeck.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:Version=${{ env.VERSION }} -o publish
-
-      - name: Embute o web no publish (wwwroot ao lado do exe)
+      # Fresh web build, clean wwwroot, legacy-UI and byte-identity checks, licenses copied in.
+      - name: Publish (verified)
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force publish/wwwroot | Out-Null
-          Copy-Item app/build/web/* publish/wwwroot -Recurse -Force
+        run: ./scripts/publish-windows.ps1 -Out publish -Version $env:VERSION
 
-      - name: Zip
-        shell: pwsh
-        run: Compress-Archive -Path publish/* -DestinationPath KZCompanion-win-x64.zip -Force
-
-      # Instalador com atualizacao automatica. O app procura releases.win.json e o .nupkg
-      # na ultima Release do GitHub, entao os dois vao anexados junto com o Setup.
-      - name: Instalador (Velopack)
+      - name: Installer (Velopack)
         shell: pwsh
         run: |
           dotnet tool install -g vpk --version 1.2.161
-          vpk pack --packId KZCompanionPC --packVersion $env:VERSION --packDir publish `
-            --mainExe KZCompanion.exe --packTitle "KZ Companion" --packAuthors "KZ Dev Studio" `
-            --icon DroidDeck/kzcompanion.ico --outputDir velopack
-          Move-Item velopack/KZCompanionPC-win-Setup.exe velopack/KZCompanion-Setup.exe
-          Remove-Item velopack/KZCompanionPC-win-Portable.zip
+          ./scripts/build-installer.ps1 -PublishDir publish -Version $env:VERSION -OutDir installer
 
       - uses: actions/upload-artifact@v7
         with:
-          name: backend
-          path: |
-            KZCompanion-win-x64.zip
-            velopack/
+          name: windows
+          path: installer/*
 
-  app:
-    name: App (Android APK)
+  android:
+    name: Android APK (arm64)
+    needs: preflight
     runs-on: ubuntu-24.04
+    env:
+      KZ_REQUIRE_RELEASE_SIGNING: 'true'
     steps:
       - uses: actions/checkout@v6
 
@@ -115,7 +102,7 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Restaura assinatura de release (se os secrets existirem)
+      - name: Restore release keystore
         working-directory: app/android
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -123,67 +110,82 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > app/release.jks
-            printf 'storeFile=release.jks\nstorePassword=%s\nkeyPassword=%s\nkeyAlias=%s\n' \
-              "$STORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > key.properties
-            echo "Assinatura: chave de release"
-          else
-            echo "Assinatura: debug (sem secrets)"
-          fi
+          echo "$KEYSTORE_B64" | base64 -d > app/release.jks
+          printf 'storeFile=release.jks\nstorePassword=%s\nkeyPassword=%s\nkeyAlias=%s\n' \
+            "$STORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" > key.properties
 
-      - name: Build do APK
+      - name: Analyze and test
         working-directory: app
         run: |
           flutter pub get
+          flutter analyze --no-fatal-infos
           flutter test
-          flutter build apk --release --build-number=${{ github.run_number }}
 
-      - name: Renomeia o APK
-        run: cp app/build/app/outputs/flutter-apk/app-release.apk KZCompanion.apk
+      - name: Build APK
+        working-directory: app
+        run: flutter build apk --release --target-platform android-arm64 --build-name="$VERSION" --build-number="${{ github.run_number }}"
+
+      - name: Verify signature, package, version and ABI
+        run: |
+          cp app/build/app/outputs/flutter-apk/app-release.apk "KZCompanion-Android-arm64-v$VERSION.apk"
+          bash scripts/verify-apk.sh "KZCompanion-Android-arm64-v$VERSION.apk" "$VERSION"
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f app/android/key.properties app/android/app/release.jks
 
       - uses: actions/upload-artifact@v7
         with:
-          name: app
-          path: KZCompanion.apk
+          name: android
+          path: KZCompanion-Android-arm64-v*.apk
 
   release:
-    name: semantic-release
-    needs: [version, backend, app]
+    name: Publish GitHub Release
+    needs: [windows, android]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0          # semantic-release precisa do histórico + tags
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '20'
-
-      - name: Instala o semantic-release
-        run: npm install
 
       - uses: actions/download-artifact@v8
         with:
-          name: backend
-          path: dist
+          name: windows
+          path: assets
 
       - uses: actions/download-artifact@v8
         with:
-          name: app
-          path: dist
+          name: android
+          path: assets
 
-      - name: semantic-release (decide versão, cria tag/release, anexa binários)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
-
-      - name: Passo a passo de instalação no topo da release
-        if: needs.version.outputs.version != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: v${{ needs.version.outputs.version }}
+      - name: Checksums and notes
         run: |
-          gh release view "$TAG" --json body --jq .body > notes.md
-          cat .github/release-header.md notes.md > body.md
-          gh release edit "$TAG" --notes-file body.md
+          cp LICENSE NOTICE THIRD_PARTY_NOTICES.md assets/
+          cd assets
+          sha256sum "KZCompanion-Setup-$VERSION.exe" "KZCompanion-Android-arm64-v$VERSION.apk" > SHA256SUMS.txt
+          cd ..
+          { cat "docs/release-notes/v$VERSION.md"
+            printf '\n## SHA-256 checksums\n\n```\n'; cat assets/SHA256SUMS.txt; printf '```\n'; } > notes.md
+
+      # Draft first, so nothing is public until the tag and every asset exist.
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION" --draft --title "KZ Companion v$VERSION" --notes-file notes.md assets/*
+          n=$(gh release view "v$VERSION" --json assets --jq '.assets | length')
+          echo "assets uploaded: $n"
+          gh release view "v$VERSION" --json assets --jq '.assets[].name'
+          for f in "KZCompanion-Setup-$VERSION.exe" "KZCompanion-Android-arm64-v$VERSION.apk" SHA256SUMS.txt; do
+            gh release view "v$VERSION" --json assets --jq '.assets[].name' | grep -qx "$f" || { echo "::error::$f was not uploaded"; exit 1; }
+          done
+
+      - name: Annotated tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "v$VERSION" -m "KZ Companion v$VERSION" "$GITHUB_SHA"
+          git push origin "v$VERSION"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "v$VERSION" --draft=false --latest

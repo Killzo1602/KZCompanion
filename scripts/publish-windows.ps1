@@ -9,7 +9,8 @@
 #   4. The published wwwroot is byte-identical to the fresh build and has no legacy deck UI.
 param(
     [string]$Out = "",
-    [string]$Flutter = "flutter"
+    [string]$Flutter = "flutter",
+    [string]$Version = ""
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -57,8 +58,15 @@ Assert-WebClean $wwwroot "DroidDeck\wwwroot"
 # 3. publish into a new folder
 Write-Host "== Publish -> $full"
 if (Test-Path $full) { Remove-Item $full -Recurse -Force }
-dotnet publish (Join-Path $root "DroidDeck\DroidDeck.csproj") -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o $full --nologo -v q
+$verArg = @(); if ($Version) { $verArg = @("-p:Version=$Version") }
+dotnet publish (Join-Path $root "DroidDeck\DroidDeck.csproj") -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false @verArg -o $full --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)" }
+
+# Licenses travel with the binaries.
+foreach ($f in "LICENSE", "NOTICE", "THIRD_PARTY_NOTICES.md") {
+    if (-not (Test-Path (Join-Path $root $f))) { throw "$f is missing from the repository root" }
+    Copy-Item (Join-Path $root $f) (Join-Path $full $f)
+}
 
 # 4. verify the published front-end is the fresh one
 $a = (Get-FileHash (Join-Path $buildWeb "main.dart.js") -Algorithm SHA256).Hash

@@ -20,9 +20,10 @@
 </div>
 
 > [!NOTE]
-> **Status: v1.0.0 is being prepared.** No release has been published yet, so there is nothing to
-> download from the Releases page today. Until then you can [build from source](#development).
-> See [docs/release-checklist.md](docs/release-checklist.md) for what is left.
+> **Status: v1.0.0 is being prepared.** Check the [Releases page](https://github.com/Killzo1602/KZCompanion/releases)
+> for published downloads. Until a release exists you can [build from source](#development).
+> The Android APK is held back until an upstream licensing question is resolved; see
+> [docs/release-checklist.md](docs/release-checklist.md).
 
 ---
 
@@ -40,21 +41,6 @@ CPU, GPU and RAM at a glance, a per-app volume mixer under your thumb, and your 
 
 KZ Companion is a modified fork of [DroidDeck](https://github.com/ggfto/DroidDeck) by Gabriel Freitas.
 See [Credits and license](#credits-and-license).
-
-## Screenshots
-
-> [!IMPORTANT]
-> Real screenshots of the current KZ Companion UI have **not been captured yet**, and this README does
-> not use images of the older DroidDeck deck, which no longer matches the product. The capture list is
-> in [docs/screenshots/README.md](docs/screenshots/README.md). Once the images exist, they go here:
-
-| Screen | File (to be added) |
-|---|---|
-| Android Dashboard | `docs/screenshots/android-dashboard.png` |
-| Android Apps / Running Apps | `docs/screenshots/android-apps-running.png` |
-| Windows configurator, Applications | `docs/screenshots/windows-applications.png` |
-| Windows configurator, Integrations catalog | `docs/screenshots/windows-integrations.png` |
-| Windows configurator, Appearance | `docs/screenshots/windows-appearance.png` |
 
 ## Features
 
@@ -141,17 +127,17 @@ You need **both** parts: the Windows app and the Android app. The phone and the 
 local network (or connected by USB with Android debugging).
 
 > [!NOTE]
-> No release is published yet. These are the steps for when v1.0.0 is on the
-> [Releases page](https://github.com/Killzo1602/KZCompanion/releases). The planned files are:
-> `KZCompanion-Setup.exe`, `KZCompanion-win-x64.zip` and `KZCompanion.apk`.
+> Downloads are on the [Releases page](https://github.com/Killzo1602/KZCompanion/releases) once v1.0.0 is published.
+> The files are `KZCompanion-Setup-1.0.0.exe` (Windows x64), `KZCompanion-Android-arm64-v1.0.0.apk` (Android ARM64)
+> and `SHA256SUMS.txt`. Check the download with `Get-FileHash <file> -Algorithm SHA256`.
 
 **Requirements:** Windows 10 version 1809 (build 17763) or newer on the PC; an Android phone. The Windows
 app is self-contained, so you do not install .NET separately. The Windows installer is not code-signed
 yet, so SmartScreen may warn on first run (see [Troubleshooting](#troubleshooting)).
 
-1. **Windows.** Download `KZCompanion-Setup.exe` and run it. It installs to the system tray and updates
-   itself from GitHub Releases. Prefer no installer? Unzip `KZCompanion-win-x64.zip` and run `KZCompanion.exe`.
-2. **Android.** Download `KZCompanion.apk` on the phone, allow installing from that source when Android asks,
+1. **Windows.** Download `KZCompanion-Setup-1.0.0.exe` and run it. It installs for your user (no administrator rights
+   needed), runs from the system tray and updates itself from GitHub Releases.
+2. **Android.** Download `KZCompanion-Android-arm64-v1.0.0.apk` on the phone (ARM64 devices only), allow installing from that source when Android asks,
    and open it.
 3. **Allow the firewall.** On first launch the PC app offers to open the needed ports in Windows Firewall
    (TCP 4787 for the app, UDP 7573 for discovery). Accept for private networks.
@@ -280,14 +266,15 @@ current .NET 8 runtime (or SDK), or temporarily set `DOTNET_ROLL_FORWARD=Major`.
 
 ### Release publishing
 
-Releases are produced by the manual **Release** GitHub Actions workflow (`.github/workflows/release.yml`):
-it runs the tests, builds the Windows installer (Velopack), the portable zip and the APK, and
-publishes them with `semantic-release`. Do not tag or publish by hand; follow
-[docs/release-checklist.md](docs/release-checklist.md).
+Releases come from the manual **Release** workflow (`.github/workflows/release.yml`, input: the version). It refuses to run
+without the release-signing secrets, runs the tests, builds the verified Windows installer (Velopack) and the
+release-signed ARM64 APK, checks the front-end and signature, writes `SHA256SUMS.txt`, creates a draft release,
+pushes the annotated tag and then publishes. Do not tag or publish by hand; follow
+[docs/release-checklist.md](docs/release-checklist.md). Signing is described in [docs/android-signing.md](docs/android-signing.md).
 
 ## Documentation
 
-- [Release checklist](docs/release-checklist.md)
+- [Release checklist](docs/release-checklist.md), [Android signing](docs/android-signing.md), [License audit](docs/license-audit.md)
 - [Integration audit](docs/integration-audit-phase1.md) and [Running Apps design](docs/running-apps-phase2.md)
 - [Changelog](CHANGELOG.md)
 
@@ -302,11 +289,18 @@ publishes them with `semantic-release`. Do not tag or publish by hand; follow
 
 ## Credits and license
 
-KZ Companion is © 2026 KZ Dev Studio, licensed under the [Apache License 2.0](LICENSE).
+KZ Companion is a modified fork of **[DroidDeck](https://github.com/ggfto/DroidDeck)** by Gabriel Freitas. Upstream
+copyright notices and license files are preserved; [NOTICE](NOTICE) lists the changes.
 
-It is a modified fork of **[DroidDeck](https://github.com/ggfto/DroidDeck)** by Gabriel Freitas, also Apache 2.0.
-The original copyright and license are preserved, and [NOTICE](NOTICE) lists the changes. Note: `app/LICENSE` is a GPL-3.0 text inherited from upstream while the rest of the repository is Apache 2.0; this inconsistency is tracked in the [release checklist](docs/release-checklist.md) and must be resolved before v1.0.0. Hardware sensors use
-[LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (MPL-2.0).
+| Part | License | Status |
+|---|---|---|
+| Windows app (`DroidDeck/`), tests, scripts, docs | [Apache License 2.0](LICENSE), as declared by the upstream author | Upstream's declaration; KZ Dev Studio's additions are offered under the same terms |
+| Android app and web configurator (`app/`) | **Not settled.** The upstream repository ships both the Apache-2.0 root `LICENSE` and a GPL-3.0 [`app/LICENSE`](app/LICENSE) | Unconfirmed by the upstream author. See [docs/license-audit.md](docs/license-audit.md). |
+| Third-party components | Their own licenses (MIT, BSD, Apache-2.0, MPL-2.0; Google ML Kit under Google's terms) | [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
 
+**This repository is not claimed to be entirely Apache-2.0.** Because of the open question about `app/`, the Android APK
+is only published once that question is resolved (see the [release checklist](docs/release-checklist.md)).
+
+Hardware sensors use [LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (MPL-2.0).
 This project is unrelated to [Droid-Deck/DroidDeck](https://github.com/Droid-Deck/DroidDeck), a different
 app that runs Steam games on Android.

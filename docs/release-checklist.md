@@ -1,76 +1,66 @@
 # KZ Companion v1.0.0: release checklist
 
-Status: **not released.** No tag, GitHub Release or binary has been published. This file records what was
-verified on 2026-11-21 (commit `75cea72` plus the release-preparation changes) and what still blocks a release.
+Status: **prepared, NOT published.** No tag, GitHub Release or binary exists. Last verified 2026-11-21.
 
-## Verification results
+## Blockers (owner action needed)
+
+1. **Android APK: unresolved license question.** The repository root is Apache-2.0, but `app/LICENSE` is the full GPL-3.0 text, and the
+   APK bundles Google ML Kit (proprietary). Under Apache-2.0 that is fine; under GPL-3.0 it is a real conflict. The upstream author
+   has not confirmed which license covers `app/`. Until they do, the APK must not be published. Evidence and options:
+   [license-audit.md](license-audit.md). Suggested next step: post this on <https://github.com/ggfto/DroidDeck/issues> (not done by me, it is
+   your decision to contact them):
+
+   > Hi, I'm building a fork (KZ Companion). Your root `LICENSE` and README say Apache-2.0 (added 2026-10-01), but `app/LICENSE`
+   > is the full GPL-3.0 text from the original Flutter app repository. Could you confirm which license applies to `app/`? If it is
+   > Apache-2.0, could you replace `app/LICENSE` (or say so in a comment)? Thanks!
+
+2. **Android release key does not exist yet.** No `ANDROID_*` secrets are set, and the release workflow refuses to run without them.
+   Run `.\scripts\new-android-keystore.ps1` on your PC, then **back up the `.jks` and its password** (see [android-signing.md](android-signing.md)).
+   I deliberately did not create this permanent identity for you.
+
+When both are done, run **Actions > Release > Run workflow** with version `1.0.0`. (If you prefer to publish the Windows installer first and
+the APK later, the workflow needs a small change to skip the Android job; ask for it. It is not implemented.)
+
+## Verification results (2026-11-21)
 
 | Check | Result |
 |---|---|
-| Backend tests (`dotnet test`, excluding `RequiresDesktop`) | **Cannot run as-is on the dev PC** (runtime mismatch, below). With `DOTNET_ROLL_FORWARD=Major` they run on .NET 10: 519 passed, 1 failed. The failure was a flaky test (a File Explorer window titled `D:\` tripped the "no file paths in JSON" assertion); the test now ignores window titles. After that fix the re-run on .NET 10 gave **520 passed, 0 failed**. Tests were **not** run on a .NET 8.0.34 runtime. |
-| `RequiresDesktop` tests | Not run (need an interactive desktop; excluded in CI). |
-| `flutter analyze --no-fatal-infos` | 0 errors, 0 warnings, 10 info-level hints (style only). |
-| `flutter test` | 66 passed, 2 skipped, 0 failed. |
-| Windows publish (`scripts/publish-windows.ps1`) | **Passed** into a new folder (`dist/KZCompanion-win-x64-rc-verify`, the running app was not touched). Fresh web build, `main.dart.js` sha256 `335BC8F4...18D288`, identical in the published `wwwroot`, no legacy text. The script fails if the published `wwwroot` differs from the fresh web build or contains legacy deck text. |
-| Android release APK | `flutter build apk --release` **passed** (66.5 MB). It is signed with the Android **debug** key (no release keystore configured), as is the existing `dist/KZCompanion.apk`. |
-| Credentials in the repository | None found: no keystores, `.env`, tokens or private keys tracked or in history. `key.properties` and `*.jks` are git-ignored. Integration secrets are written at runtime to `%LocalAppData%\KZCompanion`, not the repo. |
-| License / NOTICE | **Inconsistent: `app/LICENSE` is GPL-3.0 (see Blocker 0).** Root `LICENSE` is the unmodified Apache 2.0 text. `NOTICE` names KZ Dev Studio, the upstream DroidDeck copyright and the changes, and LibreHardwareMonitorLib (MPL-2.0). Other third-party packages (NAudio, MQTTnet, NLog, QRCoder, Velopack, WebView2, Flutter packages) are not listed in `NOTICE`; they are permissively licensed but a third-party notices file is recommended. |
-| Update behavior | `AppUpdater` checks `https://github.com/Killzo1602/KZCompanion` Releases every 6 h, only on the Velopack-installed copy (not the zip). Unverified end to end: needs two published versions. |
-| Legacy UI assets | The publish script rejects the strings `Import from Stream Deck`, `Automations`, `Profiles`, `StreamDeck/profiles`, `Edit profile` in `main.dart.js`. The inherited `website/` still contains the old deck (banner added, publishing disabled). |
+| Flutter analyzer | 0 errors, 0 warnings, 10 info-level style hints |
+| Flutter tests | 66 passed, 2 skipped, 0 failed |
+| Backend tests | 520 passed, 0 failed, **on .NET 10 via `DOTNET_ROLL_FORWARD=Major`**. Not run on .NET 8.0.34 (see below). `RequiresDesktop` tests are excluded (they need an interactive desktop). |
+| Windows publish (`scripts/publish-windows.ps1 -Version 1.0.0`) | Passed. Fresh web build, `main.dart.js` sha256 `335BC8F4...18D288`, identical in the published `wwwroot`, no legacy deck text. `LICENSE`, `NOTICE`, `THIRD_PARTY_NOTICES.md` copied in. |
+| Installer (`scripts/build-installer.ps1`) | Built: `KZCompanion-Setup-1.0.0.exe` (115.6 MB, x64). The update package contains the same front-end hash and the license files. Found and fixed: it was being packed without `--runtime win-x64` (Velopack defaulted to x86). |
+| Install / uninstall | Passed on this PC, silent install into a scratch folder: Add/Remove Programs entry "KZ Companion", publisher "KZ Dev Studio", version 1.0.0; Desktop and Start-menu shortcuts with the exe icon; **no UAC prompt** (per-user install; the exe manifest is `asInvoker`). Uninstall removed the folder, registry key and shortcuts. The running copy of the app and `%LocalAppData%\KZCompanion` were not touched. |
+| Data preservation on update | By design only: app data lives in `%LocalAppData%\KZCompanion`, outside the Velopack install folder, which updates replace. **No real update (1.0.0 to 1.0.1) was run.** |
+| Tray behavior of the installed copy | **Not verified.** Starting a second copy would collide with the app running on this PC (single-instance). Needs a clean PC or VM. |
+| Android APK (arm64) | Built with `flutter build apk --release --target-platform android-arm64`. **Signed only with a throwaway test key** to prove the pipeline: `scripts/verify-apk.sh` passes (valid v2 signature, not the debug key, package `dev.kzstudio.kzcompanion`, versionName `1.0.0`, only `arm64-v8a`, 24.4 MB). It correctly **fails** on the old debug-signed APK, on a wrong version, and on a multi-ABI APK. Found and fixed: dependencies added armeabi-v7a and x86_64 libraries. No real release APK exists yet. |
+| Release workflow | Written and YAML-validated, but **never executed** (it needs the signing secrets and the license decision). It runs the same scripts used above. |
+| Secret scan | 514 files scanned with common token and key patterns: only format strings and existing test fixtures matched. No keystores, `.env` or `key.properties` tracked; none in history. |
+| Dependency licenses | 142 Flutter and 18 NuGet packages inventoried into `THIRD_PARTY_NOTICES.md`: no GPL/LGPL dependency. MPL-2.0 libraries unmodified. ML Kit is proprietary (see blocker 1). |
+| GitHub repository | Issues **enabled** (was disabled), private vulnerability reporting **enabled**, secret scanning and push protection already on. |
+| Physical devices | **None tested.** No phone was used, and no real pairing or integration was exercised in this release work. |
 
-### The .NET test runtime mismatch (root cause)
+### The .NET test runtime mismatch (unchanged)
 
-`dotnet test` aborts with *"You must install or update .NET... Framework: Microsoft.NETCore.App 8.0.34"*.
-The dev PC has `Microsoft.AspNetCore.App 8.0.34` but only `Microsoft.NETCore.App` / `WindowsDesktop.App 8.0.19`.
-The ASP.NET Core 8.0.34 shared framework declares a dependency on `Microsoft.NETCore.App 8.0.34`
-(`shared\Microsoft.AspNetCore.App\8.0.34\Microsoft.AspNetCore.App.runtimeconfig.json`), so the test host
-cannot start. The repository is not at fault: CI uses `actions/setup-dotnet` with `8.0.x`, which installs matching runtimes.
+`dotnet test` aborts on this PC with *"You must install or update .NET... Microsoft.NETCore.App 8.0.34"*: the machine has ASP.NET Core 8.0.34 but
+only .NET runtime 8.0.19, and ASP.NET's own runtime config requires the matching 8.0.34 runtime. Fix: install the current .NET 8 runtimes
+(.NET Runtime and .NET Desktop Runtime). GitHub's `windows-latest` with `setup-dotnet 8.0.x` is not affected, and the Release workflow runs the tests there.
 
-Fix on the machine: install the current .NET 8 runtimes (**.NET Runtime** and **.NET Desktop Runtime** 8.0.34 or newer).
-Workaround: `DOTNET_ROLL_FORWARD=Major dotnet test ...` (runs on .NET 10, so it is not a perfect substitute).
+## Known limitations for the release notes
 
-## Blockers
+Windows installer unsigned (SmartScreen warning); plain HTTP on the LAN; ARM64 Android only; integrations unverified; elevated apps locked;
+the Android license question above. All are in `docs/release-notes/v1.0.0.md`.
 
-0. **License inconsistency in `app/`** (analysis in [license-audit.md](license-audit.md)). The repository root is Apache 2.0, but `app/LICENSE` is the full **GNU GPL v3** text.
-   It arrived with upstream's import of the Flutter app (`03f50f4`, "Add 'app/' from commit fbc7d1d...") and no source file
-   mentions GPL. Which license governs `app/` is unclear. This must be resolved (ask the upstream author, or take legal advice)
-   before publishing the APK. If `app/` is GPL-3.0, an Apache-2.0 label on the combined release is wrong, and the NOTICE must say so.
+## Release steps
 
-1. **Android release signing.** No release keystore exists and no `ANDROID_*` secrets are set on the repository, so the
-   Release workflow falls back to the **debug key**. A debug-signed APK cannot be updated later by a differently signed one.
-   Create a keystore, back it up safely, and add `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`,
-   `ANDROID_KEY_PASSWORD`, `ANDROID_STORE_PASSWORD` as repository secrets before the first public APK.
-2. **GitHub Issues is disabled** on the repository (`has_issues: false`). The README, templates and CONTRIBUTING
-   all point to Issues. Enable it in Settings, and enable private vulnerability reporting for `SECURITY.md`.
-3. **Real screenshots are missing.** See `docs/screenshots/README.md`. The README says so honestly; replace that section once captured.
-4. **No test on .NET 8.0.34 and no CI run on the fork.** Install the matching runtime locally or run the CI workflow
-   (Actions > CI > Run workflow) and confirm it is green.
-5. **Live verification of integrations.** Discord, Spotify and OBS setup have not been exercised against live accounts. The README labels
-   them accordingly; either test them or keep the wording.
+1. Resolve blockers 1 and 2.
+2. Confirm `main` is green: Actions > CI > Run workflow (CI has never run on this fork).
+3. Update `docs/license-audit.md`, `NOTICE` and the README license table with the upstream author's answer.
+4. Actions > Release > Run workflow, version `1.0.0`. It checks the secrets, tag and notes, tests, builds both artifacts, verifies the front-end
+   and the APK signature, writes `SHA256SUMS.txt`, creates a **draft** release, pushes the annotated tag `v1.0.0` and then publishes.
+5. Verify on the Releases page: `KZCompanion-Setup-1.0.0.exe`, `KZCompanion-Android-arm64-v1.0.0.apk`, `SHA256SUMS.txt`, notices, the update
+   files, and the two source archives GitHub adds. Download both binaries and compare their SHA-256 with `SHA256SUMS.txt`.
+6. Install the published installer on a clean Windows PC and the APK on a phone; pair with QR; check Dashboard, Mixer, Apps and Running Apps.
+7. To test auto-update, publish a later 1.0.x and confirm the installed app updates itself and keeps its data.
 
-## Should fix (not strictly blocking)
-
-- Windows installer and exe are **not code-signed**; SmartScreen will warn. The README says so.
-- The Android welcome and tray texts were renamed in English and Spanish; **Portuguese and Hindi still show "DroidDeck"**
-  because their text comes from the Portuguese source strings in code.
-- Update `website/` (inherited DroidDeck docs) or delete it before enabling GitHub Pages.
-- Log file is still `%LocalAppData%\DroidDeck.log`, and the project/solution are named `DroidDeck` (assembly is `KZCompanion`).
-- Add a third-party notices file.
-- The Tuya integration uses another product's public registration; it is on hold and not exposed.
-
-## Publishing steps (when blockers are cleared)
-
-1. Confirm `main` is green in CI and the working tree is clean.
-2. Confirm the repository secrets above exist.
-3. Decide what to do with the hand-written "Unreleased: 1.0.0" section of `CHANGELOG.md`: the release tooling
-   prepends its own generated notes above it, so either delete that section first or accept the duplicate.
-4. Run the **Release** workflow manually (Actions > Release > Run workflow). With no existing tags, `semantic-release` computes **1.0.0**.
-   It runs tests, builds `KZCompanion-Setup.exe`, `KZCompanion-win-x64.zip`, `KZCompanion.apk` plus the Velopack update files
-   (`*.nupkg`, `releases.win.json`, `assets.win.json`, `RELEASES`), and creates the tag and the Release.
-5. Open the Release page and verify the asset names and that the notes start with the install header from `.github/release-header.md`.
-6. Install the published `KZCompanion-Setup.exe` on a clean Windows PC and the APK on a phone; pair with QR; check Dashboard, Mixer, Apps and Running Apps.
-7. Fill in the Screenshots section and re-check the README links.
-8. For the first update test, publish a later 1.0.x and confirm the installed app updates itself.
-
-Do not run `git tag` or create the Release by hand; the workflow does both and updates `CHANGELOG.md`.
-Do not overwrite a running copy of the app: publish into a new folder (the script refuses otherwise).
+Never create the tag or release by hand, and never overwrite a running copy of the app.

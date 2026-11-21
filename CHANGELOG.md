@@ -1,12 +1,12 @@
 # Changelog
 
-All notable changes to KZ Companion are recorded here. Release entries are generated from
-[Conventional Commits](https://www.conventionalcommits.org/) by `semantic-release`.
+All notable changes to KZ Companion are recorded here. Release entries are written from
+[Conventional Commits](https://www.conventionalcommits.org/) by hand for each release; the release notes live in `docs/release-notes/`.
 
 History of the upstream project this was forked from (DroidDeck 1.0 to 1.14.0, by Gabriel Freitas) is kept in
 [CHANGELOG-upstream-DroidDeck.md](CHANGELOG-upstream-DroidDeck.md).
 
-## Unreleased: 1.0.0 (first public release, not yet published)
+## 1.0.0 (first public release; not yet published)
 
 KZ Companion 1.0.0 is the first release under the KZ Companion name. It replaces the DroidDeck button deck
 with a dashboard and remote control for a Windows PC.
