@@ -64,6 +64,27 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 600));
     expect(AudioState.fromJson(await client.getAudio()).muted, s0.muted);
 
+    // Mute (microfone) e Deafen pelo codigo do app: o estado exibido e o confirmado pelo Windows.
+    final out0 = s0.muted;
+    final mic0 = s0.inputMuted!;
+    store.toggleMicMute();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    expect(store.state.value!.inputMuted, !mic0, reason: 'botao Mute deve mudar o microfone');
+    expect(store.state.value!.muted, out0, reason: 'botao Mute nao pode mudar os alto-falantes');
+    store.toggleMicMute();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    expect(store.state.value!.inputMuted, mic0);
+    store.toggleDeafen();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    expect(store.state.value!.deafened, true);
+    expect(store.state.value!.muted, true);
+    expect(store.state.value!.inputMuted, true);
+    store.toggleDeafen();
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+    expect(store.state.value!.deafened, false);
+    expect(store.state.value!.muted, out0);
+    expect(store.state.value!.inputMuted, mic0);
+
     // Windows -> Android: um push (como o hub entrega) atualiza o estado local.
     signalR.audioPush.value = {
       'outputName': s0.outputName,

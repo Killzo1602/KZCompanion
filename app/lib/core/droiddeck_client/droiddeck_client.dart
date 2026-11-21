@@ -591,8 +591,16 @@ class DroidDeckClient {
     await _dio.put('/api/audio/sessions/$id', data: {'volume': volume, 'mute': mute});
   }
 
-  Future<void> setDeafen(bool enabled) async {
-    await _dio.post('/api/audio/deafen', data: {'enabled': enabled});
+  /// Mudo do microfone padrao do Windows (so ele). Devolve o estado confirmado pelo PC.
+  Future<Map<String, dynamic>> setAudioMic(bool mute) async {
+    final r = await _dio.put('/api/audio/mic', data: {'mute': mute});
+    return (r.data as Map).cast<String, dynamic>();
+  }
+
+  /// Deafen: muta saida + microfone e restaura o mudo anterior ao desligar. Devolve o estado confirmado.
+  Future<Map<String, dynamic>> setDeafen(bool enabled) async {
+    final r = await _dio.post('/api/audio/deafen', data: {'enabled': enabled});
+    return (r.data as Map).cast<String, dynamic>();
   }
 
   // ---- KZ Companion: biblioteca de aplicativos e energia ----

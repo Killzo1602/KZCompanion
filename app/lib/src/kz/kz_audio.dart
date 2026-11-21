@@ -194,6 +194,7 @@ class AudioStore {
     if (commit || !_throttled('master')) _send(() => client.setAudioMaster(volume: v));
   }
 
+  /// Mudo do ALTO-FALANTE (Windows). So a tela Controls usa; o botao Mute do painel e do microfone.
   void toggleMasterMute() {
     final s = state.value;
     if (s == null) return;
@@ -209,10 +210,25 @@ class AudioStore {
     _send(() => client.setAudioMaster(mute: m));
   }
 
+  /// Mudo do MICROFONE padrao do Windows: so ele. Nao mexe na saida nem no volume.
+  /// O estado mostrado e o que o PC confirma (resposta do comando), nao um palpite.
+  void toggleMicMute() {
+    final s = state.value;
+    if (s == null || s.inputMuted == null) return;
+    _send(() async => _applyConfirmed(await client.setAudioMic(!s.inputMuted!)));
+  }
+
+  /// Deafen/undeafen: o PC decide (e restaura o mudo anterior); a tela so reflete a resposta.
   void toggleDeafen() {
     final s = state.value;
     if (s == null) return;
-    _send(() => client.setDeafen(!s.deafened));
+    _send(() async => _applyConfirmed(await client.setDeafen(!s.deafened)));
+  }
+
+  /// Resposta de um comando: estado confirmado pelo Windows, aplicado sem travas locais.
+  void _applyConfirmed(Map<String, dynamic> j) {
+    _lockUntil.remove('master');
+    _apply(j, fromPush: false);
   }
 
   void setSessionVolume(String id, int v, {bool commit = false}) {

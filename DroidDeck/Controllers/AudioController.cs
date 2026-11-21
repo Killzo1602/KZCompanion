@@ -38,6 +38,15 @@ namespace DroidDeck.Controllers
             return ok ? Ok(_audio.GetState(false)) : BadRequest(new { error });
         }
 
+        /// <summary>Mudo do microfone padrao (so ele; a saida e o volume nao mudam).</summary>
+        [HttpPut("mic")]
+        public IActionResult Mic([FromBody] AudioChange body)
+        {
+            if (body.Mute == null) return BadRequest(new { error = "mute is required." });
+            var (ok, error) = _audio.SetMic(body.Mute.Value);
+            return ok ? Ok(_audio.GetState(false)) : BadRequest(new { error });
+        }
+
         [HttpPut("sessions/{id}")]
         public IActionResult Session(string id, [FromBody] AudioChange body)
         {

@@ -66,6 +66,8 @@ namespace DroidDeck.Services
         private bool _deafen;
         private string? _deafOutId, _deafInId;
         private bool _deafOutPrev, _deafInPrev;
+        private bool? _inSeen; // ultimo mudo do microfone visto durante o deafen (detecta mudanca explicita)
+        private static string DeafenFile => System.IO.Path.Combine(AppPaths.LocalDir, "deafen.json");
 
         private sealed class Tracked
         {
@@ -100,6 +102,7 @@ namespace DroidDeck.Services
                         _enumerator = new MMDeviceEnumerator();
                         _enumerator.RegisterEndpointNotificationCallback(this);
                         Rebind();
+                        LoadDeafen();
                     }
                 }
                 catch (Exception ex) { Log.Warning($"Audio: inicializacao falhou: {ex.Message}"); }
@@ -130,7 +133,7 @@ namespace DroidDeck.Services
             Unbind();
             if (_enumerator == null) return;
             try { _render = _enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia); } catch (Exception ex) { _render = null; Log.Warning($"Audio: sem saida padrao: {ex.Message}"); }
-            try { _capture = _enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Communications); } catch { _capture = null; }
+            try { _capture = _enumerator.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Multimedia); } catch { _capture = null; }
             try { if (_render != null) _render.AudioEndpointVolume.OnVolumeNotification += _renderCb; } catch { }
             try { if (_capture != null) _capture.AudioEndpointVolume.OnVolumeNotification += _captureCb; } catch { }
             try
@@ -266,13 +269,7 @@ namespace DroidDeck.Services
             }
             catch { s.InputMuted = null; }
 
-            // Deafen so vale enquanto os dois continuam mudos nos mesmos dispositivos; se alguem
-            // desmutou por fora (ou o padrao trocou), o estado e descartado sem mexer em nada.
-            if (_deafen)
-            {
-                var still = s.OutputId == _deafOutId && s.Muted && (_deafInId == null || (s.InputId == _deafInId && s.InputMuted == true));
-                if (!still) _deafen = false;
-            }
+            ReconcileDeafen();
             s.Deafened = _deafen;
 
             foreach (var t in _sessions.Values)
@@ -422,28 +419,22 @@ namespace DroidDeck.Services
             return (true, null, false);
         }
 
-        /// <summary>Deafen do sistema: muta saida e microfone padrao e devolve o mudo ANTERIOR de cada um ao desligar.</summary>
-        public (bool Ok, string? Error) SetDeafen(bool enable)
+        /// <summary>Microfone padrao: SO ele. Nao toca na saida nem no volume.</summary>
+        public (bool Ok, string? Error) SetMic(bool mute)
         {
             lock (_gate)
             {
+                if (_capture == null) return (false, "No microphone.");
                 try
                 {
-                    if (enable)
+                    _capture.AudioEndpointVolume.Mute = mute;
+                    // Durante o deafen, a escolha explicita vira o estado a restaurar (senao o
+                    // "desfazer" desfaria o que o usuario acabou de pedir).
+                    if (_deafen && _capture.ID == _deafInId)
                     {
-                        if (_deafen) return (true, null);
-                        if (_render == null) return (false, "No output device.");
-                        _deafOutId = _render.ID;
-                        _deafOutPrev = _render.AudioEndpointVolume.Mute;
-                        _deafInId = _capture?.ID;
-                        _deafInPrev = _capture?.AudioEndpointVolume.Mute ?? false;
-                        _render.AudioEndpointVolume.Mute = true;
-                        if (_capture != null) _capture.AudioEndpointVolume.Mute = true;
-                        _deafen = true;
-                    }
-                    else
-                    {
-                        RestoreDeafen();
+                        _deafInPrev = mute;
+                        _inSeen = mute;
+                        PersistDeafen();
                     }
                 }
                 catch (Exception ex) { return (false, ex.Message); }
@@ -452,11 +443,83 @@ namespace DroidDeck.Services
             return (true, null);
         }
 
+        /// <summary>
+        /// Deafen do sistema: muta saida E microfone padrao, guardando o mudo anterior de cada um,
+        /// e ao desligar devolve exatamente isso (quem ja estava mudo continua mudo).
+        /// </summary>
+        public (bool Ok, string? Error) SetDeafen(bool enable)
+        {
+            lock (_gate)
+            {
+                try
+                {
+                    if (enable)
+                    {
+                        ReconcileDeafen();
+                        if (_deafen) return (true, null);
+                        if (_render == null) return (false, "No output device.");
+                        _deafOutId = _render.ID;
+                        _deafOutPrev = _render.AudioEndpointVolume.Mute;
+                        _deafInId = _capture?.ID;
+                        _deafInPrev = _capture?.AudioEndpointVolume.Mute ?? false;
+                        _render.AudioEndpointVolume.Mute = true;
+                        if (_capture != null) _capture.AudioEndpointVolume.Mute = true;
+                        _inSeen = _capture != null ? true : null;
+                        _deafen = true;
+                        PersistDeafen();
+                    }
+                    else
+                    {
+                        RestoreDeafen(restoreOutput: true);
+                    }
+                }
+                catch (Exception ex) { return (false, ex.Message); }
+            }
+            MarkDirty();
+            return (true, null);
+        }
+
+        /// <summary>
+        /// Mantem o deafen coerente com o Windows (chamar com _gate): se o padrao de saida/microfone
+        /// trocou, devolve o mudo dos dispositivos antigos; se alguem desmutou os alto-falantes por
+        /// fora (Windows, Discord...), o deafen acabou: restaura o microfone; mudanca explicita do
+        /// microfone vira o novo estado a restaurar.
+        /// </summary>
+        private void ReconcileDeafen()
+        {
+            if (!_deafen) return;
+            try
+            {
+                if (_render?.ID != _deafOutId || _capture?.ID != _deafInId)
+                {
+                    RestoreDeafen(restoreOutput: true);
+                    return;
+                }
+                if (!_render!.AudioEndpointVolume.Mute)
+                {
+                    RestoreDeafen(restoreOutput: false); // a saida ja foi desmutada pelo usuario
+                    return;
+                }
+                if (_capture != null)
+                {
+                    var m = _capture.AudioEndpointVolume.Mute;
+                    if (_inSeen != m)
+                    {
+                        _deafInPrev = m;
+                        _inSeen = m;
+                        PersistDeafen();
+                    }
+                }
+            }
+            catch (Exception ex) { Log.Warning($"Audio: conferencia do deafen falhou: {ex.Message}"); }
+        }
+
         /// <summary>Devolve o mudo salvo aos dispositivos guardados (se ainda existirem). Chamar com _gate.</summary>
-        private void RestoreDeafen()
+        private void RestoreDeafen(bool restoreOutput)
         {
             if (!_deafen) return;
             _deafen = false;
+            _inSeen = null;
             void Restore(string? id, bool prev)
             {
                 if (id == null || _enumerator == null) return;
@@ -465,27 +528,68 @@ namespace DroidDeck.Services
                     using var d = _enumerator.GetDevice(id);
                     if (d.State == DeviceState.Active) d.AudioEndpointVolume.Mute = prev;
                 }
-                catch { /* dispositivo sumiu: nada a restaurar */ }
+                catch (Exception ex) { Log.Warning($"Audio: nao foi possivel restaurar {id}: {ex.Message}"); }
             }
-            Restore(_deafOutId, _deafOutPrev);
+            if (restoreOutput) Restore(_deafOutId, _deafOutPrev);
             Restore(_deafInId, _deafInPrev);
+            try { System.IO.File.Delete(DeafenFile); } catch { }
+        }
+
+        // O estado do deafen vai para o disco: se o app cair com o PC "ensurdecido", ao voltar ele
+        // reassume e o usuario consegue desfazer com o mudo anterior certo (e nao fica preso mudo).
+        private void PersistDeafen()
+        {
+            try
+            {
+                System.IO.File.WriteAllText(DeafenFile, System.Text.Json.JsonSerializer.Serialize(
+                    new { outId = _deafOutId, outPrev = _deafOutPrev, inId = _deafInId, inPrev = _deafInPrev }));
+            }
+            catch { }
+        }
+
+        private void LoadDeafen()
+        {
+            try
+            {
+                if (!System.IO.File.Exists(DeafenFile)) return;
+                using var doc = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(DeafenFile));
+                var r = doc.RootElement;
+                var outId = r.GetProperty("outId").GetString();
+                var inId = r.TryGetProperty("inId", out var i) && i.ValueKind == System.Text.Json.JsonValueKind.String ? i.GetString() : null;
+                if (_render != null && _render.ID == outId && _render.AudioEndpointVolume.Mute && (_capture?.ID == inId))
+                {
+                    _deafOutId = outId;
+                    _deafOutPrev = r.GetProperty("outPrev").GetBoolean();
+                    _deafInId = inId;
+                    _deafInPrev = r.GetProperty("inPrev").GetBoolean();
+                    _inSeen = _capture?.AudioEndpointVolume.Mute;
+                    _deafen = true;
+                    Log.Info("Audio: deafen anterior reassumido");
+                }
+                else System.IO.File.Delete(DeafenFile);
+            }
+            catch { try { System.IO.File.Delete(DeafenFile); } catch { } }
+        }
+
+        /// <summary>Encerrar o app com o deafen ligado devolve o audio como estava.</summary>
+        public override async Task StopAsync(CancellationToken cancellationToken)
+        {
+            try { lock (_gate) RestoreDeafen(restoreOutput: true); } catch { }
+            await base.StopAsync(cancellationToken);
         }
 
         // ---- IMMNotificationClient: troca do dispositivo padrao ----
 
         public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)
         {
-            if (role == Role.Console && flow == DataFlow.Render) { /* Multimedia e Console costumam vir juntos */ }
             Task.Run(() =>
             {
                 lock (_gate)
                 {
-                    // Trocou de dispositivo no meio do deafen: devolve o mudo dos antigos antes.
-                    if (_deafen && (flow == DataFlow.Render ? defaultDeviceId != _deafOutId : defaultDeviceId != _deafInId))
-                    {
-                        try { RestoreDeafen(); } catch { }
-                    }
+                    // Guarda os ids do deafen, reabre os padroes e deixa o Reconcile devolver o
+                    // mudo dos dispositivos antigos se algum padrao mudou.
                     Rebind();
+                    ReconcileDeafen();
                 }
                 MarkDirty();
             });

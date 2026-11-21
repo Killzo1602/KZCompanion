@@ -56,7 +56,8 @@ class KzAudioControls extends StatelessWidget {
           final online = store.signalR.linkState.value == 'online';
           final enabled = online && s != null && s.volume != null;
           final volume = s?.volume;
-          final muted = s?.muted ?? false;
+          final speakersMuted = s?.muted ?? false;
+          final micMuted = s?.inputMuted;
           return Opacity(
             opacity: enabled ? 1 : 0.45,
             child: IgnorePointer(
@@ -64,26 +65,32 @@ class KzAudioControls extends StatelessWidget {
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Row(children: [
                   Expanded(
+                    // Mute = MICROFONE do Windows (so ele). Mostra o estado real do microfone.
                     child: _toggle(context,
-                        icon: muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                        label: muted ? 'Muted' : 'Mute',
-                        active: muted,
-                        onTap: store.toggleMasterMute),
+                        icon: micMuted == true ? Icons.mic_off_rounded : Icons.mic_rounded,
+                        label: micMuted == null ? 'No mic' : (micMuted ? 'Mic muted' : 'Mute mic'),
+                        active: micMuted == true,
+                        onTap: micMuted == null ? () {} : store.toggleMicMute),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _toggle(context,
                         icon: Icons.headset_off_rounded,
-                        label: 'Deafen',
+                        label: (s?.deafened ?? false) ? 'Deafened' : 'Deafen',
                         active: s?.deafened ?? false,
                         onTap: store.toggleDeafen),
                   ),
                 ]),
                 const SizedBox(height: 4),
                 Row(children: [
+                  if (speakersMuted)
+                    const Padding(
+                      padding: EdgeInsets.only(right: 4),
+                      child: Icon(Icons.volume_off_rounded, size: 15, color: _red),
+                    ),
                   Expanded(
                     child: Text(
-                      s == null || s.outputName.isEmpty ? 'Windows volume' : s.outputName,
+                      s == null || s.outputName.isEmpty ? 'Windows volume' : (speakersMuted ? '${s.outputName} (muted)' : s.outputName),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(fontSize: 12, color: scheme.onSurface.withValues(alpha: 0.65)),
