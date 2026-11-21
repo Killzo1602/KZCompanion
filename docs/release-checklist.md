@@ -31,7 +31,7 @@ Workaround: `DOTNET_ROLL_FORWARD=Major dotnet test ...` (runs on .NET 10, so it 
 
 ## Blockers
 
-0. **License inconsistency in `app/`.** The repository root is Apache 2.0, but `app/LICENSE` is the full **GNU GPL v3** text.
+0. **License inconsistency in `app/`** (analysis in [license-audit.md](license-audit.md)). The repository root is Apache 2.0, but `app/LICENSE` is the full **GNU GPL v3** text.
    It arrived with upstream's import of the Flutter app (`03f50f4`, "Add 'app/' from commit fbc7d1d...") and no source file
    mentions GPL. Which license governs `app/` is unclear. This must be resolved (ask the upstream author, or take legal advice)
    before publishing the APK. If `app/` is GPL-3.0, an Apache-2.0 label on the combined release is wrong, and the NOTICE must say so.
