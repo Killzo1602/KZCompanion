@@ -504,12 +504,23 @@ class _InstalledDialogState extends State<_InstalledDialog> {
                               height: 36,
                               child: icon != null
                                   ? Image.memory(icon, fit: BoxFit.contain, filterQuality: FilterQuality.medium)
-                                  : Icon(item['kind'] == 'packaged' ? Icons.store_rounded : Icons.apps_rounded,
+                                  : Icon(
+                                      item['kind'] == 'packaged'
+                                          ? Icons.store_rounded
+                                          : (item['kind'] == 'steam' || item['kind'] == 'battlenet')
+                                              ? Icons.sports_esports_rounded
+                                              : Icons.apps_rounded,
                                       color: scheme.primary.withValues(alpha: 0.6)),
                             ),
                             title: Text('${item['name']}', maxLines: 1, overflow: TextOverflow.ellipsis),
                             subtitle: Text(
-                              item['kind'] == 'packaged' ? 'Microsoft Store app' : detail,
+                              item['kind'] == 'packaged'
+                                  ? 'Microsoft Store app'
+                                  : item['kind'] == 'steam'
+                                      ? 'Steam game'
+                                      : item['kind'] == 'battlenet'
+                                          ? 'Battle.net game'
+                                          : detail,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 11),

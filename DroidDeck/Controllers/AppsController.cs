@@ -59,7 +59,13 @@ namespace DroidDeck.Controllers
             a.Group,
             a.Favorite,
             a.Kind,
-            Path = IsLocal ? (a.Kind == "packaged" ? a.AppId : a.Path) : null,
+            Path = IsLocal ? a.Kind switch
+            {
+                "packaged" => a.AppId,
+                "steam" => "steam://rungameid/" + a.AppId,
+                "battlenet" => "Battle.net: " + a.AppId,
+                _ => a.Path,
+            } : null,
             IconBase64 = _library.IconBase64(a.Id),
         };
 
@@ -71,6 +77,39 @@ namespace DroidDeck.Controllers
         {
             var app = _library.Get(id);
             if (app == null) return NotFound(new { error = "Aplicativo não encontrado." });
+            if (app.Kind == "steam")
+            {
+                // Pelo launcher da Steam (App ID numerico validado): nada de abrir o .exe do jogo direto.
+                if (!System.Text.RegularExpressions.Regex.IsMatch(app.AppId ?? "", @"^\d{1,10}$")) return BadRequest(new { error = "Invalid Steam App ID." });
+                try
+                {
+                    Process.Start(new ProcessStartInfo("steam://rungameid/" + app.AppId) { UseShellExecute = true });
+                    return Ok(new { launched = app.Name });
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"Falha ao abrir '{app.Name}' pela Steam: {ex.Message}");
+                    return StatusCode(500, new { error = ex.Message });
+                }
+            }
+            if (app.Kind == "battlenet")
+            {
+                var launcher = BattleNetGames.FindLauncher();
+                if (!System.Text.RegularExpressions.Regex.IsMatch(app.AppId ?? "", @"^[A-Za-z0-9_]{2,16}$") || launcher == null)
+                    return BadRequest(new { error = "Battle.net is not available." });
+                try
+                {
+                    var psi = new ProcessStartInfo(launcher) { UseShellExecute = false };
+                    psi.ArgumentList.Add("--exec=launch " + app.AppId);
+                    Process.Start(psi);
+                    return Ok(new { launched = app.Name });
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"Falha ao abrir '{app.Name}' pela Battle.net: {ex.Message}");
+                    return StatusCode(500, new { error = ex.Message });
+                }
+            }
             if (app.Kind == "packaged")
             {
                 // App da Loja: abre pelo AppUserModelID (validado de novo aqui; nunca vem do cliente).
@@ -140,7 +179,12 @@ namespace DroidDeck.Controllers
             var dup = _library.FindByIdentity(item.Identity);
             if (dup != null) return Conflict(new { error = $"\"{dup.Name}\" is already in your library.", id = dup.Id });
             var entry = new AppEntry { Name = item.Name, Group = (body?.Group ?? "").Trim(), Favorite = body?.Favorite ?? false, Kind = item.Kind };
-            if (item.Kind == "packaged")
+            if (item.Kind is "steam" or "battlenet")
+            {
+                entry.AppId = item.Path; // App ID / codigo do jogo: vem da lista do servidor
+                entry.Path = "";
+            }
+            else if (item.Kind == "packaged")
             {
                 if (!InstalledApps.IsValidAumid(item.Path)) return BadRequest(new { error = "Invalid application id." });
                 entry.AppId = item.Path;

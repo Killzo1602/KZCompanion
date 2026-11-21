@@ -118,7 +118,9 @@ namespace DroidDeck.Services
         }
 
         public static string IdentityOfEntry(AppEntry e) =>
-            e.Kind == "packaged" ? "pkg:" + e.AppId.ToLowerInvariant() : IdentityOfPath(e.Path);
+            e.Kind == "packaged" ? "pkg:" + e.AppId.ToLowerInvariant()
+            : e.Kind is "steam" or "battlenet" ? e.Kind + ":" + e.AppId.ToLowerInvariant()
+            : IdentityOfPath(e.Path);
 
         /// <summary>Identidades de tudo que ja esta na biblioteca (para o "ja adicionado" do seletor).</summary>
         public HashSet<string> Identities()
@@ -168,6 +170,7 @@ namespace DroidDeck.Services
                 foreach (var a in list.Where(a => !a.CustomIcon))
                 {
                     if (a.Kind == "packaged") { SaveIcon(a.Id, InstalledApps.ExtractPackagedIconPng(a.AppId)); continue; }
+                    if (a.Kind is "steam" or "battlenet") continue; // arte local do jogo ja salva ao adicionar
                     if (!File.Exists(a.Path)) continue;
                     SaveIcon(a.Id, ExtractIconPng(a.Path));
                 }

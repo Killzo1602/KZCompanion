@@ -21,13 +21,15 @@ namespace DroidDeck.Services
     {
         public string Key { get; init; } = "";
         public string Name { get; init; } = "";
-        /// <summary>"file" (.lnk/.exe, abre pelo caminho) ou "packaged" (app da Loja, abre pelo AppUserModelID).</summary>
+        /// <summary>"file" (.lnk/.exe), "packaged" (app da Loja, AppUserModelID), "steam" (App ID) ou "battlenet" (codigo do jogo).</summary>
         public string Kind { get; init; } = "file";
         /// <summary>Caminho do .lnk/.exe, ou o AppUserModelID quando Kind = packaged. Nunca vem do cliente.</summary>
         public string Path { get; init; } = "";
         public string Identity { get; init; } = "";
         public string Source { get; init; } = "";
         public string Detail { get; set; } = "";
+        /// <summary>Preenchido para jogos (Steam/Battle.net).</summary>
+        public GameInfo? Game { get; init; }
     }
 
     /// <summary>
@@ -71,14 +73,19 @@ namespace DroidDeck.Services
         public string? IconBase64(InstalledItem item)
         {
             if (_icons.TryGetValue(item.Key, out var cached)) return cached;
-            byte[]? png = item.Kind == "packaged" ? ExtractPackagedIconPng(item.Path) : AppLibrary.ExtractIconPng(item.Path);
+            byte[]? png = IconFor(item);
             var b64 = png == null ? null : Convert.ToBase64String(png);
             _icons[item.Key] = b64;
             return b64;
         }
 
-        public static byte[]? IconFor(InstalledItem item) =>
-            item.Kind == "packaged" ? ExtractPackagedIconPng(item.Path) : AppLibrary.ExtractIconPng(item.Path);
+        public static byte[]? IconFor(InstalledItem item) => item.Kind switch
+        {
+            "packaged" => ExtractPackagedIconPng(item.Path),
+            "steam" => item.Game == null ? null : SteamGames.IconPng(item.Game),
+            "battlenet" => item.Game == null ? null : SteamGames.ExeIconPng(item.Game.InstallDir),
+            _ => AppLibrary.ExtractIconPng(item.Path),
+        };
 
         // ---- enumeracao ----
 
@@ -153,6 +160,22 @@ namespace DroidDeck.Services
             {
                 var identity = "pkg:" + id.ToLowerInvariant();
                 byIdentity[identity] = new InstalledItem { Key = Key(identity), Name = name, Kind = "packaged", Path = id, Identity = identity, Source = "Microsoft Store" };
+            }
+
+            // 4) Jogos: Steam (manifestos de todas as bibliotecas) e Battle.net (product.db). Abrem pelo launcher.
+            foreach (var g in SteamGames.Enumerate().Concat(BattleNetGames.Enumerate()))
+            {
+                // Atalhos/programas registrados que apontam para DENTRO da pasta do jogo sao o mesmo jogo:
+                // fica so a entrada do launcher (identidade pelo caminho, nunca pelo nome).
+                var prefix = g.InstallDir.TrimEnd('\\').ToLowerInvariant() + "\\";
+                foreach (var dup in byIdentity.Where(kv => kv.Value.Kind == "file" && kv.Key.StartsWith(prefix, StringComparison.Ordinal)).Select(kv => kv.Key).ToList())
+                    byIdentity.Remove(dup);
+                var identity = g.Kind + ":" + g.Id.ToLowerInvariant();
+                byIdentity[identity] = new InstalledItem
+                {
+                    Key = Key(identity), Name = g.Name, Kind = g.Kind, Path = g.Id, Identity = identity,
+                    Source = g.Kind == "steam" ? "Steam" : "Battle.net", Game = g,
+                };
             }
 
             var list = byIdentity.Values.ToList();
