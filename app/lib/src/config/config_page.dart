@@ -3,16 +3,12 @@ import 'package:droiddeck/src/connection/constants.dart';
 import 'package:droiddeck/src/services/server_discovery_service.dart';
 import 'package:droiddeck/src/services/signalr_service.dart';
 import 'package:droiddeck/core/core.dart';
-import 'package:droiddeck/src/stream_deck/backup/backup_buttons.dart';
-import 'package:droiddeck/src/config/integrations_page.dart';
-import 'package:droiddeck/src/config/triggers_page.dart';
 import 'package:droiddeck/src/config/pc_switcher.dart';
 import 'package:droiddeck/src/connection/pc_store.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'qr_scan_page.dart';
-import 'appearance_settings_page.dart';
 import '../welcome/welcome_page.dart';
 
 class ConfigPage extends StatefulWidget {
@@ -313,39 +309,6 @@ class ConfigPageState extends State<ConfigPage> {
               child: Text(tr('Salvar')),
             ),
             ],
-            const Divider(height: 32),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.palette_outlined),
-              title: Text(tr('Aparência')),
-              subtitle: Text(tr('Tema, cores, estilo dos botões, vibração e idioma')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AppearanceSettingsPage()),
-              ),
-            ),
-            const BackupButtons(),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.extension_outlined),
-              title: Text(tr('Integrações')),
-              subtitle: Text(tr(
-                  'Discord, OBS, Spotify, Twitch, Home Assistant, Hue, Voicemeeter e mais')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const IntegrationsPage()),
-              ),
-            ),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.bolt),
-              title: Text(tr('Automações')),
-              subtitle: Text(tr('Apertar um botão sozinho num horário, quando um app abrir…')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const TriggersPage()),
-              ),
-            ),
           ],
           ),
         ),

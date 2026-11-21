@@ -1,9 +1,9 @@
-import 'package:droiddeck/src/config/appearance_settings_page.dart';
 import 'package:droiddeck/src/kz/config/apps_config_page.dart';
-import 'package:droiddeck/src/stream_deck/stream_deck_page.dart';
+import 'package:droiddeck/src/kz/kz_appearance_page.dart';
+import 'package:droiddeck/src/kz/kz_integrations_page.dart';
 import 'package:flutter/material.dart';
 
-/// Configurador do KZ Companion (navegador no próprio PC): aplicativos, botões e aparência.
+/// Configurador do KZ Companion (navegador no próprio PC): aplicativos, integrações e aparência.
 class KzConfigShell extends StatefulWidget {
   const KzConfigShell({super.key});
 
@@ -19,8 +19,8 @@ class _KzConfigShellState extends State<KzConfigShell> {
     final scheme = Theme.of(context).colorScheme;
     final pages = <Widget>[
       const AppsConfigPage(),
-      StreamDeckPage(onToggleFullscreen: () {}, isFullscreen: false),
-      const AppearanceSettingsPage(),
+      const KzIntegrationsPage(),
+      const KzAppearancePage(),
     ];
     return Scaffold(
       body: Row(children: [
@@ -38,7 +38,7 @@ class _KzConfigShellState extends State<KzConfigShell> {
           ),
           destinations: const [
             NavigationRailDestination(icon: Icon(Icons.apps_rounded), label: Text('Applications')),
-            NavigationRailDestination(icon: Icon(Icons.grid_view_rounded), label: Text('Buttons')),
+            NavigationRailDestination(icon: Icon(Icons.extension_outlined), label: Text('Integrations')),
             NavigationRailDestination(icon: Icon(Icons.palette_outlined), label: Text('Appearance')),
           ],
         ),

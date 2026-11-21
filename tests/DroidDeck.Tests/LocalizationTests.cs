@@ -44,8 +44,8 @@ namespace DroidDeck.Tests
         [Fact]
         public void Placeholders_SaoTrocadosDepoisDeTraduzir()
         {
-            Assert.Equal(" Button: \"Live\".", InEnglish(() => L.T(" Botão: \"{label}\".", ("label", "Live"))));
-            Assert.Equal(" Botão: \"Live\".", L.T(" Botão: \"{label}\".", ("label", "Live")));
+            Assert.Equal("Spotify refused: boom", InEnglish(() => L.T("O Spotify recusou: {error}", ("error", "boom"))));
+            Assert.Equal("O Spotify recusou: boom", L.T("O Spotify recusou: {error}", ("error", "boom")));
         }
 
         [Fact]

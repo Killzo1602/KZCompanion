@@ -3,8 +3,9 @@ import 'package:droiddeck/src/kz/apps_page.dart';
 import 'package:droiddeck/src/kz/controls_page.dart';
 import 'package:droiddeck/src/kz/dashboard_page.dart';
 import 'package:droiddeck/src/kz/hardware_page.dart';
-import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:droiddeck/src/kz/kz_settings_page.dart';
+import 'package:droiddeck/src/kz/kz_appearance.dart';
+import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -94,7 +95,8 @@ class _KzShellState extends State<KzShell> with WidgetsBindingObserver {
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       // O recorte (notch) fica nas laterais com o celular deitado: o SafeArea cuida.
-      body: SafeArea(
+      body: KzBackdrop(
+        child: SafeArea(
         child: Row(children: [
           NavigationRail(
             selectedIndex: _index,
@@ -126,6 +128,7 @@ class _KzShellState extends State<KzShell> with WidgetsBindingObserver {
             ]),
           ),
         ]),
+        ),
       ),
     );
   }

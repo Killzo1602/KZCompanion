@@ -4,12 +4,13 @@ import 'dart:ui' as ui;
 
 import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/kz/dashboard_page.dart';
-import 'package:droiddeck/src/kz/kz_audio.dart';
+import 'package:droiddeck/src/kz/kz_appearance.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:droiddeck/src/services/signalr_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Sem rede: responde na hora com dados de exemplo (sem timers de timeout do Dio pendentes).
 class _FakePc implements HttpClientAdapter {
@@ -74,7 +75,7 @@ Future<void> _pumpAt(WidgetTester tester, Size physical, double dpr, {required S
               Expanded(
                 child: Column(children: [
                   const SizedBox(height: 30), // cabecalho compacto
-                  Expanded(child: DashboardPage(c: c, onOpenApps: () {})),
+                  Expanded(child: KzBackdrop(child: DashboardPage(c: c, onOpenApps: () {}))),
                 ]),
               ),
             ]),
@@ -99,6 +100,7 @@ Future<void> _pumpAt(WidgetTester tester, Size physical, double dpr, {required S
 }
 
 void main() {
+  appearanceVariants();
   testWidgets('Huawei Mate 20 Lite landscape (2340x1080 @2.75)', (tester) async {
     await _pumpAt(tester, const Size(2340, 1080), 2.75, name: 'mate20lite');
   });
@@ -107,5 +109,48 @@ void main() {
   });
   testWidgets('many audio sessions scroll without overflow', (tester) async {
     await _pumpAt(tester, const Size(2340, 1080), 2.75, name: 'many_sessions', sessions: 20);
+  });
+}
+
+/// As opções de Aparência do painel nunca podem quebrar o layout no Mate 20 Lite deitado.
+void appearanceVariants() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+  tearDown(KzPrefs.resetDashboard);
+  const mate = Size(2340, 1080);
+
+  testWidgets('compact spacing + round corners + glow background', (tester) async {
+    KzPrefs.density.value = KzDensity.compact;
+    KzPrefs.corners.value = KzCorners.round;
+    KzPrefs.background.value = KzBackground.glow;
+    await _pumpAt(tester, mate, 2.75, name: 'mate20lite_compact_glow');
+    expect(find.text('FAVORITES'), findsOneWidget);
+  });
+  testWidgets('sharp corners, many sessions', (tester) async {
+    KzPrefs.corners.value = KzCorners.sharp;
+    await _pumpAt(tester, mate, 2.75, name: 'mate20lite_sharp', sessions: 20);
+  });
+  testWidgets('stats hidden: favorites fill the left column', (tester) async {
+    KzPrefs.showStats.value = false;
+    await _pumpAt(tester, mate, 2.75, name: 'mate20lite_no_stats');
+    expect(find.text('CPU'), findsNothing);
+    expect(find.text('FAVORITES'), findsOneWidget);
+  });
+  testWidgets('favorites hidden', (tester) async {
+    KzPrefs.showFavorites.value = false;
+    await _pumpAt(tester, mate, 2.75, name: 'mate20lite_no_favorites');
+    expect(find.text('FAVORITES'), findsNothing);
+    expect(find.text('CPU'), findsOneWidget);
+  });
+  testWidgets('audio hidden: left column takes the full width', (tester) async {
+    KzPrefs.showAudio.value = false;
+    await _pumpAt(tester, mate, 2.75, name: 'mate20lite_no_audio');
+    expect(find.text('FAVORITES'), findsOneWidget);
+  });
+  testWidgets('everything hidden shows a hint, not a blank screen', (tester) async {
+    KzPrefs.showStats.value = false;
+    KzPrefs.showFavorites.value = false;
+    KzPrefs.showAudio.value = false;
+    await _pumpAt(tester, mate, 2.75, name: 'mate20lite_empty');
+    expect(find.textContaining('hidden'), findsOneWidget);
   });
 }

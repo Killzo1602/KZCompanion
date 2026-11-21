@@ -1308,25 +1308,5 @@ namespace DroidDeck.Tests
                 .ToList();
             Assert.True(missing.Count == 0, "Sem tradução: " + string.Join(" | ", missing));
         }
-
-        [Fact]
-        public async Task Tally_ListaEEstado_ComOSinalManual()
-        {
-            var client = _factory.CreateClient();
-            client.DefaultRequestHeaders.Add("X-API-KEY", ApiKeyProvider.GetKey());
-            var targets = (await client.GetFromJsonAsync<List<FieldOption>>("/api/tally/targets"))!;
-            Assert.Contains(targets, t => t.Value == TallyService.ManualId);
-
-            var keys = await client.GetStringAsync("/api/companion/keys");
-            Assert.Contains("\"connected\":false", keys);
-        }
-
-        [Fact]
-        public async Task Tally_SemChave_Recusa()
-        {
-            var client = _factory.CreateClient();
-            var response = await client.GetAsync("/api/tally/targets");
-            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        }
     }
 }

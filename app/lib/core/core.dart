@@ -18,18 +18,12 @@ export 'droiddeck_client/models/mixer_master.dart';
 export 'droiddeck_client/models/mixer_config.dart';
 export 'droiddeck_client/models/mixer_channel.dart';
 export 'droiddeck_client/models/media_session.dart';
-export 'droiddeck_client/models/deck_profile.dart';
-export 'droiddeck_client/models/deck_button.dart';
-export 'droiddeck_client/models/deck_action.dart';
-export 'droiddeck_client/models/sound_result.dart';
 
 export 'ui/molecules/volume_control.dart';
 export 'ui/molecules/media_control_widget.dart';
 
 
-export 'theme/deck_theme.dart';
 export 'theme/app_theme.dart';
 export 'theme/theme_controller.dart';
-export 'ui/molecules/deck_tile.dart';
 export 'web_mode.dart';
 export 'ui/friendly_error.dart';

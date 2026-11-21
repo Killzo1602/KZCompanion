@@ -1,4 +1,5 @@
 import 'package:droiddeck/core/core.dart';
+import 'package:droiddeck/src/kz/kz_appearance.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:droiddeck/src/kz/kz_audio_widgets.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
@@ -11,57 +12,72 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, box) {
-      // Paisagem (o painel e travado assim): esquerda = CPU/GPU/RAM + favoritos; direita = audio.
-      // Em tela estreita (nao deveria ocorrer) empilha, para nunca cortar nem estourar.
-      if (box.maxWidth < 620) {
-        return ListView(
-          padding: const EdgeInsets.all(12),
-          children: [
-            _statsRow(),
-            const SizedBox(height: 12),
-            _favorites(context, expand: false),
-            const SizedBox(height: 12),
-            KzAudioControls(c.audio),
-            const SizedBox(height: 12),
-            KzMixer(c.audio),
-          ],
+    return Watch((context) {
+      final gap = KzPrefs.density.value.gap;
+      final stats = KzPrefs.showStats.value;
+      final favs = KzPrefs.showFavorites.value;
+      final audio = KzPrefs.showAudio.value;
+      if (!stats && !favs && !audio) {
+        return Center(
+          child: Text(
+            'All dashboard sections are hidden.\nTurn them on in Settings → Appearance.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55)),
+          ),
         );
       }
-      final rightWidth = (box.maxWidth * 0.42).clamp(320.0, 430.0);
-      return Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              _statsRow(),
-              const SizedBox(height: 12),
-              Expanded(child: _favorites(context, expand: true)),
-            ]),
-          ),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: rightWidth,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              KzAudioControls(c.audio),
-              const SizedBox(height: 12),
-              Expanded(child: KzMixer(c.audio, scroll: true)),
-            ]),
-          ),
-        ]),
-      );
+      return LayoutBuilder(builder: (context, box) {
+        // Paisagem (o painel e travado assim): esquerda = CPU/GPU/RAM + favoritos; direita = audio.
+        // Em tela estreita (nao deveria ocorrer) empilha, para nunca cortar nem estourar.
+        if (box.maxWidth < 620) {
+          return ListView(
+            padding: EdgeInsets.all(gap),
+            children: [
+              if (stats) ...[_statsRow(gap), SizedBox(height: gap)],
+              if (favs) ...[_favorites(context, expand: false), SizedBox(height: gap)],
+              if (audio) ...[
+                KzAudioControls(c.audio),
+                SizedBox(height: gap),
+                KzMixer(c.audio),
+              ],
+            ],
+          );
+        }
+        final rightWidth = (box.maxWidth * 0.42).clamp(320.0, 430.0);
+        final left = stats || favs;
+        final leftColumn = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          if (stats) _statsRow(gap),
+          if (stats && favs) SizedBox(height: gap),
+          if (favs) Expanded(child: _favorites(context, expand: true)),
+          // So as estatisticas: elas nao esticam, o resto fica vazio.
+          if (!favs) const Spacer(),
+        ]);
+        final rightColumn = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          KzAudioControls(c.audio),
+          SizedBox(height: gap),
+          Expanded(child: KzMixer(c.audio, scroll: true)),
+        ]);
+        return Padding(
+          padding: EdgeInsets.all(gap),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (left) Expanded(child: leftColumn),
+            if (left && audio) SizedBox(width: gap),
+            if (audio) left ? SizedBox(width: rightWidth, child: rightColumn) : Expanded(child: rightColumn),
+          ]),
+        );
+      });
     });
   }
 
-  Widget _statsRow() {
+  Widget _statsRow(double gap) {
     return Watch((context) {
       final s = c.signalR.systemStats.value;
       return IntrinsicHeight(
         child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Expanded(child: _stat('CPU', Icons.memory_rounded, s.cpuUsage, s.cpuTemp, c.cpuHistory.value)),
-          const SizedBox(width: 12),
+          SizedBox(width: gap),
           Expanded(child: _stat('GPU', Icons.developer_board_rounded, s.gpuUsage, s.gpuTemp, c.gpuHistory.value)),
-          const SizedBox(width: 12),
+          SizedBox(width: gap),
           Expanded(
             child: _stat('RAM', Icons.storage_rounded, s.ramUsedPercent, null, c.ramHistory.value,
                 sub: s.ramTotal > 0

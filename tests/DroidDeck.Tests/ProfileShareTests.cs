@@ -55,38 +55,4 @@ namespace DroidDeck.Tests
         public void TextoInvalido_Erro(string data) =>
             Assert.Throws<InvalidDataException>(() => ProfileShare.Decode(data));
     }
-
-    public class ProfileShareEndpointTests : IClassFixture<WebApplicationFactory<DroidDeck.Program>>
-    {
-        private readonly WebApplicationFactory<DroidDeck.Program> _factory;
-
-        public ProfileShareEndpointTests(WebApplicationFactory<DroidDeck.Program> factory) => _factory = factory;
-
-        [Fact]
-        public async Task ImportarDeFora_TiraOAtalho()
-        {
-            var client = _factory.CreateClient();
-            client.DefaultRequestHeaders.Add("X-API-KEY", ApiKeyProvider.GetKey());
-            var profile = new DeckProfile
-            {
-                Name = "Compartilhado",
-                Buttons =
-                {
-                    new DeckButton { Id = "x", Label = "Copiar", Action = new DeckAction { Type = "hotkey", Parameters = { ["keys"] = "^c" } } },
-                    new DeckButton { Id = "y", Row = 1, Label = "Play", Action = new DeckAction { Type = "media", Parameters = { ["command"] = "playpause" } } },
-                },
-            };
-            var resp = await client.PostAsJsonAsync("/api/share/import", new { data = ProfileShare.Encode(profile) });
-            Assert.Equal(HttpStatusCode.OK, resp.StatusCode);
-            var body = await resp.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal(1, body.GetProperty("stripped").GetInt32());
-
-            var saved = await client.GetFromJsonAsync<DeckProfile>("/api/streamdeck/profiles/" + body.GetProperty("profileId").GetString());
-            Assert.Null(saved!.Buttons.Find(b => b.Label == "Copiar")!.Action);
-            Assert.Equal("media", saved.Buttons.Find(b => b.Label == "Play")!.Action!.Type);
-
-            var bad = await client.PostAsJsonAsync("/api/share/import", new { data = "lixo" });
-            Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
-        }
-    }
 }

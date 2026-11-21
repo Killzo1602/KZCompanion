@@ -111,49 +111,4 @@ namespace DroidDeck.Tests
             Assert.False(ActionPolicy.IsLocal((IPAddress?)null));
         }
     }
-
-    /// <summary>
-    /// O TestServer nao tem IP remoto, entao as requisicoes contam como vindas de fora do PC
-    /// -- exatamente o caso do celular. Nenhum destes testes grava perfil.
-    /// </summary>
-    public class ActionPolicyEndpointTests : IClassFixture<WebApplicationFactory<DroidDeck.Program>>
-    {
-        private readonly WebApplicationFactory<DroidDeck.Program> _factory;
-
-        public ActionPolicyEndpointTests(WebApplicationFactory<DroidDeck.Program> factory) => _factory = factory;
-
-        private System.Net.Http.HttpClient Client()
-        {
-            var client = _factory.CreateClient();
-            client.DefaultRequestHeaders.Add("X-API-KEY", ApiKeyProvider.GetKey());
-            return client;
-        }
-
-        [Fact]
-        public async Task ExecuteRemoto_DeAcaoPrivilegiada_E403()
-        {
-            var response = await Client().PostAsJsonAsync("/api/StreamDeck/execute",
-                new { type = "launch_app", parameters = new { path = "" } });
-
-            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-        }
-
-        [Fact]
-        public async Task ExecuteRemoto_DeAcaoComum_ContinuaLiberado()
-        {
-            var response = await Client().PostAsJsonAsync("/api/StreamDeck/execute",
-                new { type = "none", parameters = new { } });
-
-            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        }
-
-        [Fact]
-        public async Task Press_DeBotaoInexistente_E404()
-        {
-            var response = await Client().PostAsJsonAsync("/api/StreamDeck/press",
-                new { profileId = "nao-existe", buttonId = "nada" });
-
-            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        }
-    }
 }

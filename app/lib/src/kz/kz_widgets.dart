@@ -1,3 +1,5 @@
+import 'package:droiddeck/core/core.dart';
+import 'package:droiddeck/src/kz/kz_appearance.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:flutter/material.dart';
 
@@ -25,11 +27,13 @@ class KzCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final scale = KzPrefs.density.watch(context).padScale;
+    final radius = KzPrefs.corners.watch(context).radius;
     return Container(
-      padding: padding,
+      padding: padding * scale,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(

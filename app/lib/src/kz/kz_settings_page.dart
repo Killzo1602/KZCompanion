@@ -1,36 +1,11 @@
 import 'package:droiddeck/core/core.dart';
-import 'package:droiddeck/src/config/appearance_settings_page.dart';
 import 'package:droiddeck/src/connection/constants.dart';
+import 'package:droiddeck/src/kz/kz_appearance_page.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
+import 'package:droiddeck/src/kz/kz_integrations_page.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
-import 'package:droiddeck/src/stream_deck/stream_deck_page.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
-
-/// Preferências de exibição do painel (persistidas no aparelho).
-class KzPrefs {
-  static const keepAwakeKey = 'kz_keep_awake';
-  static const immersiveKey = 'kz_immersive';
-  static final keepAwake = signal(true);
-  static final immersive = signal(true);
-
-  static Future<void> load() async {
-    final sp = await SharedPreferences.getInstance();
-    keepAwake.value = sp.getBool(keepAwakeKey) ?? true;
-    immersive.value = sp.getBool(immersiveKey) ?? true;
-  }
-
-  static Future<void> setKeepAwake(bool v) async {
-    keepAwake.value = v;
-    (await SharedPreferences.getInstance()).setBool(keepAwakeKey, v);
-  }
-
-  static Future<void> setImmersive(bool v) async {
-    immersive.value = v;
-    (await SharedPreferences.getInstance()).setBool(immersiveKey, v);
-  }
-}
 
 class KzSettingsPage extends StatefulWidget {
   const KzSettingsPage({super.key, required this.c});
@@ -59,64 +34,8 @@ class _KzSettingsPageState extends State<KzSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
-    final theme = ThemeController.instance;
     return ListView(padding: const EdgeInsets.all(12), children: [
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(
-          child: Column(children: [
-            KzCard(
-              title: 'Accent color',
-              icon: Icons.palette_outlined,
-              child: Watch((context) {
-                final s = theme.settings.value;
-                return Wrap(spacing: 10, runSpacing: 10, children: [
-                  for (final color in kAccentChoices)
-                    GestureDetector(
-                      onTap: () => theme.update(s.copyWith(accent: () => color)),
-                      child: Container(
-                        width: 36,
-                        height: 36,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: s.effectiveAccent.toARGB32() == color.toARGB32()
-                                ? Colors.white
-                                : Colors.transparent,
-                            width: 2.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                ]);
-              }),
-            ),
-            const SizedBox(height: 12),
-            KzCard(
-              title: 'Display',
-              icon: Icons.stay_current_landscape_rounded,
-              padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-              child: Column(children: [
-                Watch((context) => SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Keep screen on'),
-                      value: KzPrefs.keepAwake.value,
-                      onChanged: (v) {
-                        KzPrefs.setKeepAwake(v);
-                        WakelockPlus.toggle(enable: v);
-                      },
-                    )),
-                Watch((context) => SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Hide system bars'),
-                      value: KzPrefs.immersive.value,
-                      onChanged: KzPrefs.setImmersive,
-                    )),
-              ]),
-            ),
-          ]),
-        ),
-        const SizedBox(width: 12),
         Expanded(
           child: Column(children: [
             KzCard(
@@ -168,18 +87,18 @@ class _KzSettingsPageState extends State<KzSettingsPage> {
                 ]);
               }),
             ),
-            const SizedBox(height: 12),
+          ]),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(children: [
             KzCard(
-              title: 'More',
+              title: 'Settings',
               icon: Icons.tune_rounded,
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
               child: Column(children: [
-                _link(context, Icons.grid_view_rounded, 'Button deck', () => _push(context, (ctx) => _Wrapped(
-                      title: 'Button deck',
-                      child: StreamDeckPage(onToggleFullscreen: () {}, isFullscreen: false),
-                    ))),
-                _link(context, Icons.color_lens_outlined, 'Full appearance settings',
-                    () => _push(context, (_) => const AppearanceSettingsPage())),
+                _link(context, Icons.palette_outlined, 'Appearance', () => _push(context, (_) => const KzAppearancePage())),
+                _link(context, Icons.extension_outlined, 'Integrations', () => _push(context, (_) => const KzIntegrationsPage())),
               ]),
             ),
             const SizedBox(height: 12),
@@ -206,17 +125,5 @@ class _KzSettingsPageState extends State<KzSettingsPage> {
         title: Text(label),
         trailing: const Icon(Icons.chevron_right_rounded),
         onTap: onTap,
-      );
-}
-
-class _Wrapped extends StatelessWidget {
-  const _Wrapped({required this.title, required this.child});
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(title), toolbarHeight: 44),
-        body: SafeArea(top: false, child: child),
       );
 }

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/services.dart' show AssetManifest, rootBundle;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -65,8 +64,8 @@ class AppLanguage {
 
   static String resolve(String choice) {
     if (choice != 'auto' && _has(choice)) return choice;
-    final device = PlatformDispatcher.instance.locale.languageCode;
-    return _has(device) ? device : fallback;
+    // KZ Companion é só em inglês por enquanto: o idioma do aparelho não conta.
+    return fallback;
   }
 
   static LanguageInfo get info =>
@@ -89,10 +88,8 @@ class AppLanguage {
     } catch (_) {
       // Sem os arquivos o app segue em português (as chaves).
     }
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      choice.value = prefs.getString(_prefKey) ?? 'auto';
-    } catch (_) {}
+    // A escolha de idioma salva por versões antigas é ignorada: o app fica em inglês.
+    choice.value = 'auto';
   }
 
   /// Usa estes idiomas (código → conteúdo do JSON). Os testes chamam com os arquivos do disco.
