@@ -14,7 +14,9 @@ On your own PC (needs a JDK for `keytool` and the GitHub CLI logged in as the re
 It creates `%USERPROFILE%\KZCompanion-signing\kzcompanion-release.jks` (outside the repository), asks for a password
 (hidden), and sets these repository secrets without printing them: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`,
 `ANDROID_KEY_PASSWORD`, `ANDROID_STORE_PASSWORD`. It prints only the public certificate fingerprints.
-It refuses to overwrite an existing keystore.
+It refuses to overwrite an existing keystore, and refuses to run if the signing secrets already exist (so a second identity is never created by accident).
+If the key was created but uploading the secrets failed, keep the key and run `.\scripts
+ew-android-keystore.ps1 -SecretsOnly -ReplaceSecrets` to upload it again.
 
 Manual alternative: create the keystore with `keytool -genkeypair -v -storetype PKCS12 -keystore kzcompanion-release.jks -alias kzcompanion -keyalg RSA -keysize 4096 -validity 10000`,
 then add the four secrets under Settings, Secrets and variables, Actions.
