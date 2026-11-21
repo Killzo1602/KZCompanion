@@ -1,12 +1,10 @@
 ### Install
 
-DroidDeck has **two parts, and you need both**:
+KZ Companion has **two parts, and you need both**:
 
-1. **Windows** — `DroidDeck-Setup.exe` (installs to the tray and updates itself). Prefer no installer? Use `DroidDeck-win-x64.zip`.
-2. **Android** — `DroidDeck.apk`, then pair with the QR code from the tray menu.
+1. **Windows**: `KZCompanion-Setup.exe` (installs to the tray and updates itself). Prefer no installer? Use `KZCompanion-win-x64.zip`.
+2. **Android**: `KZCompanion.apk`, then pair with the QR code from the tray menu (**Pair device (QR)**).
 
-Step by step: [installation guide](https://me.gf2.in/DroidDeck/docs/getting-started/installation/) · [Português](https://me.gf2.in/DroidDeck/docs/pt/getting-started/installation/)
-
-> Looking for the app that runs Steam games on Android? That is a different project with the same name: [Droid-Deck/DroidDeck](https://github.com/Droid-Deck/DroidDeck).
+The Windows installer is not code-signed yet, so SmartScreen may warn on first run. Step by step, requirements and troubleshooting are in the [README](https://github.com/Killzo1602/KZCompanion#installation).
 
 ---

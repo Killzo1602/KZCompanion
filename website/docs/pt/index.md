@@ -1,5 +1,12 @@
 # DroidDeck
 
+!!! warning "Documentação legada do DroidDeck"
+    Este site vem do projeto original [DroidDeck](https://github.com/ggfto/DroidDeck) e descreve o deck de
+    botões, perfis, automações e importação do Stream Deck. **Esses recursos foram removidos do KZ
+    Companion.** As páginas ficam por atribuição e como referência de integrações e API, e ainda não foram
+    reescritas. Para a documentação atual, veja o [README](https://github.com/Killzo1602/KZCompanion#readme).
+
+
 **O DroidDeck transforma um celular Android em um Stream Deck para o seu PC com Windows.** Monte uma
 grade de botões no celular que disparam atalhos, abrem apps, controlam áudio e mídia, comandam o
 Discord e o OBS, tocam sons e acendem suas lâmpadas inteligentes. No PC roda um pequeno app na

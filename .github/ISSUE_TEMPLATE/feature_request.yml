@@ -1,19 +1,27 @@
 name: Feature request
-description: A new action, integration or improvement.
+description: Suggest an improvement. v1.0.0 is in feature freeze, so requests are planned for after the release.
 labels: [enhancement]
 body:
+  - type: markdown
+    attributes:
+      value: Please **do not include credentials, pairing keys or tokens**.
   - type: textarea
     id: problem
     attributes:
       label: What would you like to do?
-      description: Describe what you want the button (or the app) to do, and why.
+      description: Describe the problem or workflow, and why it matters.
     validations:
       required: true
   - type: textarea
     id: idea
     attributes:
       label: How could it work?
-      description: Optional. Screens, apps it should talk to, similar tools that do it well.
+      description: Optional. Screens, apps or services it should work with.
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: Windows version and Android version/device this is about.
   - type: checkboxes
     id: help
     attributes:

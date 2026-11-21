@@ -105,6 +105,9 @@ components:
     padding: "24px"
 ---
 
+> **Legacy document.** Written for DroidDeck (the button deck) and kept for history. It does not describe KZ Companion 1.0. See README.md.
+
+
 # Design System: DroidDeck
 
 ## Overview

@@ -1,197 +1,312 @@
 <div align="center">
 
-<img src="website/landing/logo.svg" alt="DroidDeck" width="96" height="96">
+<img src="app/assets/images/logo.png" alt="KZ Companion" width="112" height="112">
 
-# DroidDeck
+# KZ Companion
 
-**Turn an Android phone into a Stream Deck for your Windows PC.**
+**Give an old Android phone a second life as a live dashboard and remote control for your Windows PC.**
 
-**English** · [Português](README.pt-BR.md)
+[![Platform: Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?style=for-the-badge&logo=windows11&logoColor=white)](#installation)
+[![Platform: Android](https://img.shields.io/badge/Android-companion%20app-3DDC84?style=for-the-badge&logo=android&logoColor=white)](#installation)
+[![Latest release](https://img.shields.io/github/v/release/Killzo1602/KZCompanion?style=for-the-badge&label=Release&include_prereleases)](https://github.com/Killzo1602/KZCompanion/releases)
+[![CI](https://img.shields.io/github/actions/workflow/status/Killzo1602/KZCompanion/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/Killzo1602/KZCompanion/actions/workflows/ci.yml)
+[![License: Apache 2.0](https://img.shields.io/github/license/Killzo1602/KZCompanion?style=for-the-badge)](LICENSE)
 
-[![GitHub stars](https://img.shields.io/github/stars/ggfto/DroidDeck?style=for-the-badge&logo=github&label=Stars&color=f5b301)](https://github.com/ggfto/DroidDeck/stargazers)
-[![Latest release](https://img.shields.io/github/v/release/ggfto/DroidDeck?style=for-the-badge&label=Release)](https://github.com/ggfto/DroidDeck/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/ggfto/DroidDeck/total?style=for-the-badge&label=Downloads)](https://github.com/ggfto/DroidDeck/releases)
-[![CI](https://img.shields.io/github/actions/workflow/status/ggfto/DroidDeck/ci.yml?branch=main&style=for-the-badge&label=CI)](https://github.com/ggfto/DroidDeck/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/ggfto/DroidDeck?style=for-the-badge)](LICENSE)
-
-[**Download**](https://github.com/ggfto/DroidDeck/releases/latest) ·
-[**Website**](https://me.gf2.in/DroidDeck/) ·
-[**Documentation**](https://me.gf2.in/DroidDeck/docs/)
+[**Download**](https://github.com/Killzo1602/KZCompanion/releases) ·
+[**Installation**](#installation) ·
+[**Documentation**](#documentation) ·
+[**Report a bug**](https://github.com/Killzo1602/KZCompanion/issues/new/choose)
 
 </div>
 
 > [!NOTE]
-> **Looking for the app that runs Steam games on Android?** That is a different project that happens to
-> share the name: [Droid-Deck/DroidDeck](https://github.com/Droid-Deck/DroidDeck). This one turns your
-> phone into a **button deck that controls a Windows PC**.
+> **Status: v1.0.0 is being prepared.** No release has been published yet, so there is nothing to
+> download from the Releases page today. Until then you can [build from source](#development).
+> See [docs/release-checklist.md](docs/release-checklist.md) for what is left.
 
 ---
 
-Set up a grid of buttons on your phone that fire shortcuts, open apps, control audio and media, drive
-Discord and OBS, play sounds and switch your smart lights. The PC side is a small tray app; the phone
-talks to it over your local network.
+## What it is
 
-<p align="center">
-  <img src="website/docs/assets/demo.gif" alt="DroidDeck on a phone: buttons light up as they are tapped, a timer counts down and live CPU, GPU and network gauges update" width="100%">
-</p>
+KZ Companion has two parts that work together:
 
-## 💡 Why DroidDeck
+- **KZ Companion for Windows** — a small tray app on your PC. It reads your hardware, controls the
+  audio mixer, launches and manages apps, and talks to the integrations you choose to set up.
+- **KZ Companion for Android** — the dashboard and remote control. It shows live PC stats and gives you
+  touch controls for audio, apps and more.
 
-- **Free and open source** — no subscription, no limit on the number of buttons or pages.
-- **No sign-up, no cloud** — DroidDeck itself needs no account; the phone talks straight to your PC on the local network.
-- **Integrations built in** — Discord, OBS, Spotify, Twitch, YouTube, Home Assistant and Tuya work out
-  of the box, with live state on the buttons. No plugins to hunt down.
-- **Edit on the big screen** — a drag-and-drop configurator in the PC's browser; changes reach the
-  phone instantly.
-- **Updates itself** — the Windows app installs new versions in the background.
+The phone you stopped using, propped up next to your monitor, becomes a dedicated PC control panel:
+CPU, GPU and RAM at a glance, a per-app volume mixer under your thumb, and your favorite apps one tap away.
 
-## ✨ Features
+KZ Companion is a modified fork of [DroidDeck](https://github.com/ggfto/DroidDeck) by Gabriel Freitas.
+See [Credits and license](#credits-and-license).
 
-| | |
+## Screenshots
+
+> [!IMPORTANT]
+> Real screenshots of the current KZ Companion UI have **not been captured yet**, and this README does
+> not use images of the older DroidDeck deck, which no longer matches the product. The capture list is
+> in [docs/screenshots/README.md](docs/screenshots/README.md). Once the images exist, they go here:
+
+| Screen | File (to be added) |
 |---|---|
-| ⌨️ **Shortcuts & apps** | Send key combinations, open programs, files and URLs, run PowerShell/Python/`.bat` scripts, chain steps in a multi-action (with conditions), call webhooks and APIs. |
-| 🪟 **Windows** | Switch the default audio device (headphones ↔ speakers), lock, sleep, turn the screen off. |
-| ⏱️ **Timers** | Countdown, stopwatch, pomodoro and counters with a live clock on the button. |
-| 🎮 **Steam** | Pick an installed game and the button gets its cover; tap to launch it. |
-| 🗂️ **Profiles** | Folders, long-press and double-tap actions, automatic switching by the focused app, `.droiddeck` backups, and an offline copy of the deck on the phone. |
-| 🔊 **Audio mixer** | Mute apps, change device volume, toggle the mic. The phone also has a full per-app mixer. |
-| ⏯️ **Media** | Play/pause, next, previous for whatever is playing in Windows (Spotify, browser, players). |
-| 📊 **Live monitors** | CPU, GPU, RAM and network gauges that update every second. |
-| 💬 **Discord** | Mute/deafen, join channels, voice volume, push-to-talk, per-user volume, native soundboard. |
-| 🎥 **OBS Studio** | Scenes, recording, streaming, virtual camera, replay buffer, mute and show/hide sources, filters, chapter markers, screenshots — with live state. |
-| 🎵 **Soundboard** | Search and play sounds from MyInstants, routed to your mic through VB-Cable. |
-| 💡 **Smart home** | Home Assistant, and Tuya / Smart Life lights, plugs and switches — toggles, dimmers and colours, with real state. |
-| 🎧 **Spotify** | Player, like, shuffle, playlists and the album cover on the button (Premium). |
-| 📡 **Twitch & YouTube** | Markers, clips, ads, polls and chat; live status and viewers. |
-| 🔁 **Two states & info** | Toggle buttons with their own icon and label; clock, weather, now playing, Windows notifications, command output and URL values on a button; record macros from the keyboard. |
-| 🎚️ **Sliders & big buttons** | Volume sliders for the PC, the mic or one app; buttons that span several cells; animated GIF icons. |
-| 🤖 **Automations** | Press a button by itself at a set time, when an app opens or closes, or when the PC wakes up. |
-| 📥 **Import & share** | Import Elgato Stream Deck profiles, share a profile by link or QR, start from the [profile gallery](https://me.gf2.in/DroidDeck/gallery/). |
-| 🖥️ **Several PCs** | Pair one phone with more than one PC and switch from the deck's top bar. |
-| 📱 **iPhone, iPad & USB** | Use the deck in any browser (iPhone, iPad, another PC) through a QR code, or connect an Android phone over a USB cable, no Wi-Fi needed. |
-| 🎨 **Themes** | Ready-made themes, light/dark mode, accent colour and three button styles. A "deck only" mode opens straight into a full-screen deck, and buttons can vibrate on tap. |
+| Android Dashboard | `docs/screenshots/android-dashboard.png` |
+| Android Apps / Running Apps | `docs/screenshots/android-apps-running.png` |
+| Windows configurator, Applications | `docs/screenshots/windows-applications.png` |
+| Windows configurator, Integrations catalog | `docs/screenshots/windows-integrations.png` |
+| Windows configurator, Appearance | `docs/screenshots/windows-appearance.png` |
 
-## 📸 Screenshots
+## Features
 
-<p align="center">
-  <img src="website/docs/assets/screenshots/deck-neon.png" alt="Deck with the Neon theme" width="49%">
-  <img src="website/docs/assets/screenshots/deck-oled.png" alt="Deck with the OLED theme" width="49%">
-</p>
-<p align="center">
-  <img src="website/docs/assets/screenshots/appearance-top.png" alt="Appearance screen with live preview" width="49%">
-  <img src="website/docs/assets/screenshots/appearance-themes.png" alt="Themes, accent colour and button style" width="49%">
-</p>
+**Monitoring**
+- Live CPU, GPU and RAM usage with history on the Android Dashboard, plus a Hardware page with more detail.
+- Sensor values such as CPU temperature and power are shown **only when your hardware and the sensor driver
+  report them**; otherwise the app says they are unavailable. See [CPU temperature is missing](#cpu-temperature-is-missing).
 
-## 🚀 Getting started
+**Audio**
+- Windows master volume and mute.
+- Per-application volume and mute, from the Windows audio mixer.
+- Microphone mute and a system-wide **Deafen** (see [below](#windows-microphone-controls-vs-discord-mute)).
 
-**You need both parts:** the Windows app (it does the work) and the Android app (the buttons). The
-phone app alone does nothing. On an iPhone or iPad, use the
-[deck in the browser](https://me.gf2.in/DroidDeck/docs/getting-started/browser-usb/) instead of the app.
+**Apps**
+- **Favorites** and one-tap application launching.
+- **Installed application and game discovery**, including Steam and Battle.net games, in the app picker.
+- **Running Apps**: the applications that currently have a window, one row per app, with
+  **Focus / Restore**, **Minimize** and **graceful Close** (the same as clicking the window's X; it never
+  force-kills a process, and the phone asks before closing). Per-app volume appears on the same row when the app has an audio session.
 
-**Requirements:** Windows 10 1809+ (64-bit) · Android 7.0+ (or any browser, for iPhone and iPad) · phone and PC on the same local network, or an Android phone on a USB cable.
+**Customization and connection**
+- Appearance settings on both Windows and Android.
+- **QR pairing** and authenticated communication between phone and PC.
+- An optional **integrations catalog** (see the [support matrix](#integrations)).
 
-1. **Windows** — download and run `DroidDeck-Setup.exe` from the [latest release](https://github.com/ggfto/DroidDeck/releases/latest).
-   It lives in the system tray and updates itself. (Prefer no installer? Use `DroidDeck-win-x64.zip`,
-   extract it and run `DroidDeck.exe`.) No .NET install needed.
-2. **Android** — install `DroidDeck.apk` from the same release.
-3. **Pair** — right-click the tray icon → **Parear dispositivo (QR)…** and scan the code with the app.
-4. **Configure** — open `http://localhost:4787/` on the PC to edit your buttons. Changes show up on the phone instantly.
+### Windows microphone controls vs. Discord mute
+
+These are two different things, and KZ Companion does not blur them.
+
+| | Windows mic mute / Deafen | Discord mute / deafen |
+|---|---|---|
+| Works on | The default Windows microphone and output device | Your voice state **inside Discord** only |
+| Needs setup | No | Yes: the Discord integration (see below) |
+| Effect | Every app stops hearing the mic (mute). Deafen also mutes the default output. | Discord's own self-mute/self-deafen |
+| Deafen restore | Turning Deafen off restores each device to the mute state it had before. | — |
+
+Muting the Windows microphone silences it for all applications, including Discord. It does not change
+Discord's own mute button state. The Discord integration is what controls Discord's internal state.
+
+## Integrations
+
+Integrations are **optional** and are configured **on the Windows PC**. The catalog is a list of what
+exists, with an honest status. **Nothing below has been verified against a live account or device yet**;
+"setup available" means the setup screen and backend exist, not that it is proven in every environment.
+
+| Integration | Status | Notes |
+|---|---|---|
+| **Discord** | Setup available | Mute/deafen, voice channel, volume via Discord's local RPC. You create your own Discord application. Discord restricts the voice scopes to approved apps; unapproved apps work for accounts on the app's tester list (up to 50). The Discord soundboard is not offered. |
+| **Spotify** | Setup available | Account sign-in works; the player panel is not in the app yet. Needs Premium and your own Spotify developer app (Development Mode: Premium owner, up to 5 users). "Save to library" uses a Spotify endpoint removed in Feb 2026 and needs an update. |
+| **OBS Studio** | Setup available | Connects through OBS WebSocket 5.x and reads state. Phone controls are not built yet. |
+| **Apple Music** | Candidate | Not verified. See [Apple Music on Windows](#apple-music-on-windows). |
+| **Home Assistant** | Backend only | Code exists; no KZ setup screen or device list yet. |
+| **Philips Hue** | Backend only | Uses the older local Hue API v1; its long-term support is unverified. |
+| **Govee (LAN)** | Backend only | Needs LAN Control on each device. |
+| **MQTT** | Backend only | Publish only. |
+| **Twitch** | Backend only | Needs your own Twitch application. |
+| **YouTube Live** | Backend only | Needs your own Google Cloud OAuth client. |
+| **Tuya / Smart Life** | On hold | Pairing currently borrows Home Assistant's public registration; off until KZ Companion has its own. |
+
+Status meanings: **Setup available** = a setup screen exists. **Backend only** = the PC has code but there is
+no KZ screen. **Experimental / unverified** = anything that has not been run against the real service
+(currently every row). **Candidate** = a plausible idea with no proof. **On hold** = deliberately paused.
+
+The PC code also contains older integrations inherited from DroidDeck (for example Voicemeeter, Elgato,
+Streamer.bot, VTube Studio, vMix, Bitfocus Companion, radio automation, a MyInstants soundboard). They have
+no KZ interface and are neither supported nor tested in KZ Companion. The detailed audit is in
+[docs/integration-audit-phase1.md](docs/integration-audit-phase1.md).
+
+### Apple Music on Windows
+
+There is no public API to control the Apple Music desktop app. KZ Companion's only possible route is the
+**Windows media session** (the same system media controls Windows shows for playing media), and it has
+**not been tested** whether Apple Music for Windows exposes one. Even if it does:
+
+- play/pause/skip depend on what the app allows through that interface;
+- there are no playlists, likes or library access;
+- per-app volume would come from the Windows mixer, independent of media sessions.
+
+MusicKit does not apply: it plays music inside your own app and cannot control the desktop app.
+
+## Installation
+
+You need **both** parts: the Windows app and the Android app. The phone and the PC must be on the same
+local network (or connected by USB with Android debugging).
 
 > [!NOTE]
-> The app follows the phone's language (English, Portuguese, Spanish or Hindi; anything else gets English). The
-> [documentation](https://me.gf2.in/DroidDeck/docs/) is available in both.
+> No release is published yet. These are the steps for when v1.0.0 is on the
+> [Releases page](https://github.com/Killzo1602/KZCompanion/releases). The planned files are:
+> `KZCompanion-Setup.exe`, `KZCompanion-win-x64.zip` and `KZCompanion.apk`.
 
-Having trouble (SmartScreen, firewall, phone not finding the PC)? See
-[Installation](https://me.gf2.in/DroidDeck/docs/getting-started/installation/) and
-[Troubleshooting](https://me.gf2.in/DroidDeck/docs/troubleshooting/).
+**Requirements:** Windows 10 version 1809 (build 17763) or newer on the PC; an Android phone. The Windows
+app is self-contained, so you do not install .NET separately. The Windows installer is not code-signed
+yet, so SmartScreen may warn on first run (see [Troubleshooting](#troubleshooting)).
 
-## 🔌 Integrations
+1. **Windows.** Download `KZCompanion-Setup.exe` and run it. It installs to the system tray and updates
+   itself from GitHub Releases. Prefer no installer? Unzip `KZCompanion-win-x64.zip` and run `KZCompanion.exe`.
+2. **Android.** Download `KZCompanion.apk` on the phone, allow installing from that source when Android asks,
+   and open it.
+3. **Allow the firewall.** On first launch the PC app offers to open the needed ports in Windows Firewall
+   (TCP 4787 for the app, UDP 7573 for discovery). Accept for private networks.
+4. **Pair with QR.** On the PC, right-click the tray icon and open the pairing window. In the Android app,
+   scan the QR code. The phone stores the key and connects.
+5. **Connect.** Once paired, the Dashboard fills with live data. The PC also answers a discovery broadcast
+   (UDP 7573) on the local network. USB (cable) connection is available from the tray menu and needs USB debugging on the phone.
+6. **Set up integrations (optional).** On the PC, choose **Open KZ Companion** in the tray menu (the
+   configurator, served at `http://localhost:4787`) and go to **Integrations**. Enter credentials **on the PC**, not on the phone.
 
-| Integration | Guide |
+## Security and privacy
+
+- **Local only.** The phone talks directly to the PC over your local network. There is no KZ cloud
+  service and no account. The app and its integrations do make normal outbound calls when you enable
+  them (for example Spotify, Discord sign-in, GitHub for update checks), so KZ Companion is not "fully offline".
+- **Pairing and authentication.** The PC generates a random API key on first run. The QR code carries
+  the PC address and that key. Every API call and the live connection require the key.
+  Anyone holding the key can control the PC through KZ Companion, so treat it like a password and
+  do not share screenshots of the QR code.
+- **Plain HTTP on your LAN.** Traffic between phone and PC is **not encrypted** (HTTP and WebSocket, not
+  HTTPS) and there is **no end-to-end encryption**. Use it on networks you trust, not on public Wi-Fi.
+- **Secrets at rest.** The API key and integration credentials are stored under `%LocalAppData%\KZCompanion`
+  encrypted with Windows DPAPI for your user account. That protects them from other Windows users, **not**
+  from other programs running as you.
+- **Privileged actions.** Actions that run code on the PC are limited to the local PC and are not available
+  to remote phone connections. Credentials for integrations are meant to be entered on the PC.
+- **Known limitation.** Today any paired phone can still change some integration settings; moving all
+  credential entry to the PC is planned work. See [SECURITY.md](SECURITY.md) to report a vulnerability.
+
+## Troubleshooting
+
+### Android cannot connect
+Make sure the phone and PC are on the same network (not a guest network with client isolation) and
+KZ Companion is running in the tray. Re-pair if the PC was reinstalled or its key was reset.
+
+### QR pairing does not work
+Check camera permission for the app, raise screen brightness and avoid glare. Make sure the pairing window
+was opened from the tray (**Pair device (QR)**) on the PC you want to control. A VPN on either device can
+route traffic away from the LAN, and a guest or "client isolation" Wi-Fi blocks phone-to-PC traffic.
+
+### Windows Firewall
+KZ Companion needs TCP 4787 and UDP 7573 on **private** networks. If you declined the prompt, use the tray
+menu item **Allow in firewall (local network)**, or add inbound rules for those ports.
+
+### Running Apps permissions
+Running Apps only uses window and process information that Windows exposes to a normal user. Windows may
+refuse to bring a window to the front (the phone shows a message); try again, or click the window once.
+
+### Elevated applications
+Applications running **as administrator** are listed as locked. Windows does not let a normal process
+control them, so every action is refused. Start KZ Companion as administrator if you need to manage them.
+Apps that hide to the tray when closed lose their row, and windows on other virtual desktops are hidden.
+
+### CPU temperature is missing
+Reading CPU temperature needs a sensor driver and often administrator rights. If the Hardware page says it
+is unavailable, use the tray menu: *Install CPU sensor driver*, then *Restart as administrator*. Some CPUs
+do not expose the sensor at all; then it stays unavailable and KZ Companion will not invent a value.
+
+### Integration setup fails
+Read the requirements on the integration's own page. The common ones: Discord needs its desktop app running
+and your account on the app's tester list; Spotify needs Premium and the exact redirect address
+`http://127.0.0.1:4787/api/integrations/spotify/callback`; OBS needs its WebSocket server enabled and the
+right port and password. The log is at `%LocalAppData%\DroidDeck.log` (the file name predates the rename).
+
+### Windows media-session compatibility
+Media information and controls come from the Windows media session. Apps that do not publish one (or
+publish an incomplete one) will not show now-playing data or respond to play/pause. See
+[Apple Music on Windows](#apple-music-on-windows).
+
+### SmartScreen warning
+The installer is not code-signed yet. Choose **More info**, then **Run anyway**, only if you downloaded it
+from this repository's Releases page.
+
+## Development
+
+### Repository layout
+
+| Path | Contents |
 |---|---|
-| Discord (uses your own Discord app — ~2 min setup) | [Discord](https://me.gf2.in/DroidDeck/docs/integrations/discord/) |
-| OBS Studio (obs-websocket) | [OBS Studio](https://me.gf2.in/DroidDeck/docs/integrations/obs/) |
-| Soundboard (MyInstants + VB-Cable) | [Soundboard](https://me.gf2.in/DroidDeck/docs/integrations/soundboard/) |
-| Tuya / Smart Life (Nova Digital, Positivo, RSmart, Elgin…) | [Smart home](https://me.gf2.in/DroidDeck/docs/integrations/tuya/) |
-| Home Assistant (long-lived token) | [Home Assistant](https://me.gf2.in/DroidDeck/docs/integrations/homeassistant/) |
-| Spotify (your own Spotify app, Premium) | [Spotify](https://me.gf2.in/DroidDeck/docs/integrations/spotify/) |
-| Twitch (your own Twitch app) | [Twitch](https://me.gf2.in/DroidDeck/docs/integrations/twitch/) |
-| YouTube (your own Google OAuth client) | [YouTube](https://me.gf2.in/DroidDeck/docs/integrations/youtube/) |
-| Streamer.bot (WebSocket Server) | [Streamer.bot](https://me.gf2.in/DroidDeck/docs/integrations/streamerbot/) |
-| VTube Studio (plugin API) | [VTube Studio](https://me.gf2.in/DroidDeck/docs/integrations/vtubestudio/) |
-| Voicemeeter (Standard, Banana, Potato) | [Voicemeeter](https://me.gf2.in/DroidDeck/docs/integrations/voicemeeter/) |
-| vMix (TCP API, with tally) | [vMix](https://me.gf2.in/DroidDeck/docs/integrations/vmix/) |
-| Bitfocus Companion (the phone as a surface) | [Companion](https://me.gf2.in/DroidDeck/docs/integrations/companion/) |
-| mAirList and RadioDJ (radio automation) | [Radio](https://me.gf2.in/DroidDeck/docs/integrations/radio/) |
-| Full-screen tally and ON AIR | [Tally and ON AIR](https://me.gf2.in/DroidDeck/docs/integrations/tally/) |
-| OSC, TCP and UDP (mixing consoles, QLab) | [Network](https://me.gf2.in/DroidDeck/docs/integrations/network/) |
-| Philips Hue (Hue Bridge) | [Philips Hue](https://me.gf2.in/DroidDeck/docs/integrations/hue/) |
-| Elgato Key Light | [Elgato Key Light](https://me.gf2.in/DroidDeck/docs/integrations/elgato/) |
-| Govee (LAN API) | [Govee](https://me.gf2.in/DroidDeck/docs/integrations/govee/) |
-| MQTT (your broker) | [MQTT](https://me.gf2.in/DroidDeck/docs/integrations/mqtt/) |
-| Per-app mixer & media | [Mixer & media](https://me.gf2.in/DroidDeck/docs/integrations/mixer-media/) |
+| `DroidDeck/` | Windows tray app and local server (C#, .NET 8, ASP.NET Core + SignalR). Project is named `DroidDeck`, assembly `KZCompanion`. |
+| `app/` | Android app and the web configurator (Flutter/Dart, one code base). |
+| `tests/DroidDeck.Tests/` | Backend tests (xUnit). |
+| `scripts/` | `publish-windows.ps1` (verified Windows publish), `deploy-web.ps1`. |
+| `docs/` | Design notes, integration audit, release checklist. |
+| `website/` | Inherited DroidDeck documentation site. Not yet rewritten for KZ Companion; see its README. |
+| `.github/` | CI, release workflow, issue and PR templates. |
 
-## 🧩 How it works
+### Tools
 
-```mermaid
-flowchart LR
-  phone["Android phone<br/>(button grid)"] -- "REST + SignalR<br/>port 4787" --> pc["DroidDeck on Windows<br/>(tray app)"]
-  browser["Browser on the PC<br/>(configurator)"] -- "http://localhost:4787" --> pc
-  pc --> win["Windows: keys, apps,<br/>audio, media"]
-  pc --> ext["Discord · OBS · Tuya<br/>MyInstants"]
-```
+- Windows 10/11, **.NET 8 SDK** (the project targets `net8.0-windows10.0.17763.0`).
+- **Flutter** stable with Dart 3.8 or newer (`app/pubspec.yaml`).
+- Android: a JDK 17 and the Android SDK for APK builds.
+- Optional: Node 20 (release tooling only).
 
-This is a monorepo with both halves of the project, which evolve together:
-
-```
-DroidDeck/
-  DroidDeck/  C# backend (.NET 8 / WinForms tray + ASP.NET Core + SignalR). Serves the API and the web configurator.
-  app/        Flutter app: phone runtime + web configurator (same codebase).
-  tests/      Backend tests.
-  scripts/    Utilities (deploy the web build to wwwroot).
-  website/    Landing page + documentation (MkDocs, EN/PT) published to GitHub Pages.
-```
-
-App and backend share a contract: **REST** (`/api/...`), **SignalR** (`/deckHub`) and **UDP discovery**
-(port 7573), authenticated with an API key obtained through QR pairing.
-
-## 🛠️ Building from source
+### Build
 
 ```powershell
-# Backend: tray app + web server at http://localhost:4787
+# Windows app, verified publish: fresh web build, clean wwwroot, new output folder
+.\scripts\publish-windows.ps1 -Out dist\KZCompanion-win-x64-local
+
+# Run from source (tray app + server on http://localhost:4787)
 dotnet run --project DroidDeck
 
-# Web configurator: flutter build web + copy to DroidDeck/wwwroot
-.\scripts\deploy-web.ps1
-
-# Android APK
+# Android
 cd app
-flutter build apk --debug --target-platform android-arm64
+flutter pub get
+flutter build apk --release
 ```
 
-Backend modes: default (tray), `--headless` (server only), `--print-pairing` (prints the pairing URI/QR and exits).
+The configurator front-end is served from `DroidDeck\wwwroot`, which is git-ignored and goes stale
+silently. Always use `publish-windows.ps1`: it rebuilds the web app, replaces `wwwroot`, never overwrites a
+running executable, and fails if legacy deck UI text is found or the published front-end is not the fresh one.
 
-Full details — architecture, tests, releases with semantic-release — in
-[Architecture](https://me.gf2.in/DroidDeck/docs/developers/architecture/) and
-[Building from source](https://me.gf2.in/DroidDeck/docs/developers/building/).
+### Tests
 
-## 🤝 Contributing
+```powershell
+dotnet test DroidDeck.sln -c Release --filter "Category!=RequiresDesktop"
+cd app; flutter analyze --no-fatal-infos; flutter test
+```
 
-Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Translating the app into
-your language is a great first contribution, and questions and ideas go to
-[Discussions](https://github.com/ggfto/DroidDeck/discussions).
+Tests marked `RequiresDesktop` need an interactive desktop (keyboard hooks) and run locally only.
+If `dotnet test` aborts with *"You must install or update .NET"* asking for `Microsoft.NETCore.App 8.0.34`,
+your machine has the ASP.NET Core 8.0.34 runtime without the matching .NET 8.0.34 runtime. Install the
+current .NET 8 runtime (or SDK), or temporarily set `DOTNET_ROLL_FORWARD=Major`. Details in
+[docs/release-checklist.md](docs/release-checklist.md).
 
-If DroidDeck is useful to you, consider leaving a ⭐ — it helps the project reach more people.
+### Release publishing
 
-## ⭐ Star history
+Releases are produced by the manual **Release** GitHub Actions workflow (`.github/workflows/release.yml`):
+it runs the tests, builds the Windows installer (Velopack), the portable zip and the APK, and
+publishes them with `semantic-release`. Do not tag or publish by hand; follow
+[docs/release-checklist.md](docs/release-checklist.md).
 
-<a href="https://star-history.com/#ggfto/DroidDeck&Date">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ggfto%2Fdroiddeck&type=Date&theme=dark">
-    <img alt="Star history chart" src="https://api.star-history.com/svg?repos=ggfto%2Fdroiddeck&type=Date">
-  </picture>
-</a>
+## Documentation
 
-## 📄 License
+- [Release checklist](docs/release-checklist.md)
+- [Integration audit](docs/integration-audit-phase1.md) and [Running Apps design](docs/running-apps-phase2.md)
+- [Changelog](CHANGELOG.md)
 
-[Apache License 2.0](LICENSE).
+## Community
+
+- **Bugs and feature requests:** [GitHub Issues](https://github.com/Killzo1602/KZCompanion/issues/new/choose).
+  For a bug, include your Windows version, Android version and device model, the KZ Companion version,
+  steps to reproduce, what you expected and what happened, and relevant logs or screenshots.
+  **Never upload credentials, pairing keys, QR codes or tokens.**
+- **Contributing:** see [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Security issues:** see [SECURITY.md](SECURITY.md).
+
+## Credits and license
+
+KZ Companion is © 2026 KZ Dev Studio, licensed under the [Apache License 2.0](LICENSE).
+
+It is a modified fork of **[DroidDeck](https://github.com/ggfto/DroidDeck)** by Gabriel Freitas, also Apache 2.0.
+The original copyright and license are preserved, and [NOTICE](NOTICE) lists the changes. Note: `app/LICENSE` is a GPL-3.0 text inherited from upstream while the rest of the repository is Apache 2.0; this inconsistency is tracked in the [release checklist](docs/release-checklist.md) and must be resolved before v1.0.0. Hardware sensors use
+[LibreHardwareMonitorLib](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) (MPL-2.0).
+
+This project is unrelated to [Droid-Deck/DroidDeck](https://github.com/Droid-Deck/DroidDeck), a different
+app that runs Steam games on Android.

@@ -6,8 +6,8 @@ class Constants {
   /// Porta padrão do backend (usada quando o pareamento não informa outra).
   static const defaultPort = "4787";
 
-  /// Site do projeto (download do DroidDeck para Windows). [siteDisplay] é a forma curta,
+  /// Pagina de download do KZ Companion para Windows (GitHub Releases). [siteDisplay] é a forma curta,
   /// para a pessoa digitar no navegador do PC.
-  static const siteUrl = "https://me.gf2.in/DroidDeck/?lang=pt";
-  static const siteDisplay = "me.gf2.in/DroidDeck";
+  static const siteUrl = "https://github.com/Killzo1602/KZCompanion/releases";
+  static const siteDisplay = "github.com/Killzo1602/KZCompanion/releases";
 }

@@ -402,7 +402,10 @@ namespace DroidDeck.Tests
             var body = await response.Content.ReadAsStringAsync();
             Assert.Contains("\"apps\"", body);
             Assert.DoesNotContain("exePath", body, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain(":\\\\", body); // nenhum caminho de arquivo no JSON
+            // Nenhum caminho de arquivo no JSON. O titulo da janela e texto do usuario (um Explorer
+            // aberto em "D:\" tem esse caminho no titulo), entao ele fica fora da checagem.
+            var semTitulos = System.Text.RegularExpressions.Regex.Replace(body, "\"title\":\"(?:[^\"\\\\]|\\\\.)*\"", "\"title\":\"\"");
+            Assert.DoesNotContain(":\\\\", semTitulos);
         }
 
         [Theory]

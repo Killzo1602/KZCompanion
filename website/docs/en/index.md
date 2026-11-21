@@ -1,5 +1,13 @@
 # DroidDeck
 
+!!! warning "Legacy DroidDeck documentation"
+    This site is inherited from the upstream [DroidDeck](https://github.com/ggfto/DroidDeck) project and
+    describes its button deck, profiles, automations and Stream Deck import. **Those features were removed
+    from KZ Companion.** The pages are kept for attribution and for the integrations and API reference,
+    and have not been rewritten yet. For current KZ Companion documentation, see the
+    [README](https://github.com/Killzo1602/KZCompanion#readme).
+
+
 **DroidDeck turns an Android phone into a Stream Deck for your Windows PC.** Set up a grid of buttons
 on your phone that fire shortcuts, open apps, control audio and media, drive Discord and OBS, play
 sounds and switch your smart lights. The PC side is a small tray app; the phone talks to it over your

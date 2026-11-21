@@ -1,34 +1,39 @@
 name: Bug report
-description: Something in DroidDeck (the Windows app or the phone app) does not work as it should.
+description: Something in KZ Companion (the Windows app or the Android app) does not work as it should.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting! This is DroidDeck, the **phone-as-Stream-Deck for Windows**. If you are
-        looking for the app that runs Steam games on Android, that is
-        [another project](https://github.com/Droid-Deck/DroidDeck).
-  - type: textarea
-    id: what
-    attributes:
-      label: What happened?
-      description: What you did, what you expected and what happened instead.
-    validations:
-      required: true
+        Thanks for reporting! **Do not paste or upload credentials, pairing keys, QR codes, API keys or tokens**,
+        in the text, the logs or the screenshots. Blur them first.
   - type: textarea
     id: steps
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. Add a button with the action ...
-        2. Tap it on the phone
-        3. ...
+        1. Open the Apps page on the phone
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
   - type: input
     id: version
     attributes:
-      label: DroidDeck version
-      description: Right-click the tray icon; the menu shows it.
-      placeholder: "1.9.1"
+      label: KZ Companion version
+      description: Right-click the tray icon on the PC; the menu shows it.
+      placeholder: "1.0.0"
     validations:
       required: true
   - type: input
@@ -36,16 +41,23 @@ body:
     attributes:
       label: Windows version
       placeholder: Windows 11 24H2
+    validations:
+      required: true
   - type: input
-    id: phone
+    id: android
     attributes:
-      label: Phone and Android version
-      placeholder: Redmi Note 9S, Android 12
+      label: Android version and device model
+      placeholder: Pixel 6, Android 14
+    validations:
+      required: true
   - type: textarea
     id: log
     attributes:
-      label: Log
-      description: |
-        Relevant lines from `%LocalAppData%\DroidDeck.log` (or `DroidDeck_01.log`). Remove anything
-        private before pasting.
+      label: Relevant logs
+      description: Lines from `%LocalAppData%\DroidDeck.log` (the file name predates the rename). Remove anything private.
       render: text
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag images here. Blur anything private.

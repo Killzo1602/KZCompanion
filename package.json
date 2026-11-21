@@ -1,8 +1,8 @@
 {
-  "name": "droiddeck-release",
+  "name": "kzcompanion-release",
   "version": "0.0.0",
   "private": true,
-  "description": "Ferramentas de CI (semantic-release) do DroidDeck. Não é um pacote publicável — só versiona/release.",
+  "description": "Release tooling (semantic-release) for KZ Companion. Not a publishable package.",
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",

@@ -1,44 +1,50 @@
-# Contributing to DroidDeck
+# Contributing to KZ Companion
 
-Thanks for wanting to help! DroidDeck has two halves that live in this repository: the Windows app
-(`DroidDeck/`, C# / .NET 8) and the phone app plus web configurator (`app/`, Flutter).
+Thanks for helping! KZ Companion is a fork of [DroidDeck](https://github.com/ggfto/DroidDeck) and has two
+halves in this repository: the Windows app (`DroidDeck/`, C# / .NET 8) and the Android app plus web
+configurator (`app/`, Flutter).
 
-## Good ways to start
+**v1.0.0 is in feature freeze.** Until it ships, bug fixes, documentation, translations and tests are
+welcome. New features and new integrations should be discussed in an issue first.
 
-- **Translate.** Each language is one file in [`app/assets/i18n/`](app/assets/i18n/), shared by the
-  phone app, the web configurator and the Windows app. To add one, copy `en.json` to `<code>.json`
-  (`fr.json`, `de.json`...), set `@language` to the language's own name, `@locale` and `@decimal`, and
-  translate the values. Keep the keys and the `{placeholders}` as they are; the keys are the
-  Portuguese text used in the code, the English values show what each one means. Nothing else needs
-  to change: the new language shows up in Appearance → Language and is picked automatically on
-  phones set to it. A partial file is fine: anything you haven't translated yet appears in English.
-  No Flutter or C# experience needed.
-- **Issues labelled [`good first issue`](https://github.com/ggfto/DroidDeck/labels/good%20first%20issue)**
-  are small and self-contained.
-- **A new action type** usually needs only C#: implement `IActionProvider` and the phone builds the
-  editor from its schema. See [Architecture](https://me.gf2.in/DroidDeck/docs/developers/architecture/).
+## Before you start
 
-Not sure where something goes? Ask in [Discussions](https://github.com/ggfto/DroidDeck/discussions).
+- Search [existing issues](https://github.com/Killzo1602/KZCompanion/issues) first.
+- For a bug, use the **Bug report** template. Never post credentials, pairing keys, QR codes or tokens.
+- Security problems go through [SECURITY.md](SECURITY.md), not public issues.
 
-## Building and testing
+## Build and test
 
 ```powershell
-dotnet test tests/DroidDeck.Tests          # backend tests
-dotnet run --project DroidDeck             # tray app + server at http://localhost:4787
+dotnet test DroidDeck.sln -c Release --filter "Category!=RequiresDesktop"   # backend
+dotnet run --project DroidDeck                                              # tray app + server, http://localhost:4787
 
 cd app
-flutter analyze
+flutter pub get
+flutter analyze --no-fatal-infos
 flutter test
-flutter build apk --debug --target-platform android-arm64
+flutter build apk --release
 ```
 
-More in [Building from source](https://me.gf2.in/DroidDeck/docs/developers/building/).
+To produce a Windows build that includes a fresh web configurator, use `scripts\publish-windows.ps1`
+(see the README's Development section). Do not copy an old `app\build\web` into `DroidDeck\wwwroot` by hand.
 
 ## Pull requests
 
-- Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`,
-  `docs:`…): releases and the changelog are generated from them.
-- Keep `dotnet test`, `flutter analyze` and `flutter test` green; CI runs all three.
-- User-facing text goes through `tr("…")` in the app and `L.T("…")` on the PC, so it can be translated.
-- Actions that run code or reach the network from the PC (like launching apps or calling URLs) must be
-  listed as privileged in `ActionPolicy`.
+- Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`...).
+  Versions and the changelog are generated from them.
+- Keep `dotnet test`, `flutter analyze` and `flutter test` green. Say so in the PR if a test cannot run on your machine.
+- User-facing text goes through `tr("...")` in the app and `L.T("...")` / `L.Ui("...")` on the PC, so it can be translated.
+- Actions that run code or reach the network from the PC must be listed as privileged in `ActionPolicy`.
+- Do not claim an integration works unless you ran it against the real service.
+
+## Translations
+
+Each language is one file in [`app/assets/i18n/`](app/assets/i18n/). Copy `en.json` to `<code>.json`, set
+`@language`, `@locale` and `@decimal`, and translate the values. Keep the keys and `{placeholders}`.
+A partial file is fine; missing strings fall back to English.
+
+## License
+
+By contributing you agree your work is licensed under the [Apache License 2.0](LICENSE). Keep upstream
+copyright headers and the [NOTICE](NOTICE) intact.

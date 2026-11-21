@@ -1,3 +1,5 @@
+> **Legacy document.** Written for DroidDeck (the button deck) and kept for history. It does not describe KZ Companion 1.0. See README.md.
+
 # Product
 
 <!-- impeccable:product-schema 1 -->

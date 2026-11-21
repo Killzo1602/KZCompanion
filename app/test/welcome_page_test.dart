@@ -54,8 +54,9 @@ void main() {
     expect(find.byType(WelcomePage), findsNothing);
   });
 
-  test('o link do site aponta para a versão em português', () {
-    expect(Constants.siteUrl, startsWith('https://${Constants.siteDisplay}/'));
-    expect(Constants.siteUrl, contains('lang=pt'));
+  test('o link de download aponta para as Releases do KZ Companion, nao para o DroidDeck', () {
+    expect(Constants.siteUrl, 'https://${Constants.siteDisplay}');
+    expect(Constants.siteUrl, startsWith('https://github.com/Killzo1602/KZCompanion'));
+    expect(Constants.siteUrl, isNot(contains('gf2.in')));
   });
 }
