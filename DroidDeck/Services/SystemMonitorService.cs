@@ -126,6 +126,7 @@ namespace DroidDeck.Services
                         stats.GpuHotspot = ls.GpuHotspot; stats.GpuPower = ls.GpuPower; stats.SsdTemp = ls.SsdTemp;
                         stats.Drives = ls.Drives; stats.Fans = ls.Fans;
                         stats.CpuSensorCount = ls.CpuSensorCount;
+                        stats.CpuDriverMissing = ls.CpuDriverMissing;
                     }
                     stats.SensorsElevated = HardwareSensors.IsElevated;
                     stats.NetAdapter = _netAdapter;

@@ -224,6 +224,12 @@ namespace DroidDeck
             { Enabled = !elevated };
             adminItem.Click += (_, _) => RestartAsAdmin();
 
+            var driverItem = new ToolStripMenuItem(DroidDeck.Services.HardwareSensors.PawnIoInstalled
+                ? "CPU sensor driver (PawnIO): installed"
+                : "Install CPU sensor driver (PawnIO)…")
+            { Enabled = !DroidDeck.Services.HardwareSensors.PawnIoInstalled };
+            driverItem.Click += (_, _) => InstallPawnIo();
+
             var exitItem = new ToolStripMenuItem(L.Ui("Encerrar"));
             exitItem.Click += (_, _) => { Program.Exiting = true; Application.Exit(); };
 
@@ -233,6 +239,7 @@ namespace DroidDeck
             menu.Items.Add(_firewallItem);
             menu.Items.Add(_usbItem);
             menu.Items.Add(adminItem);
+            menu.Items.Add(driverItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(versionItem);
             menu.Items.Add(_updateItem);
@@ -269,6 +276,30 @@ namespace DroidDeck
             }
             Program.Exiting = true;
             Application.Exit();
+        }
+
+        /// <summary>
+        /// CPU temperatura/potencia pedem o driver PawnIO. Instala pelo winget (pacote
+        /// namazso.PawnIO), so depois de o usuario confirmar; o Windows pede permissao de admin.
+        /// </summary>
+        private void InstallPawnIo()
+        {
+            var answer = MessageBox.Show(
+                "CPU temperature and power need the free PawnIO driver (signed, used by LibreHardwareMonitor).\n\n" +
+                "Install it now with winget (package namazso.PawnIO)? Windows will ask for administrator permission. " +
+                "After it finishes, restart KZ Companion as administrator.",
+                "KZ Companion", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (answer != DialogResult.Yes) return;
+            try
+            {
+                Process.Start(new ProcessStartInfo("cmd.exe",
+                    "/c winget install --id namazso.PawnIO -e --accept-source-agreements --accept-package-agreements & pause")
+                {
+                    Verb = "runas",
+                    UseShellExecute = true,
+                });
+            }
+            catch (System.ComponentModel.Win32Exception) { /* permissao negada */ }
         }
 
         private frmWeb? _window;

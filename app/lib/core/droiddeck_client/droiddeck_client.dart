@@ -576,6 +576,25 @@ class DroidDeckClient {
     return (r.data as Map).cast<String, dynamic>();
   }
 
+  // ---- KZ Companion: mixer de audio do Windows ----
+
+  Future<Map<String, dynamic>> getAudio() async {
+    final r = await _dio.get('/api/audio');
+    return (r.data as Map).cast<String, dynamic>();
+  }
+
+  Future<void> setAudioMaster({int? volume, bool? mute}) async {
+    await _dio.put('/api/audio/master', data: {'volume': volume, 'mute': mute});
+  }
+
+  Future<void> setAudioSession(String id, {int? volume, bool? mute}) async {
+    await _dio.put('/api/audio/sessions/$id', data: {'volume': volume, 'mute': mute});
+  }
+
+  Future<void> setDeafen(bool enabled) async {
+    await _dio.post('/api/audio/deafen', data: {'enabled': enabled});
+  }
+
   // ---- KZ Companion: biblioteca de aplicativos e energia ----
 
   Future<List<Map<String, dynamic>>> getApps() async {

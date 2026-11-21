@@ -30,12 +30,31 @@ namespace DroidDeck.Services
             }
         }
 
+        /// <summary>
+        /// O LibreHardwareMonitorLib 0.9.x le MSR/SMN (temperatura e potencia das CPUs AMD Zen e
+        /// Intel) pelo driver PawnIO, assinado e separado. Sem ele esses sensores ficam em 0 mesmo
+        /// como administrador; SSD e GPU nao dependem dele.
+        /// </summary>
+        public static bool PawnIoInstalled
+        {
+            get
+            {
+                try
+                {
+                    using var k = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\PawnIO");
+                    return k != null;
+                }
+                catch { return false; }
+            }
+        }
+
         /// <summary>Despeja todos os sensores vistos (diagnostico: --sensors-dump).</summary>
         public string Dump()
         {
             EnsureOpen();
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"Elevated: {IsElevated}");
+            sb.AppendLine($"PawnIO driver installed: {PawnIoInstalled}");
             if (_computer == null) { sb.AppendLine("LibreHardwareMonitor nao abriu."); return sb.ToString(); }
             void Walk(IHardware hw, int depth)
             {
@@ -135,6 +154,8 @@ namespace DroidDeck.Services
                     .Where(d => d != null).Select(d => d!)
                     .ToList();
                 stats.SsdTemp = stats.Drives.Count > 0 ? stats.Drives.Max(d => d.Temp) : null;
+                stats.SensorsElevated = IsElevated;
+                stats.CpuDriverMissing = !PawnIoInstalled;
                 stats.CpuSensorCount = all.Count(x => IsCpu(x.Hw) && x.Sensor.SensorType == SensorType.Temperature && Valid(x.Sensor.Value) != null);
 
                 stats.Fans = all

@@ -24,10 +24,13 @@ class HardwarePage extends StatelessWidget {
             const SizedBox(height: 6),
             KzMetricRow('Temperature', fmtTemp(s.cpuTemp), available: s.cpuTemp != null),
             KzMetricRow('Power', fmtPower(s.cpuPower), available: s.cpuPower != null),
-            if (s.cpuTemp == null && s.cpuPower == null && !s.sensorsElevated)
+            if (s.cpuTemp == null && s.cpuPower == null)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Text('Needs administrator on the PC: tray menu, Restart as administrator.',
+                child: Text(
+                    s.cpuDriverMissing
+                        ? 'Needs the PawnIO driver: PC tray menu, Install CPU sensor driver, then restart as administrator.'
+                        : (s.sensorsElevated ? 'The CPU does not report this sensor.' : 'Needs administrator: PC tray menu, Restart as administrator.'),
                     style: TextStyle(fontSize: 10.5, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
               ),
           ]),

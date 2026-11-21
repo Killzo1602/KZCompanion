@@ -1,6 +1,6 @@
 import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
-import 'package:droiddeck/src/kz/kz_media.dart';
+import 'package:droiddeck/src/kz/kz_audio_widgets.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:flutter/material.dart';
 
@@ -11,34 +11,20 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    // Ordem: CPU/GPU/RAM, favoritos, controles de audio, mixer. Rola na vertical; cada bloco
+    // tem o seu proprio Watch, entao arrastar um slider nao reconstrói o resto do painel.
+    return ListView(
       padding: const EdgeInsets.all(12),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            _statsRow(),
-            const SizedBox(height: 12),
-            Expanded(child: _favorites(context)),
-          ]),
-        ),
-        const SizedBox(width: 12),
-        SizedBox(
-          width: 250,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Expanded(
-              child: KzCard(
-                title: 'Media',
-                icon: Icons.music_note_rounded,
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  KzMediaControls(c, compact: true),
-                  const SizedBox(height: 4),
-                  KzVolume(c),
-                ]),
-              ),
-            ),
-          ]),
-        ),
-      ]),
+      children: [
+        _statsRow(),
+        const SizedBox(height: 12),
+        _favorites(context),
+        const SizedBox(height: 12),
+        KzAudioControls(c.audio),
+        const SizedBox(height: 12),
+        KzMixer(c.audio),
+        const SizedBox(height: 4),
+      ],
     );
   }
 
@@ -93,38 +79,37 @@ class DashboardPage extends StatelessWidget {
       title: 'Favorites',
       icon: Icons.star_rounded,
       trailing: TextButton(onPressed: onOpenApps, child: const Text('All apps')),
-      child: Flexible(
-        child: Watch((context) {
-          final favs = c.apps.value.where((a) => a.favorite).toList();
-          if (favs.isEmpty) {
-            return Center(
+      child: Watch((context) {
+        final favs = c.apps.value.where((a) => a.favorite).toList();
+        if (favs.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Center(
               child: Text(
                 c.apps.value.isEmpty
-                    ? 'No applications yet.\nAdd them from the Windows configurator.'
-                    : 'Mark applications as favorites in the Windows configurator.',
+                    ? 'No applications yet. Add them from the Windows configurator.'
+                    : 'Star applications in the Windows configurator to pin them here.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55)),
               ),
-            );
-          }
-          return SingleChildScrollView(
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final a in favs)
-                  KzAppTile(
-                    app: a,
-                    onTap: () async {
-                      final err = await c.launch(a);
-                      if (context.mounted) kzToast(context, err ?? 'Opening ${a.name}…');
-                    },
-                  ),
-              ],
             ),
           );
-        }),
-      ),
+        }
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final a in favs)
+              KzAppTile(
+                app: a,
+                onTap: () async {
+                  final err = await c.launch(a);
+                  if (context.mounted) kzToast(context, err ?? 'Opening ${a.name}…');
+                },
+              ),
+          ],
+        );
+      }),
     );
   }
 }

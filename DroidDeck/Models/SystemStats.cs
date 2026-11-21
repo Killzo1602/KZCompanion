@@ -21,6 +21,8 @@ namespace DroidDeck.Models
         public float? SsdTemp { get; set; }
         public int CpuSensorCount { get; set; }
         public bool SensorsElevated { get; set; }
+        /// <summary>O driver PawnIO (que o LibreHardwareMonitor usa para ler temperatura/potencia da CPU) nao esta instalado.</summary>
+        public bool CpuDriverMissing { get; set; }
         public string NetAdapter { get; set; } = "";
         public List<DriveTemp> Drives { get; set; } = new();
         public List<FanStat> Fans { get; set; } = new();

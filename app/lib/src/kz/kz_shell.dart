@@ -59,6 +59,7 @@ class _KzShellState extends State<KzShell> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       c.signalR.onAppResumed();
       c.refreshPcInfo();
+      c.audio.refresh();
     } else if (state == AppLifecycleState.paused) {
       c.signalR.diag('app paused');
     }

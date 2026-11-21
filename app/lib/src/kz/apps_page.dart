@@ -35,12 +35,18 @@ class AppsPage extends StatelessWidget {
         );
       }
       const defaultGroup = 'Applications';
+      const favGroup = 'Favorites';
       final groups = <String, List<KzApp>>{};
-      for (final a in apps) {
+      for (final a in apps.where((a) => a.favorite)) {
+        groups.putIfAbsent(favGroup, () => []).add(a);
+      }
+      for (final a in apps.where((a) => !a.favorite)) {
         groups.putIfAbsent(a.group.isEmpty ? defaultGroup : a.group, () => []).add(a);
       }
       final names = groups.keys.toList()
         ..sort((a, b) {
+          if (a == favGroup) return -1;
+          if (b == favGroup) return 1;
           if (a == defaultGroup) return -1;
           if (b == defaultGroup) return 1;
           return a.toLowerCase().compareTo(b.toLowerCase());

@@ -58,54 +58,44 @@ class KzMediaControls extends StatelessWidget {
       );
 }
 
-/// Volume geral do Windows (saída padrão) com mudo.
-class KzVolume extends StatefulWidget {
+/// Volume geral do Windows (saida padrao REAL, vinda do PC) com mudo.
+class KzVolume extends StatelessWidget {
   const KzVolume(this.c, {super.key});
   final KzController c;
 
   @override
-  State<KzVolume> createState() => _KzVolumeState();
-}
-
-class _KzVolumeState extends State<KzVolume> {
-  double? _drag;
-
-  @override
   Widget build(BuildContext context) {
-    final c = widget.c;
     return Watch((context) {
-      c.home.outputs.value;
-      final out = c.mainOutput;
-      if (out == null) {
-        return Text('Volume unavailable',
+      final s = c.audio.state.value;
+      final online = c.audio.signalR.linkState.value == 'online';
+      final volume = s?.volume;
+      if (volume == null) {
+        return Text(online ? 'Volume unavailable' : 'PC offline',
             style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)));
       }
-      final id = out.device.id ?? out.id ?? '';
-      final volume = (_drag ?? out.device.volume.toDouble()).clamp(0, 100).toDouble();
-      final muted = out.device.mute;
-      return Row(children: [
-        IconButton(
-          onPressed: () => c.home.toggleMute(id, muted),
-          icon: Icon(muted
-              ? Icons.volume_off_rounded
-              : volume < 1
-                  ? Icons.volume_mute_rounded
-                  : Icons.volume_up_rounded),
+      final muted = s!.muted;
+      return Opacity(
+        opacity: online ? 1 : 0.45,
+        child: IgnorePointer(
+          ignoring: !online,
+          child: Row(children: [
+            IconButton(
+              onPressed: c.audio.toggleMasterMute,
+              icon: Icon(muted ? Icons.volume_off_rounded : Icons.volume_up_rounded),
+            ),
+            Expanded(
+              child: Slider(
+                value: volume.toDouble(),
+                min: 0,
+                max: 100,
+                onChanged: (v) => c.audio.setMasterVolume(v.round()),
+                onChangeEnd: (v) => c.audio.setMasterVolume(v.round(), commit: true),
+              ),
+            ),
+            SizedBox(width: 38, child: Text('$volume%', textAlign: TextAlign.end)),
+          ]),
         ),
-        Expanded(
-          child: Slider(
-            value: volume,
-            min: 0,
-            max: 100,
-            onChanged: (v) => setState(() => _drag = v),
-            onChangeEnd: (v) async {
-              await c.home.setVolume(id, v.round());
-              if (mounted) setState(() => _drag = null);
-            },
-          ),
-        ),
-        SizedBox(width: 38, child: Text('${volume.round()}%', textAlign: TextAlign.end)),
-      ]);
+      );
     });
   }
 }

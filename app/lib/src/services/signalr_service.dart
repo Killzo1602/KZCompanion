@@ -39,6 +39,7 @@ class SystemStats {
   final List<FanStat> fans;
   final List<DriveTemp> drives; // temperatura por unidade (modelo), sem casar com letra
   final bool sensorsElevated; // o PC roda como administrador?
+  final bool cpuDriverMissing; // driver PawnIO ausente (CPU temp/potencia)
   final int cpuSensorCount;
   final String netAdapter; // adaptador com mais trafego agora
 
@@ -60,6 +61,7 @@ class SystemStats {
     this.fans = const [],
     this.drives = const [],
     this.sensorsElevated = false,
+    this.cpuDriverMissing = false,
     this.cpuSensorCount = 0,
     this.netAdapter = '',
   });
@@ -86,6 +88,7 @@ class SystemStats {
 
     return SystemStats(
       sensorsElevated: (json['sensorsElevated'] ?? json['SensorsElevated']) == true,
+      cpuDriverMissing: (json['cpuDriverMissing'] ?? json['CpuDriverMissing']) == true,
       cpuSensorCount: ((json['cpuSensorCount'] ?? json['CpuSensorCount']) as num?)?.toInt() ?? 0,
       netAdapter: '${json['netAdapter'] ?? json['NetAdapter'] ?? ''}',
       drives: ((json['drives'] ?? json['Drives']) as List? ?? const [])
@@ -273,6 +276,9 @@ class SignalRService {
     if (route != url) Injector.get<DroidDeckClient>().setBaseUrl(route);
     await init(route, apiKey: _lastApiKey);
   }
+
+  // Estado de audio empurrado pelo PC (volume mestre, mudo, sessoes) sempre que o Windows muda.
+  final audioPush = signal<Map<String, dynamic>?>(null);
 
   // Incrementa quando a biblioteca de aplicativos mudou no PC (configurador).
   final appsChanged = signal<int>(0);
@@ -477,6 +483,15 @@ class SignalRService {
       connectionStatus.value = "Build Error";
       return;
     }
+
+    _hubConnection?.on('ReceiveAudioState', (arguments) {
+      if (arguments == null || arguments.isEmpty) return;
+      try {
+        audioPush.value = Map<String, dynamic>.from(arguments[0] as Map);
+      } catch (e) {
+        _logger.warning('Error parsing ReceiveAudioState: $e');
+      }
+    });
 
     _hubConnection?.on('ReceiveAppsChanged', (_) {
       appsChanged.value = appsChanged.value + 1;
