@@ -290,6 +290,27 @@ class DroidDeckClient {
     return (r.data as List).map((e) => (e as Map).cast<String, dynamic>()).toList();
   }
 
+  // ---- Aplicativos abertos no PC (secao "Running now") ----
+
+  Future<List<Map<String, dynamic>>> getRunningApps() async {
+    final r = await _dio.get('/api/running-apps');
+    final list = (r.data as Map)['apps'] as List? ?? const [];
+    return list.map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
+
+  Future<List<int>> getRunningAppIcon(String id) => getBytes('/api/running-apps/$id/icon');
+
+  /// action: focus | minimize | close. O PC confere a identidade do app e da janela antes de agir;
+  /// close so vale com confirm=true (o app pergunta antes ao usuario).
+  Future<Map<String, dynamic>> runningAppAction(String id, String action,
+      {String? windowId, bool confirm = false}) async {
+    final r = await _dio.post('/api/running-apps/$id/$action', queryParameters: {
+      if (windowId != null) 'windowId': windowId,
+      if (confirm) 'confirm': 'true',
+    });
+    return (r.data as Map?)?.cast<String, dynamic>() ?? const {};
+  }
+
   Future<void> launchApp(String id) async {
     await _dio.post('/api/apps/$id/launch');
   }

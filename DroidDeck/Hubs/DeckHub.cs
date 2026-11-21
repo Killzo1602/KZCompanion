@@ -82,6 +82,13 @@ namespace DroidDeck.Hubs
             await base.OnConnectedAsync();
         }
 
+        /// <summary>A tela Apps do celular esta aberta: passa a receber ReceiveRunningApps (e liga os WinEvents).</summary>
+        public void WatchRunningApps() =>
+            (_services.GetService(typeof(Services.RunningAppsService)) as Services.RunningAppsService)?.Watch(Context.ConnectionId);
+
+        public void UnwatchRunningApps() =>
+            (_services.GetService(typeof(Services.RunningAppsService)) as Services.RunningAppsService)?.Unwatch(Context.ConnectionId);
+
         /// <summary>O app trocou de idioma: passa a receber no novo e ja recebe os textos traduzidos.</summary>
         public async Task SetLanguage(string language)
         {
@@ -176,6 +183,7 @@ namespace DroidDeck.Hubs
         {
             // Celular que caiu com o dedo numa tecla: solta so as dele.
             Lib.Input.HeldKeys.Shared.ReleaseOwner(Context.ConnectionId);
+            (_services.GetService(typeof(Services.RunningAppsService)) as Services.RunningAppsService)?.Unwatch(Context.ConnectionId);
             MicHold?.ReleaseOwner(Context.ConnectionId);
             Companion?.ReleaseOwner(Context.ConnectionId);
             Interlocked.Decrement(ref _connectedCount);

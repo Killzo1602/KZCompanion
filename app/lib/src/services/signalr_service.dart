@@ -283,6 +283,10 @@ class SignalRService {
   // Incrementa quando a biblioteca de aplicativos mudou no PC (configurador).
   final appsChanged = signal<int>(0);
 
+  // Aplicativos abertos no PC (push do PC enquanto a tela Apps observa). Null = nada recebido ainda.
+  final runningAppsPush = signal<List<Map<String, dynamic>>?>(null);
+  bool _watchingRunningApps = false;
+
   // Estado de mute por processo (para botões toggle refletirem a realidade).
   final muteStates = signal<Map<String, bool>>({});
 
@@ -490,6 +494,16 @@ class SignalRService {
         audioPush.value = Map<String, dynamic>.from(arguments[0] as Map);
       } catch (e) {
         _logger.warning('Error parsing ReceiveAudioState: $e');
+      }
+    });
+
+    _hubConnection?.on('ReceiveRunningApps', (arguments) {
+      if (arguments == null || arguments.isEmpty) return;
+      try {
+        final list = (arguments[0] as Map)['apps'] as List? ?? const [];
+        runningAppsPush.value = list.map((e) => (e as Map).cast<String, dynamic>()).toList();
+      } catch (e) {
+        _logger.warning('Error parsing ReceiveRunningApps: $e');
       }
     });
 
@@ -702,6 +716,7 @@ class SignalRService {
       _retryCount = 0;
       // A URL da reconexão ainda tem o idioma de quando conectou.
       _sendLanguage();
+      _resubscribeRunningApps();
     });
 
     try {
@@ -713,12 +728,30 @@ class SignalRService {
       _retryCount = 0;
       _retryTimer?.cancel();
       _sendLanguage();
+      _resubscribeRunningApps();
     } catch (e) {
       _logger.severe('SignalR Connection Failed: $e');
       connectionStatus.value = "Conn Error: $e";
       diag('connect failed: $e');
       _scheduleRetry();
     }
+  }
+
+  /// A tela Apps abriu (true) ou fechou (false): o PC so observa janelas enquanto alguem olha.
+  Future<void> watchRunningApps(bool watch) async {
+    _watchingRunningApps = watch;
+    final conn = _hubConnection;
+    if (conn == null || conn.state != HubConnectionState.Connected) return; // reenvia ao conectar
+    try {
+      await conn.invoke(watch ? 'WatchRunningApps' : 'UnwatchRunningApps');
+    } catch (e) {
+      _logger.warning('Error invoking WatchRunningApps: $e');
+    }
+  }
+
+  /// A conexao nova nao herda a observacao da antiga (o PC a solta ao desconectar).
+  void _resubscribeRunningApps() {
+    if (_watchingRunningApps) watchRunningApps(true);
   }
 
   /// Avisa o PC do idioma do app (mudou nas configurações ou reconectou).

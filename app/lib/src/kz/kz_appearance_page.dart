@@ -178,6 +178,7 @@ class _DashboardCard extends StatelessWidget {
           _switch('CPU / GPU / RAM', KzPrefs.showStats.value, KzPrefs.setShowStats),
           _switch('Favorites', KzPrefs.showFavorites.value, KzPrefs.setShowFavorites),
           _switch('Audio controls and mixer', KzPrefs.showAudio.value, KzPrefs.setShowAudio),
+          _switch('Running apps (Apps screen)', KzPrefs.showRunningApps.value, KzPrefs.setShowRunningApps),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton.icon(

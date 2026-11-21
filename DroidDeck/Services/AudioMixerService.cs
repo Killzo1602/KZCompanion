@@ -197,7 +197,7 @@ namespace DroidDeck.Services
             }
         }
 
-        private static string ShortHash(string s) =>
+        internal static string ShortHash(string s) =>
             Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(s)))[..12].ToLowerInvariant();
 
         // ---- eventos -> envio ao celular (debounce de 80 ms) ----

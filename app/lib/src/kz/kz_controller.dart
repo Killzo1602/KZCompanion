@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/home/home_controller.dart';
 import 'package:droiddeck/src/kz/kz_audio.dart';
+import 'package:droiddeck/src/kz/kz_running_apps.dart';
 import 'package:droiddeck/src/services/signalr_service.dart';
 import 'package:flutter/foundation.dart';
 
@@ -53,6 +54,7 @@ class KzController {
         signalR = signalR ?? Injector.get<SignalRService>() {
     home = HomeController(client: this.client, signalR: this.signalR);
     audio = AudioStore(client: this.client, signalR: this.signalR);
+    runningApps = RunningAppsStore(client: this.client, signalR: this.signalR);
     _disposers.add(effect(() {
       final s = this.signalR.systemStats.value;
       untracked(() => _push(s));
@@ -85,6 +87,7 @@ class KzController {
   final SignalRService signalR;
   late final HomeController home;
   late final AudioStore audio;
+  late final RunningAppsStore runningApps;
 
   final apps = signal<List<KzApp>>([]);
   final appsError = signal<String?>(null);
@@ -168,6 +171,7 @@ class KzController {
       d();
     }
     _appsTimer?.cancel();
+    runningApps.dispose();
     audio.dispose();
     home.dispose();
   }

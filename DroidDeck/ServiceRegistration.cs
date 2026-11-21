@@ -33,6 +33,7 @@ namespace DroidDeck
             services.AddSingleton<AiUsageService>();
             services.AddHostedSingleton<InfoService>();
             services.AddHostedSingleton<ForegroundWatcher>();
+            services.AddSingleton<RunningAppsService>();
             services.AddHostedSingleton<Lib.UsbBridge>();
             services.AddHostedSingleton<TriggerService>();
             return services;

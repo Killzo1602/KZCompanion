@@ -49,6 +49,7 @@ class KzPrefs {
   static const showStatsKey = 'kz_show_stats';
   static const showFavoritesKey = 'kz_show_favorites';
   static const showAudioKey = 'kz_show_audio';
+  static const showRunningAppsKey = 'kz_show_running_apps';
 
   static final keepAwake = signal(true);
   static final immersive = signal(true);
@@ -58,6 +59,7 @@ class KzPrefs {
   static final showStats = signal(true);
   static final showFavorites = signal(true);
   static final showAudio = signal(true);
+  static final showRunningApps = signal(true);
 
   static T _enum<T extends Enum>(List<T> values, String? name, T fallback) =>
       values.asNameMap()[name] ?? fallback;
@@ -72,6 +74,7 @@ class KzPrefs {
     showStats.value = sp.getBool(showStatsKey) ?? true;
     showFavorites.value = sp.getBool(showFavoritesKey) ?? true;
     showAudio.value = sp.getBool(showAudioKey) ?? true;
+    showRunningApps.value = sp.getBool(showRunningAppsKey) ?? true;
   }
 
   static Future<void> setKeepAwake(bool v) async {
@@ -114,6 +117,11 @@ class KzPrefs {
     (await SharedPreferences.getInstance()).setBool(showAudioKey, v);
   }
 
+  static Future<void> setShowRunningApps(bool v) async {
+    showRunningApps.value = v;
+    (await SharedPreferences.getInstance()).setBool(showRunningAppsKey, v);
+  }
+
   /// Volta o visual (fundo, espaçamento, cantos e seções) ao padrão do KZ Companion.
   static Future<void> resetDashboard() async {
     await setBackground(KzBackground.flat);
@@ -122,6 +130,7 @@ class KzPrefs {
     await setShowStats(true);
     await setShowFavorites(true);
     await setShowAudio(true);
+    await setShowRunningApps(true);
   }
 }
 
