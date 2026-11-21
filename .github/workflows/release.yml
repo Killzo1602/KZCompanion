@@ -58,6 +58,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.38.9'   # pinned: the version the release was verified with (newer stable needs Gradle 9)
           channel: stable
           cache: true
 
@@ -100,6 +101,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.38.9'   # pinned: the version the release was verified with (newer stable needs Gradle 9)
           channel: stable
           cache: true
 
