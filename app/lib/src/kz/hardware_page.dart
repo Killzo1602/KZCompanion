@@ -24,6 +24,12 @@ class HardwarePage extends StatelessWidget {
             const SizedBox(height: 6),
             KzMetricRow('Temperature', fmtTemp(s.cpuTemp), available: s.cpuTemp != null),
             KzMetricRow('Power', fmtPower(s.cpuPower), available: s.cpuPower != null),
+            if (s.cpuTemp == null && s.cpuPower == null && !s.sensorsElevated)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Needs administrator on the PC: tray menu, Restart as administrator.',
+                    style: TextStyle(fontSize: 10.5, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
+              ),
           ]),
         ),
         KzCard(
@@ -57,7 +63,10 @@ class HardwarePage extends StatelessWidget {
           title: 'Storage',
           icon: Icons.sd_storage_rounded,
           child: Column(children: [
-            KzMetricRow('SSD temperature', fmtTemp(s.ssdTemp), available: s.ssdTemp != null),
+            if (s.drives.isEmpty)
+              KzMetricRow('Drive temperature', 'Unavailable', available: false)
+            else
+              for (final d in s.drives) KzMetricRow(d.name, fmtTemp(d.temp)),
             const SizedBox(height: 4),
             if (s.disks.isEmpty) const KzMetricRow('Drives', 'Unavailable', available: false),
             for (final d in s.disks) ...[
@@ -81,6 +90,7 @@ class HardwarePage extends StatelessWidget {
           child: Column(children: [
             KzMetricRow('Download', _rate(s.netDown)),
             KzMetricRow('Upload', _rate(s.netUp)),
+            if (s.netAdapter.isNotEmpty) KzMetricRow('Adapter', s.netAdapter),
           ]),
         ),
       ];
@@ -91,15 +101,6 @@ class HardwarePage extends StatelessWidget {
           Wrap(spacing: 12, runSpacing: 12, children: [
             for (final card in cards) SizedBox(width: w, child: card),
           ]),
-          if (s.cpuTemp == null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12, left: 4),
-              child: Text(
-                'Some sensors (CPU temperature, fans) need KZ Companion to run as administrator on the PC.',
-                style: TextStyle(
-                    fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
-              ),
-            ),
         ]);
       });
     });

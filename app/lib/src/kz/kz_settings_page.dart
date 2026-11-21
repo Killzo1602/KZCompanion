@@ -124,12 +124,39 @@ class _KzSettingsPageState extends State<KzSettingsPage> {
               title: 'Connected PC',
               icon: Icons.computer_rounded,
               child: Watch((context) {
-                final status = c.signalR.connectionStatus.value;
+                final status = c.signalR.linkState.value;
+                final diag = c.signalR.diagLog.value;
                 return Column(children: [
                   KzMetricRow('Address', _ip.isEmpty ? 'Not paired' : '$_ip:$_port', available: _ip.isNotEmpty),
-                  KzMetricRow('Status', status == 'Connected' ? 'Connected' : status),
+                  KzMetricRow('Status', status == 'online' ? 'Online' : status == 'offline' ? 'Offline' : 'Reconnecting'),
                   KzMetricRow('Link', c.signalR.currentUrl.value.contains('127.0.0.1') ? 'USB cable' : 'Wi-Fi / LAN'),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
+                  ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    dense: true,
+                    title: const Text('Connection log', style: TextStyle(fontSize: 12)),
+                    children: [
+                      Container(
+                        constraints: const BoxConstraints(maxHeight: 120),
+                        width: double.infinity,
+                        child: SingleChildScrollView(
+                          reverse: true,
+                          child: Text(
+                            diag.isEmpty ? 'No events yet.' : diag.join('\n'),
+                            style: const TextStyle(fontSize: 10.5, fontFamily: 'monospace', height: 1.35),
+                          ),
+                        ),
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          'Huawei/EMUI: Settings, Battery, App launch, KZ Companion, Manage manually, '
+                          'allow background activity. Keeps the link alive when the screen dims.',
+                          style: TextStyle(fontSize: 10.5),
+                        ),
+                      ),
+                    ],
+                  ),
                   Row(children: [
                     Expanded(
                       child: OutlinedButton.icon(

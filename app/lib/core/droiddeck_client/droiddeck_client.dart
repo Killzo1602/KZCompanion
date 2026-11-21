@@ -570,6 +570,12 @@ class DroidDeckClient {
     });
   }
 
+  /// Nome e Windows do PC (endpoint anonimo, o mesmo usado para checar conectividade).
+  Future<Map<String, dynamic>> getPing() async {
+    final r = await _dio.get('/api/ping');
+    return (r.data as Map).cast<String, dynamic>();
+  }
+
   // ---- KZ Companion: biblioteca de aplicativos e energia ----
 
   Future<List<Map<String, dynamic>>> getApps() async {

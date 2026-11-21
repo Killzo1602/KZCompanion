@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' show Random;
 
 import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/connection/usb_route.dart';
@@ -13,7 +14,7 @@ import 'package:logging/logging.dart';
 class _InfiniteRetryPolicy implements IRetryPolicy {
   @override
   int? nextRetryDelayInMilliseconds(RetryContext retryContext) {
-    const steps = [0, 2000, 5000, 10000, 20000, 30000];
+    const steps = [0, 1000, 2000, 4000, 8000, 16000, 30000];
     final n = retryContext.previousRetryCount;
     return n < steps.length ? steps[n] : 30000; // depois, 30s pra sempre
   }
@@ -36,6 +37,10 @@ class SystemStats {
   final double? gpuPower;
   final double? ssdTemp;
   final List<FanStat> fans;
+  final List<DriveTemp> drives; // temperatura por unidade (modelo), sem casar com letra
+  final bool sensorsElevated; // o PC roda como administrador?
+  final int cpuSensorCount;
+  final String netAdapter; // adaptador com mais trafego agora
 
   SystemStats({
     this.cpuUsage = 0,
@@ -53,6 +58,10 @@ class SystemStats {
     this.gpuPower,
     this.ssdTemp,
     this.fans = const [],
+    this.drives = const [],
+    this.sensorsElevated = false,
+    this.cpuSensorCount = 0,
+    this.netAdapter = '',
   });
 
   /// % de RAM em uso (usa o valor do backend; se faltar, calcula de total/disponível).
@@ -76,6 +85,14 @@ class SystemStats {
     }
 
     return SystemStats(
+      sensorsElevated: (json['sensorsElevated'] ?? json['SensorsElevated']) == true,
+      cpuSensorCount: ((json['cpuSensorCount'] ?? json['CpuSensorCount']) as num?)?.toInt() ?? 0,
+      netAdapter: '${json['netAdapter'] ?? json['NetAdapter'] ?? ''}',
+      drives: ((json['drives'] ?? json['Drives']) as List? ?? const [])
+          .whereType<Map>()
+          .map((d) => DriveTemp('${d['name'] ?? d['Name'] ?? ''}',
+              ((d['temp'] ?? d['Temp']) as num?)?.toDouble() ?? 0))
+          .toList(),
       cpuTemp: opt('cpuTemp'),
       cpuPower: opt('cpuPower'),
       gpuTemp: opt('gpuTemp'),
@@ -107,6 +124,13 @@ class SystemStats {
   }
 }
 
+/// Temperatura de uma unidade de armazenamento (pelo modelo).
+class DriveTemp {
+  final String name;
+  final double temp;
+  const DriveTemp(this.name, this.temp);
+}
+
 /// Uma ventoinha com leitura de RPM.
 class FanStat {
   final String name;
@@ -129,6 +153,10 @@ class DiskStat {
 class SignalRService {
   SignalRService() {
     effect(() {
+      connectionStatus.value;
+      untracked(_updateLink);
+    });
+    effect(() {
       AppLanguage.current.value;
       untracked(_sendLanguage);
     });
@@ -149,6 +177,102 @@ class SignalRService {
 
   // Incrementa quando o backend avisa que um perfil do deck mudou (sync ao vivo).
   final deckUpdated = signal<int>(0);
+
+  // ---- Saude da conexao (KZ Companion) ----
+  // online / reconnecting / offline: o que a interface mostra (o texto cru fica em connectionStatus).
+  final linkState = signal<String>('reconnecting');
+  // Ultimas linhas do diario de conexao (aparece em Settings, ajuda a achar a causa de quedas).
+  final diagLog = signal<List<String>>([]);
+  // Nome e versao do Windows do PC (vem do /api/ping).
+  final pcName = signal<String>('');
+  final pcOs = signal<String>('');
+  DateTime _lastMessageAt = DateTime.now();
+  DateTime? _failingSince;
+  Timer? _watchdog;
+
+  void diag(String message) {
+    final t = DateTime.now();
+    String two(int v) => v.toString().padLeft(2, '0');
+    final line = '${two(t.hour)}:${two(t.minute)}:${two(t.second)} $message';
+    final next = [...diagLog.value, line];
+    diagLog.value = next.length > 60 ? next.sublist(next.length - 60) : next;
+    _logger.info(message);
+  }
+
+  void _updateLink() {
+    if (connectionStatus.value == 'Connected') {
+      _failingSince = null;
+      linkState.value = 'online';
+      return;
+    }
+    _failingSince ??= DateTime.now();
+    // Uma queda curta e "reconnecting"; depois de 15 s sem conseguir, "offline".
+    linkState.value = DateTime.now().difference(_failingSince!) > const Duration(seconds: 15)
+        ? 'offline'
+        : 'reconnecting';
+  }
+
+  void _startWatchdog() {
+    _watchdog ??= Timer.periodic(const Duration(seconds: 5), (_) => _healthCheck());
+  }
+
+  /// A cada 5 s: com o hub "conectado" mas sem nenhum dado ha mais de 12 s (o PC manda
+  /// estatisticas todo segundo), o socket morreu sem avisar (Wi-Fi que dormiu, adb reverse
+  /// que caiu): refaz a conexao. Sem conexao e sem tentativa agendada, agenda uma.
+  void _healthCheck() {
+    if (_stopped || _lastBaseUrl == null) return;
+    final conn = _hubConnection;
+    if (conn != null && conn.state == HubConnectionState.Connected) {
+      final silent = DateTime.now().difference(_lastMessageAt);
+      if (silent > const Duration(seconds: 12)) {
+        diag('no data for ${silent.inSeconds}s: restarting the connection');
+        _restart();
+      }
+    } else if (!(_retryTimer?.isActive ?? false) &&
+        (conn == null || conn.state == HubConnectionState.Disconnected)) {
+      _scheduleRetry();
+    }
+    _updateLink();
+  }
+
+  /// O app voltou ao primeiro plano (tela ligou, saiu de outro app): nao espera o proximo
+  /// ciclo de tentativa; confere a conexao ja.
+  void onAppResumed() {
+    diag('app resumed');
+    final conn = _hubConnection;
+    if (conn == null || conn.state != HubConnectionState.Connected) {
+      _retryTimer?.cancel();
+      _retryCount = 0;
+      _restart();
+      return;
+    }
+    // Conectado no papel: se em 3 s nao chegou dado novo, o socket esta morto.
+    Timer(const Duration(seconds: 3), () {
+      if (_stopped || connectionStatus.value != 'Connected') return;
+      if (DateTime.now().difference(_lastMessageAt) > const Duration(milliseconds: 3500)) {
+        diag('no response after resume: restarting');
+        _restart();
+      }
+    });
+  }
+
+  /// Derruba a conexao atual e abre outra ja (backoff zerado).
+  Future<void> _restart() async {
+    final url = _lastBaseUrl;
+    if (url == null || url.isEmpty) return;
+    _stopped = true; // o onclose deste stop() nao agenda outra tentativa
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    final dead = _hubConnection;
+    _hubConnection = null;
+    try {
+      await dead?.stop();
+    } catch (_) {}
+    _retryCount = 0;
+    final route = await UsbRoute.pick(url, apiKey: _lastApiKey);
+    if (route != url) Injector.get<DroidDeckClient>().setBaseUrl(route);
+    await init(route, apiKey: _lastApiKey);
+  }
 
   // Incrementa quando a biblioteca de aplicativos mudou no PC (configurador).
   final appsChanged = signal<int>(0);
@@ -255,9 +379,13 @@ class SignalRService {
     if (url == null || url.isEmpty) return;
     if (_retryTimer?.isActive ?? false) return; // ja tem uma tentativa agendada
 
-    const steps = [2000, 5000, 10000, 20000, 30000];
-    final delay = steps[_retryCount < steps.length ? _retryCount : steps.length - 1];
+    // Backoff exponencial (1, 2, 4, 8, 16, 30 s) com 20% de variacao: varios aparelhos
+    // nao batem no PC juntos quando ele volta.
+    const steps = [1000, 2000, 4000, 8000, 16000, 30000];
+    final base = steps[_retryCount < steps.length ? _retryCount : steps.length - 1];
+    final delay = (base * (0.9 + Random().nextDouble() * 0.2)).round();
     _retryCount++;
+    diag('retry $_retryCount in ${(delay / 1000).toStringAsFixed(1)}s');
     connectionStatus.value = 'Reconnecting in ${delay ~/ 1000}s...';
 
     _retryTimer = Timer(Duration(milliseconds: delay), () async {
@@ -332,12 +460,18 @@ class SignalRService {
     currentUrl.value = _redactUrl(hubUrl);
     _logger.info('Connecting to SignalR Hub at ${_redactUrl(hubUrl)}');
     connectionStatus.value = "Connecting...";
+    diag('connecting to ${_redactUrl(hubUrl)}');
+    _lastMessageAt = DateTime.now();
+    _startWatchdog();
 
     try {
       _hubConnection = HubConnectionBuilder()
           .withUrl(hubUrl)
           .withAutomaticReconnect(reconnectPolicy: _InfiniteRetryPolicy())
           .build();
+      // Ping do cliente a cada 10 s e 60 s de tolerancia para o PC (par do ajuste do servidor).
+      _hubConnection!.keepAliveIntervalInMilliseconds = 10000;
+      _hubConnection!.serverTimeoutInMilliseconds = 60000;
     } catch (e) {
       _logger.severe('Error building HubConnection: $e');
       connectionStatus.value = "Build Error";
@@ -349,6 +483,7 @@ class SignalRService {
     });
 
     _hubConnection?.on('ReceiveSystemStats', (arguments) {
+      _lastMessageAt = DateTime.now();
       if (arguments != null && arguments.isNotEmpty) {
         try {
           // Debug Raw Data
@@ -534,6 +669,7 @@ class SignalRService {
 
     _hubConnection?.onclose(({error}) {
       connectionStatus.value = "Disconnected: $error";
+      diag('connection closed${error == null ? '' : ': $error'}');
       // Cai aqui quando o servidor fecha a conexao ou o reconnect automatico
       // desiste. Sem reagendar, o estado ao vivo nunca mais voltava.
       _scheduleRetry();
@@ -541,10 +677,13 @@ class SignalRService {
 
     _hubConnection?.onreconnecting(({error}) {
       connectionStatus.value = "Reconnecting...";
+      diag('reconnecting${error == null ? '' : ': $error'}');
     });
 
     _hubConnection?.onreconnected(({connectionId}) {
       connectionStatus.value = "Connected";
+      _lastMessageAt = DateTime.now();
+      diag('reconnected');
       _retryCount = 0;
       // A URL da reconexão ainda tem o idioma de quando conectou.
       _sendLanguage();
@@ -554,12 +693,15 @@ class SignalRService {
       await _hubConnection?.start();
       _logger.info('SignalR Connected');
       connectionStatus.value = "Connected";
+      _lastMessageAt = DateTime.now();
+      diag('connected');
       _retryCount = 0;
       _retryTimer?.cancel();
       _sendLanguage();
     } catch (e) {
       _logger.severe('SignalR Connection Failed: $e');
       connectionStatus.value = "Conn Error: $e";
+      diag('connect failed: $e');
       _scheduleRetry();
     }
   }

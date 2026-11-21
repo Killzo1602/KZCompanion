@@ -27,6 +27,8 @@ namespace DroidDeck.Hubs
         public override async Task OnConnectedAsync()
         {
             Interlocked.Increment(ref _connectedCount);
+            Context.Items["since"] = DateTime.UtcNow;
+            Lib.Log.Info($"Hub: cliente conectado {Context.ConnectionId[..6]} ({Context.GetHttpContext()?.Connection.RemoteIpAddress}); total {ConnectedCount}");
             // Idioma da conexao: ?lang= (o app manda) ou o Accept-Language (navegador).
             var http = Context.GetHttpContext();
             var language = http?.Request.Query["lang"].ToString() is { Length: > 0 } q
@@ -177,6 +179,8 @@ namespace DroidDeck.Hubs
             MicHold?.ReleaseOwner(Context.ConnectionId);
             Companion?.ReleaseOwner(Context.ConnectionId);
             Interlocked.Decrement(ref _connectedCount);
+            var secs = Context.Items.TryGetValue("since", out var t) && t is DateTime d ? (int)(DateTime.UtcNow - d).TotalSeconds : -1;
+            Lib.Log.Info($"Hub: cliente saiu {Context.ConnectionId[..6]} apos {secs}s; motivo: {(exception == null ? "fechou normalmente / timeout do cliente" : exception.GetType().Name + ": " + exception.Message)}; total {ConnectedCount}");
             await base.OnDisconnectedAsync(exception);
         }
     }

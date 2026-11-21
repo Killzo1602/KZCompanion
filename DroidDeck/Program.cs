@@ -31,6 +31,12 @@ namespace DroidDeck
 
         public static bool StartMinimized { get; private set; }
 
+        /// <summary>"Windows 11" / "Windows 10" (a build 22000 em diante e o 11).</summary>
+        public static string WindowsName() =>
+            Environment.OSVersion.Version.Major >= 10
+                ? (Environment.OSVersion.Version.Build >= 22000 ? "Windows 11" : "Windows 10")
+                : "Windows";
+
         public static string DescribeBackendError(Exception ex)
         {
             if (ex is System.IO.IOException || ex is System.Net.Sockets.SocketException ||
@@ -76,6 +82,13 @@ namespace DroidDeck
                 .OnBeforeUninstallFastCallback(_ => frmPrincipal.RemoveAutoStartIfOurs())
                 .Run();
 
+            // Reinicio como administrador: a copia nova espera a antiga sair (a trava de instancia unica).
+            var waitArg = args.FirstOrDefault(a => a.StartsWith("--wait-pid=", StringComparison.Ordinal));
+            if (waitArg != null && int.TryParse(waitArg["--wait-pid=".Length..], out var waitPid))
+            {
+                try { Process.GetProcessById(waitPid).WaitForExit(15000); } catch { }
+            }
+
             Lib.Log.DropOversizedLegacyLog();
 
             // Bind em todas as interfaces — senão o celular na mesma rede recebe "connection
@@ -91,6 +104,16 @@ namespace DroidDeck
             // Útil para autostart silencioso, execução sem desktop ou depuração.
             // Ctrl+C encerra graciosamente via ConsoleLifetime do host.
             // Diagnóstico/headless de pareamento: imprime a URI e salva o QR em PNG, depois sai.
+            if (args.Contains("--sensors-dump"))
+            {
+                using var hs = new DroidDeck.Services.HardwareSensors();
+                var text = hs.Dump();
+                var file = Path.Combine(Lib.AppPaths.LocalDir, "sensors.txt");
+                File.WriteAllText(file, text);
+                Console.WriteLine(file);
+                return;
+            }
+
             if (args.Contains("--print-pairing"))
             {
                 var uri = Lib.PairingInfo.BuildUri();
@@ -283,7 +306,14 @@ namespace DroidDeck
                                     .AddIntegrations();
                         }
 
-                        services.AddSignalR();
+                        // Keepalive de 10 s nos dois sentidos e 60 s de tolerancia: um celular que o
+                        // Android/EMUI "congela" por alguns segundos nao e derrubado do hub.
+                        services.AddSignalR(o =>
+                        {
+                            o.KeepAliveInterval = TimeSpan.FromSeconds(10);
+                            o.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+                            o.HandshakeTimeout = TimeSpan.FromSeconds(15);
+                        });
                     });
 
                     webBuilder.Configure(app =>
@@ -323,7 +353,7 @@ namespace DroidDeck
                         {
                             // Endpoint anônimo para o app checar conectividade (antes de ter a chave).
                             endpoints.MapGet("/api/ping", () =>
-                                Microsoft.AspNetCore.Http.Results.Ok(new { ok = true, name = Environment.MachineName }))
+                                Microsoft.AspNetCore.Http.Results.Ok(new { ok = true, name = Environment.MachineName, os = WindowsName() }))
                                 .AllowAnonymous();
 
                             // Entrega a API key APENAS para quem acessa via loopback (o próprio PC).

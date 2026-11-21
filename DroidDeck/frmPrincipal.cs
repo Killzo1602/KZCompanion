@@ -217,6 +217,13 @@ namespace DroidDeck
             _updateItem = new ToolStripMenuItem(Program.Updater.IsInstalled ? L.Ui("Procurar atualização") : L.Ui("Baixar versão mais recente…"));
             _updateItem.Click += (_, _) => OnUpdateClick();
 
+            var elevated = DroidDeck.Services.HardwareSensors.IsElevated;
+            var adminItem = new ToolStripMenuItem(elevated
+                ? "Sensors: running as administrator"
+                : "Restart as administrator (CPU temperature/power)…")
+            { Enabled = !elevated };
+            adminItem.Click += (_, _) => RestartAsAdmin();
+
             var exitItem = new ToolStripMenuItem(L.Ui("Encerrar"));
             exitItem.Click += (_, _) => { Program.Exiting = true; Application.Exit(); };
 
@@ -225,6 +232,7 @@ namespace DroidDeck
             menu.Items.Add(_autoStartItem);
             menu.Items.Add(_firewallItem);
             menu.Items.Add(_usbItem);
+            menu.Items.Add(adminItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(versionItem);
             menu.Items.Add(_updateItem);
@@ -233,6 +241,34 @@ namespace DroidDeck
 
             ntiTray.ContextMenuStrip = menu;
             ntiTray.DoubleClick += (_, _) => OpenWebUi();
+        }
+
+        /// <summary>
+        /// CPU temperatura/potencia (e sensores da placa-mae e SSDs) exigem o driver do
+        /// LibreHardwareMonitor, que so carrega como administrador. Opcional e explicito:
+        /// o app nunca se eleva sozinho.
+        /// </summary>
+        private void RestartAsAdmin()
+        {
+            var answer = MessageBox.Show(
+                "CPU temperature and power (and some fan/SSD sensors) can only be read when KZ Companion runs as administrator.\n\n" +
+                "Restart KZ Companion as administrator now? Windows will ask for permission. You can always restart it normally.",
+                "KZ Companion", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (answer != DialogResult.Yes) return;
+            try
+            {
+                Process.Start(new ProcessStartInfo(Application.ExecutablePath, $"--wait-pid={Environment.ProcessId}")
+                {
+                    Verb = "runas",
+                    UseShellExecute = true,
+                });
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                return; // permissao negada no UAC: segue rodando como estava
+            }
+            Program.Exiting = true;
+            Application.Exit();
         }
 
         private frmWeb? _window;

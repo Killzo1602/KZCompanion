@@ -20,12 +20,10 @@ namespace DroidDeck.Services
         private readonly IHubContext<DeckHub> _hubContext;
         private readonly MediaControlService _media;
         private readonly HardwareSensors _sensors;
-        private SystemStats? _lastSensors;
+        private volatile SystemStats? _lastSensors;
         private PerformanceCounter? _cpuCounter;
 
         // Estado para throughput de rede (deltas por segundo).
-        private long _lastSent;
-        private long _lastRecv;
         private DateTime _lastNetTime = DateTime.UtcNow;
 
         // Counters de GPU (uso) por instância de engine 3D; cacheados entre ticks.
@@ -77,6 +75,9 @@ namespace DroidDeck.Services
                 return;
             }
 
+            _ = Task.Factory.StartNew(() => SensorLoop(stoppingToken), stoppingToken,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
             int tick = 0;
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -86,10 +87,11 @@ namespace DroidDeck.Services
                     // de mídia WinRT (caro) e as alocações de rede/GPU 24/7 com o app ocioso.
                     if (DeckHub.ConnectedCount <= 0)
                     {
-                        await Task.Delay(1000, stoppingToken);
+                        try { await Task.Delay(1000, stoppingToken); } catch (OperationCanceledException) { break; }
                         continue;
                     }
 
+                    var tickStart = Stopwatch.GetTimestamp();
                     var cpu = _cpuCounter?.NextValue() ?? 0;
 
                     // RAM via GlobalMemoryStatusEx: total, disponível e % de uso de uma vez.
@@ -116,20 +118,22 @@ namespace DroidDeck.Services
                         Disks = tick % DiskEveryTicks == 0 || _disks == null ? (_disks = SampleDisks()) : _disks,
                     };
 
-                    // Sensores (LibreHardwareMonitor) a cada 2 s; nos outros ticks repete a última leitura.
-                    if (tick % 2 == 0 || _lastSensors == null)
-                    {
-                        var s = new SystemStats();
-                        _sensors.Fill(s);
-                        _lastSensors = s;
-                    }
+                    // Sensores vêm do cache da thread própria (SensorLoop): nunca bloqueiam o envio.
                     var ls = _lastSensors;
-                    stats.CpuTemp = ls.CpuTemp; stats.CpuPower = ls.CpuPower; stats.GpuTemp = ls.GpuTemp;
-                    stats.GpuHotspot = ls.GpuHotspot; stats.GpuPower = ls.GpuPower; stats.SsdTemp = ls.SsdTemp;
-                    stats.Drives = ls.Drives; stats.Fans = ls.Fans;
+                    if (ls != null)
+                    {
+                        stats.CpuTemp = ls.CpuTemp; stats.CpuPower = ls.CpuPower; stats.GpuTemp = ls.GpuTemp;
+                        stats.GpuHotspot = ls.GpuHotspot; stats.GpuPower = ls.GpuPower; stats.SsdTemp = ls.SsdTemp;
+                        stats.Drives = ls.Drives; stats.Fans = ls.Fans;
+                        stats.CpuSensorCount = ls.CpuSensorCount;
+                    }
+                    stats.SensorsElevated = HardwareSensors.IsElevated;
+                    stats.NetAdapter = _netAdapter;
 
                     // Broadcast to clients listening on "ReceiveSystemStats"
                     await _hubContext.Clients.All.SendAsync("ReceiveSystemStats", stats, cancellationToken: stoppingToken);
+                    var tickMs = Stopwatch.GetElapsedTime(tickStart).TotalMilliseconds;
+                    if (tickMs > 1500) _logger.LogWarning("Ciclo de estatisticas lento: {ms} ms (CPU/GPU sob carga?)", (int)tickMs);
 
                     // Estado de reprodução de mídia (pra botões play/pause refletirem).
                     // A cada 3s: o acesso WinRT (RequestAsync) é caro; 1s era exagero.
@@ -144,13 +148,14 @@ namespace DroidDeck.Services
                         catch { }
                     }
                 }
+                catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error broadcasting system stats");
                 }
 
                 tick++;
-                await Task.Delay(1000, stoppingToken);
+                try { await Task.Delay(1000, stoppingToken); } catch (OperationCanceledException) { break; }
             }
 
             // Libera os PerformanceCounter ao encerrar o serviço.
@@ -185,34 +190,81 @@ namespace DroidDeck.Services
             return list.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
+        // Vazao real por adaptador fisico: delta de bytes (IPv4+IPv6) / tempo, so de placas
+        // ativas. Virtuais (Hyper-V, WSL, VPN, Bluetooth) ficam de fora: contariam o mesmo
+        // trafego duas vezes ou trafego interno. Contador que recua (adaptador reiniciou)
+        // so descarta aquela amostra.
+        private readonly Dictionary<string, (long Sent, long Recv)> _netLast = new();
+        private string _netAdapter = "";
+
+        private static readonly string[] VirtualMarkers =
+        {
+            "virtual", "vethernet", "hyper-v", "vmware", "virtualbox", "wsl", "loopback", "bluetooth",
+            "tap-", "tap ", "wintun", "wireguard", "openvpn", "npcap", "pseudo", "teredo", "isatap",
+            "vpn", "zerotier", "tailscale", "miniport",
+        };
+
+        private static bool IsPhysical(NetworkInterface ni)
+        {
+            if (ni.OperationalStatus != OperationalStatus.Up) return false;
+            if (ni.NetworkInterfaceType is NetworkInterfaceType.Loopback or NetworkInterfaceType.Tunnel) return false;
+            var text = (ni.Name + " " + ni.Description).ToLowerInvariant();
+            return !VirtualMarkers.Any(text.Contains);
+        }
+
         private (float up, float down) SampleNetwork()
         {
-            long sent = 0, recv = 0;
+            var now = DateTime.UtcNow;
+            var elapsed = (now - _lastNetTime).TotalSeconds;
+            _lastNetTime = now;
+            double up = 0, down = 0, bestRate = -1;
+            var seen = new HashSet<string>();
             try
             {
                 foreach (var ni in NetworkInterface.GetAllNetworkInterfaces())
                 {
-                    if (ni.OperationalStatus != OperationalStatus.Up) continue;
-                    if (ni.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
-                    var s = ni.GetIPv4Statistics();
-                    sent += s.BytesSent;
-                    recv += s.BytesReceived;
+                    if (!IsPhysical(ni)) continue;
+                    var st = ni.GetIPStatistics();
+                    long sent = st.BytesSent, recv = st.BytesReceived;
+                    seen.Add(ni.Id);
+                    if (_netLast.TryGetValue(ni.Id, out var prev) && elapsed > 0.2)
+                    {
+                        long ds = sent - prev.Sent, dr = recv - prev.Recv;
+                        if (ds >= 0 && dr >= 0)
+                        {
+                            double u = ds / elapsed / 1024.0, d = dr / elapsed / 1024.0;
+                            up += u; down += d;
+                            if (u + d > bestRate) { bestRate = u + d; _netAdapter = ni.Name; }
+                        }
+                    }
+                    _netLast[ni.Id] = (sent, recv);
                 }
             }
             catch { }
+            foreach (var key in _netLast.Keys.Where(k => !seen.Contains(k)).ToList()) _netLast.Remove(key);
+            return ((float)up, (float)down);
+        }
 
-            var now = DateTime.UtcNow;
-            var elapsed = (now - _lastNetTime).TotalSeconds;
-            float up = 0, down = 0;
-            if (_lastSent > 0 && elapsed > 0.1)
+        /// <summary>Le os sensores numa thread propria, a cada 2 s, so com cliente conectado.</summary>
+        private void SensorLoop(CancellationToken token)
+        {
+            while (!token.IsCancellationRequested)
             {
-                up = (float)Math.Max(0, (sent - _lastSent) / elapsed / 1024.0);   // KB/s
-                down = (float)Math.Max(0, (recv - _lastRecv) / elapsed / 1024.0); // KB/s
+                try
+                {
+                    if (DeckHub.ConnectedCount > 0)
+                    {
+                        var t0 = Stopwatch.GetTimestamp();
+                        var s = new SystemStats();
+                        _sensors.Fill(s);
+                        _lastSensors = s;
+                        var ms = Stopwatch.GetElapsedTime(t0).TotalMilliseconds;
+                        if (ms > 1000) _logger.LogWarning("Leitura de sensores lenta: {ms} ms", (int)ms);
+                    }
+                }
+                catch (Exception ex) { _logger.LogWarning(ex, "Leitura de sensores falhou"); }
+                if (token.WaitHandle.WaitOne(2000)) break;
             }
-            _lastSent = sent;
-            _lastRecv = recv;
-            _lastNetTime = now;
-            return (up, down);
         }
 
         private float SampleGpu()

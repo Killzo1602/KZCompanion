@@ -15,6 +15,40 @@ namespace DroidDeck.Services
     /// </summary>
     public sealed class HardwareSensors : IDisposable
     {
+        /// <summary>Roda como administrador? Sem isso o LibreHardwareMonitor nao carrega o driver e a CPU nao expoe temperatura/potencia.</summary>
+        public static bool IsElevated
+        {
+            get
+            {
+                try
+                {
+                    using var id = System.Security.Principal.WindowsIdentity.GetCurrent();
+                    return new System.Security.Principal.WindowsPrincipal(id)
+                        .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+                }
+                catch { return false; }
+            }
+        }
+
+        /// <summary>Despeja todos os sensores vistos (diagnostico: --sensors-dump).</summary>
+        public string Dump()
+        {
+            EnsureOpen();
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"Elevated: {IsElevated}");
+            if (_computer == null) { sb.AppendLine("LibreHardwareMonitor nao abriu."); return sb.ToString(); }
+            void Walk(IHardware hw, int depth)
+            {
+                hw.Update();
+                sb.AppendLine($"{new string(' ', depth * 2)}[{hw.HardwareType}] {hw.Name}");
+                foreach (var sn in hw.Sensors)
+                    sb.AppendLine($"{new string(' ', depth * 2 + 2)}{sn.SensorType,-12} {sn.Name,-28} = {(sn.Value.HasValue ? sn.Value.Value.ToString("0.##") : "null")}");
+                foreach (var sub in hw.SubHardware) Walk(sub, depth + 1);
+            }
+            foreach (var hw in _computer.Hardware) Walk(hw, 0);
+            return sb.ToString();
+        }
+
         private Computer? _computer;
         private bool _failed;
 
@@ -71,17 +105,37 @@ namespace DroidDeck.Services
                                 .Select(x => x.Sensor.Value).Where(v => v.HasValue).DefaultIfEmpty(null).Max());
                 stats.CpuPower = Pick(IsCpu, SensorType.Power, "Package");
 
-                var gpuFilter = all.Any(x => IsGpu(x.Hw)) ? (Func<IHardware, bool>)IsGpu : IsAnyGpu;
+                // A GPU "de verdade": a que tem temperatura de nucleo (a integrada do Ryzen so expoe
+                // SoC) e, entre as que tem, a NVIDIA/AMD com ventoinha. Evita misturar iGPU e dGPU.
+                var gpuHw = all.Where(x => IsAnyGpu(x.Hw)).Select(x => x.Hw).Distinct()
+                    .OrderByDescending(h => all.Any(x => x.Hw == h && x.Sensor.SensorType == SensorType.Temperature && x.Sensor.Name.Contains("GPU Core", StringComparison.OrdinalIgnoreCase) && Valid(x.Sensor.Value) != null))
+                    .ThenByDescending(h => all.Any(x => x.Hw == h && x.Sensor.SensorType == SensorType.Fan))
+                    .ThenByDescending(h => h.HardwareType == HardwareType.GpuNvidia)
+                    .FirstOrDefault();
+                Func<IHardware, bool> gpuFilter = h => gpuHw != null && h == gpuHw;
                 stats.GpuTemp = Pick(gpuFilter, SensorType.Temperature, "GPU Core", "GPU Temperature", "Core");
                 stats.GpuHotspot = Pick(gpuFilter, SensorType.Temperature, "Hot Spot", "Hotspot", "Junction");
                 stats.GpuPower = Pick(gpuFilter, SensorType.Power, "GPU Package", "GPU Power", "Package");
 
+                // Um valor por unidade (o "Temperature" principal ou o composto do NVMe): ignora
+                // limites ("Warning/Critical") e sensores secundarios, que duplicavam e
+                // inflavam a leitura. Nao tentamos casar unidade com letra de particao.
                 stats.Drives = all
-                    .Where(x => x.Hw.HardwareType == HardwareType.Storage && x.Sensor.SensorType == SensorType.Temperature && x.Sensor.Value.HasValue)
-                    .GroupBy(x => x.Hw.Name)
-                    .Select(g => new DriveTemp { Name = g.Key, Temp = g.Max(x => x.Sensor.Value!.Value) })
+                    .Where(x => x.Hw.HardwareType == HardwareType.Storage && x.Sensor.SensorType == SensorType.Temperature && Valid(x.Sensor.Value) != null)
+                    .GroupBy(x => x.Hw.Identifier.ToString())
+                    .Select(g =>
+                    {
+                        var main = g.Where(x => !x.Sensor.Name.Contains("Warning", StringComparison.OrdinalIgnoreCase)
+                                             && !x.Sensor.Name.Contains("Critical", StringComparison.OrdinalIgnoreCase)).Select(x => x.Sensor).ToList();
+                        var pick = main.FirstOrDefault(x => x.Name.Equals("Temperature", StringComparison.OrdinalIgnoreCase))
+                                   ?? main.FirstOrDefault(x => x.Name.Contains("Composite", StringComparison.OrdinalIgnoreCase))
+                                   ?? main.FirstOrDefault();
+                        return pick == null ? null : new DriveTemp { Name = g.First().Hw.Name, Temp = pick.Value!.Value };
+                    })
+                    .Where(d => d != null).Select(d => d!)
                     .ToList();
                 stats.SsdTemp = stats.Drives.Count > 0 ? stats.Drives.Max(d => d.Temp) : null;
+                stats.CpuSensorCount = all.Count(x => IsCpu(x.Hw) && x.Sensor.SensorType == SensorType.Temperature && Valid(x.Sensor.Value) != null);
 
                 stats.Fans = all
                     .Where(x => x.Sensor.SensorType == SensorType.Fan && x.Sensor.Value is > 0)

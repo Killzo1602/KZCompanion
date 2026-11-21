@@ -19,6 +19,9 @@ namespace DroidDeck.Models
         public float? GpuHotspot { get; set; }
         public float? GpuPower { get; set; }
         public float? SsdTemp { get; set; }
+        public int CpuSensorCount { get; set; }
+        public bool SensorsElevated { get; set; }
+        public string NetAdapter { get; set; } = "";
         public List<DriveTemp> Drives { get; set; } = new();
         public List<FanStat> Fans { get; set; } = new();
 

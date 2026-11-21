@@ -25,8 +25,6 @@ class DashboardPage extends StatelessWidget {
         SizedBox(
           width: 250,
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            _connection(context),
-            const SizedBox(height: 12),
             Expanded(
               child: KzCard(
                 title: 'Media',
@@ -42,49 +40,6 @@ class DashboardPage extends StatelessWidget {
         ),
       ]),
     );
-  }
-
-  Widget _connection(BuildContext context) {
-    return Watch((context) {
-      final status = c.signalR.connectionStatus.value;
-      final ok = status == 'Connected';
-      final connecting = status.startsWith('Connecting') || status.startsWith('Reconnecting');
-      final color = ok
-          ? const Color(0xFF4ADE80)
-          : connecting
-              ? const Color(0xFFFBBF24)
-              : const Color(0xFFEF5350);
-      final label = ok ? 'PC connected' : connecting ? 'Connecting…' : 'PC offline';
-      final url = c.signalR.currentUrl.value;
-      return KzCard(
-        child: Row(children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-              Text(
-                ok ? _host(url) : 'Retrying automatically',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6)),
-              ),
-            ]),
-          ),
-        ]),
-      );
-    });
-  }
-
-  String _host(String url) {
-    final u = Uri.tryParse(url);
-    return u == null || u.host.isEmpty ? url : '${u.host}:${u.port}';
   }
 
   Widget _statsRow() {

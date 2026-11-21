@@ -61,6 +61,7 @@ class KzController {
       final connected = signalR.connectionStatus.value == 'Connected';
       if (connected && !wasConnected) {
         untracked(() {
+          refreshPcInfo();
           refreshApps();
           home.fetchOutputs();
           home.fetchMediaSessions();
@@ -106,6 +107,15 @@ class KzController {
     ramHistory.value = _append(ramHistory.value, s.ramUsedPercent);
     if (s.cpuTemp != null) cpuTempHistory.value = _append(cpuTempHistory.value, s.cpuTemp!);
     if (s.gpuTemp != null) gpuTempHistory.value = _append(gpuTempHistory.value, s.gpuTemp!);
+  }
+
+  /// Nome do PC e versao do Windows para o cabecalho.
+  Future<void> refreshPcInfo() async {
+    try {
+      final p = await client.getPing();
+      signalR.pcName.value = '${p['name'] ?? ''}';
+      signalR.pcOs.value = '${p['os'] ?? ''}';
+    } catch (_) {}
   }
 
   Future<void> refreshApps() async {

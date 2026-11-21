@@ -18,7 +18,7 @@ class KzShell extends StatefulWidget {
   State<KzShell> createState() => _KzShellState();
 }
 
-class _KzShellState extends State<KzShell> {
+class _KzShellState extends State<KzShell> with WidgetsBindingObserver {
   static const _tabKey = 'kz_tab';
   late final KzController c;
   int _index = 0;
@@ -36,6 +36,7 @@ class _KzShellState extends State<KzShell> {
   void initState() {
     super.initState();
     c = KzController();
+    WidgetsBinding.instance.addObserver(this);
     SystemChrome.setPreferredOrientations(
         [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
     KzPrefs.load().then((_) => WakelockPlus.toggle(enable: KzPrefs.keepAwake.value));
@@ -53,7 +54,19 @@ class _KzShellState extends State<KzShell> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Tela ligou / voltou de outro app: confere a conexao na hora em vez de esperar.
+    if (state == AppLifecycleState.resumed) {
+      c.signalR.onAppResumed();
+      c.refreshPcInfo();
+    } else if (state == AppLifecycleState.paused) {
+      c.signalR.diag('app paused');
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _prefsDispose?.call();
     c.dispose();
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
@@ -101,6 +114,7 @@ class _KzShellState extends State<KzShell> {
           VerticalDivider(width: 1, color: scheme.outlineVariant),
           Expanded(
             child: Column(children: [
+              _LinkHeader(c: c),
               _AuthBanner(c: c),
               Expanded(
                 child: AnimatedSwitcher(
@@ -113,6 +127,45 @@ class _KzShellState extends State<KzShell> {
         ]),
       ),
     );
+  }
+}
+
+/// Cabecalho compacto: nome do PC, Windows e um indicador pequeno Online / Reconnecting / Offline.
+class _LinkHeader extends StatelessWidget {
+  const _LinkHeader({required this.c});
+  final KzController c;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Watch((context) {
+      final state = c.signalR.linkState.value;
+      final name = c.signalR.pcName.value;
+      final os = c.signalR.pcOs.value;
+      final (Color color, String label) = switch (state) {
+        'online' => (const Color(0xFF4ADE80), 'Online'),
+        'offline' => (const Color(0xFFEF5350), 'Offline'),
+        _ => (const Color(0xFFFBBF24), 'Reconnecting'),
+      };
+      return SizedBox(
+        height: 30,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(children: [
+            Text(name.isEmpty ? 'PC' : name,
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.4)),
+            if (os.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Text(os, style: TextStyle(fontSize: 12, color: scheme.onSurface.withValues(alpha: 0.55))),
+            ],
+            const Spacer(),
+            Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            const SizedBox(width: 6),
+            Text(label, style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.w600)),
+          ]),
+        ),
+      );
+    });
   }
 }
 
