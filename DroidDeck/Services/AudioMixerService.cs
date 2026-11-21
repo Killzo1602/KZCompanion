@@ -22,6 +22,8 @@ namespace DroidDeck.Services
         public int Pid { get; set; }
         public string Name { get; set; } = "";
         public bool System { get; set; }
+        /// <summary>Identidade do aplicativo (hash do caminho do .exe; sem o caminho): sessoes do mesmo programa compartilham.</summary>
+        public string GroupKey { get; set; } = "";
         public bool Active { get; set; }
         public int Volume { get; set; }
         public bool Muted { get; set; }
@@ -75,7 +77,7 @@ namespace DroidDeck.Services
             public string ShortId = "";
         }
 
-        private sealed record ProcInfo(string Name, string? Icon);
+        private sealed record ProcInfo(string Name, string? Icon, string GroupKey);
         private readonly Dictionary<int, ProcInfo> _procCache = new();
 
         public AudioMixerService(IHubContext<DeckHub> hub)
@@ -289,6 +291,7 @@ namespace DroidDeck.Services
                     {
                         dto.System = true;
                         dto.Name = "System Sounds";
+                        dto.GroupKey = "system";
                     }
                     else
                     {
@@ -296,6 +299,7 @@ namespace DroidDeck.Services
                         dto.Pid = pid;
                         var info = ProcessInfoFor(pid, c);
                         dto.Name = info.Name;
+                        dto.GroupKey = info.GroupKey;
                         if (withIcons) dto.Icon = info.Icon;
                     }
                     s.Sessions.Add(dto);
@@ -303,12 +307,6 @@ namespace DroidDeck.Services
                 catch { /* sessao morreu no meio da leitura */ }
             }
 
-            // Mesmo nome em varias sessoes: numera (cada uma continua independente).
-            foreach (var g in s.Sessions.GroupBy(x => x.Name).Where(g => g.Count() > 1))
-            {
-                var n = 1;
-                foreach (var x in g) x.Name = $"{x.Name} ({n++})";
-            }
             s.Sessions = s.Sessions.OrderByDescending(x => x.System ? 0 : x.Active ? 2 : 1)
                                    .ThenBy(x => x.System ? "" : x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
             // Ordem estavel: Sons do sistema por ultimo na lista visual.
@@ -354,7 +352,10 @@ namespace DroidDeck.Services
                 try { using var p = Process.GetProcessById(pid); name = p.ProcessName; } catch { name = $"Process {pid}"; }
             }
             name = name.Replace("Â®", "").Replace("®", "").Replace("™", "").Trim();
-            var info = new ProcInfo(name, icon);
+            // Agrupar so por identidade verificada (caminho do executavel). Sem caminho (processo
+            // protegido), cada PID e seu proprio grupo: nunca mistura por nome parecido.
+            var groupKey = path != null ? ShortHash(path.ToLowerInvariant()) : "pid" + pid;
+            var info = new ProcInfo(name, icon, groupKey);
             if (_procCache.Count > 200) _procCache.Clear();
             _procCache[pid] = info;
             return info;
@@ -396,6 +397,35 @@ namespace DroidDeck.Services
             }
             MarkDirty();
             return (true, null);
+        }
+
+        /// <summary>Varias sessoes de uma vez (grupo do mesmo aplicativo). Cada id e validado; desconhecidos nao mudam nada.</summary>
+        public (bool Ok, string? Error, bool NotFound, int Applied) SetSessions(IReadOnlyCollection<string> ids, int? volume, bool? mute)
+        {
+            if (volume is < 0 or > 100) return (false, "Volume must be 0-100.", false, 0);
+            if (ids.Count == 0 || ids.Count > 64) return (false, "Invalid session list.", false, 0);
+            var applied = 0;
+            lock (_gate)
+            {
+                SyncSessions();
+                foreach (var id in ids.Distinct())
+                {
+                    var t = _sessions.Values.FirstOrDefault(x => x.ShortId == id);
+                    if (t == null) continue;
+                    try
+                    {
+                        if (t.Control.State == AudioSessionState.AudioSessionStateExpired) continue;
+                        var v = t.Control.SimpleAudioVolume;
+                        if (volume != null) v.Volume = volume.Value / 100f;
+                        if (mute != null) v.Mute = mute.Value;
+                        applied++;
+                    }
+                    catch { /* a sessao fechou no meio */ }
+                }
+            }
+            if (applied == 0) return (false, "Unknown or expired sessions.", true, 0);
+            MarkDirty();
+            return (true, null, false, applied);
         }
 
         public (bool Ok, string? Error, bool NotFound) SetSession(string id, int? volume, bool? mute)

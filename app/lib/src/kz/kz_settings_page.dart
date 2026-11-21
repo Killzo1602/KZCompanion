@@ -1,7 +1,6 @@
 import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/config/appearance_settings_page.dart';
 import 'package:droiddeck/src/connection/constants.dart';
-import 'package:droiddeck/src/home/audio_page.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:droiddeck/src/stream_deck/stream_deck_page.dart';
@@ -178,10 +177,6 @@ class _KzSettingsPageState extends State<KzSettingsPage> {
                 _link(context, Icons.grid_view_rounded, 'Button deck', () => _push(context, (ctx) => _Wrapped(
                       title: 'Button deck',
                       child: StreamDeckPage(onToggleFullscreen: () {}, isFullscreen: false),
-                    ))),
-                _link(context, Icons.tune_rounded, 'Audio mixer', () => _push(context, (ctx) => _Wrapped(
-                      title: 'Audio mixer',
-                      child: AudioPage(controller: c.home, isFullscreen: false, onToggleFullscreen: () {}),
                     ))),
                 _link(context, Icons.color_lens_outlined, 'Full appearance settings',
                     () => _push(context, (_) => const AppearanceSettingsPage())),

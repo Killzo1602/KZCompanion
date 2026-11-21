@@ -73,10 +73,6 @@
     </Content>
   </ItemGroup>
 
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="xcopy /y $(ProjectDir)Static\*  $(ProjectDir)$(OutDir)Static\" />
-  </Target>
-
   <!-- Sem o index.html do configurador, "/" respondia 401 e a janela abria vazia. -->
   <Target Name="RequireWebBuild" BeforeTargets="PrepareForPublish">
     <Error Condition="!Exists('$(ProjectDir)wwwroot/index.html')" Text="wwwroot/index.html ausente: rode scripts/deploy-web.ps1 (flutter build web) antes de publicar." />

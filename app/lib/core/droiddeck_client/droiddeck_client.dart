@@ -591,6 +591,12 @@ class DroidDeckClient {
     await _dio.put('/api/audio/sessions/$id', data: {'volume': volume, 'mute': mute});
   }
 
+  /// Varias sessoes de uma vez (o grupo de um aplicativo); cada uma continua com o seu id original.
+  Future<Map<String, dynamic>> setAudioSessions(List<String> ids, {int? volume, bool? mute}) async {
+    final r = await _dio.put('/api/audio/sessions', data: {'ids': ids, 'volume': volume, 'mute': mute});
+    return (r.data as Map).cast<String, dynamic>();
+  }
+
   /// Mudo do microfone padrao do Windows (so ele). Devolve o estado confirmado pelo PC.
   Future<Map<String, dynamic>> setAudioMic(bool mute) async {
     final r = await _dio.put('/api/audio/mic', data: {'mute': mute});
@@ -652,6 +658,11 @@ class DroidDeckClient {
     } else {
       await _dio.put('/api/apps/$id', data: body);
     }
+  }
+
+  /// Ordem dos aplicativos (favoritos incluidos). So o configurador no PC pode gravar.
+  Future<void> reorderApps(List<String> ids) async {
+    await _dio.put('/api/apps/order', data: {'ids': ids});
   }
 
   Future<void> deleteApp(String id) async {

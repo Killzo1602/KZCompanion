@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Threading.Tasks;
 using DroidDeck.Lib;
 
 namespace DroidDeck.Services
@@ -18,6 +19,8 @@ namespace DroidDeck.Services
         public string Path { get; set; } = "";
         public string Group { get; set; } = "";
         public bool Favorite { get; set; }
+        /// <summary>Icone trocado pelo usuario (nao e regenerado na migracao do extrator).</summary>
+        public bool CustomIcon { get; set; }
     }
 
     /// <summary>
@@ -30,6 +33,8 @@ namespace DroidDeck.Services
         private static readonly string[] AllowedExtensions = { ".exe", ".lnk" };
         private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNameCaseInsensitive = true };
         private readonly object _gate = new();
+
+        public AppLibrary() => Task.Run(MigrateIcons);
 
         private static string FilePath => System.IO.Path.Combine(AppPaths.RoamingDir, "apps.json");
         private static string IconDir
@@ -78,12 +83,70 @@ namespace DroidDeck.Services
             return true;
         }
 
+        /// <summary>Identidade de um atalho/programa: o alvo do .lnk (quando resolve) ou o proprio caminho, em minusculas.</summary>
+        private static string Identity(string path)
+        {
+            var p = path;
+            if (p.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+            {
+                var t = ResolveShortcutTarget(p);
+                if (!string.IsNullOrEmpty(t)) p = t;
+            }
+            try { p = System.IO.Path.GetFullPath(p); } catch { }
+            return p.ToLowerInvariant();
+        }
+
+        /// <summary>Ja existe um aplicativo com o mesmo caminho ou o mesmo alvo? (ex.: o .exe e o atalho dele)</summary>
+        public AppEntry? FindDuplicate(string fullPath, string? exceptId = null)
+        {
+            var id = Identity(fullPath);
+            lock (_gate)
+                return Load().FirstOrDefault(a => a.Id != exceptId &&
+                    (string.Equals(a.Path, fullPath, StringComparison.OrdinalIgnoreCase) || Identity(a.Path) == id));
+        }
+
+        /// <summary>Define a ordem (a mesma lista guardada no arquivo): ids na ordem pedida primeiro; os demais seguem depois, na ordem atual.</summary>
+        public void Reorder(IReadOnlyList<string> ids)
+        {
+            lock (_gate)
+            {
+                var list = Load();
+                var byId = list.ToDictionary(a => a.Id);
+                var next = new List<AppEntry>();
+                foreach (var id in ids)
+                    if (byId.Remove(id, out var a)) next.Add(a);
+                next.AddRange(list.Where(a => byId.ContainsKey(a.Id)));
+                Save(next);
+            }
+        }
+
+        /// <summary>Extrator novo (128 px, contain): refaz os icones automaticos salvos pela versao anterior, uma vez.</summary>
+        public void MigrateIcons()
+        {
+            const string version = "2";
+            try
+            {
+                var marker = System.IO.Path.Combine(IconDir, ".version");
+                if (File.Exists(marker) && File.ReadAllText(marker).Trim() == version) return;
+                List<AppEntry> list;
+                lock (_gate) list = Load();
+                foreach (var a in list.Where(a => !a.CustomIcon))
+                {
+                    if (!File.Exists(a.Path)) continue;
+                    SaveIcon(a.Id, ExtractIconPng(a.Path));
+                }
+                File.WriteAllText(marker, version);
+            }
+            catch (Exception ex) { Log.Warning($"Migração de ícones falhou: {ex.Message}"); }
+        }
+
         public AppEntry Add(AppEntry entry, byte[]? icon)
         {
             lock (_gate)
             {
                 var list = Load();
                 entry.Id = Guid.NewGuid().ToString("N");
+                entry.CustomIcon = icon != null;
                 list.Add(entry);
                 Save(list);
             }
@@ -103,6 +166,7 @@ namespace DroidDeck.Services
                 found.Group = changes.Group;
                 found.Favorite = changes.Favorite;
                 if (!string.IsNullOrEmpty(changes.Path)) found.Path = changes.Path;
+                if (icon != null) found.CustomIcon = true;
                 Save(list);
             }
             if (icon != null) SaveIcon(id, icon);
@@ -161,28 +225,75 @@ namespace DroidDeck.Services
             catch { return null; }
         }
 
+        // Quadro final: 128x128 com 8 px de folga. O icone NUNCA e cortado nem esticado:
+        // recorta so a margem transparente, escala mantendo a proporcao (contain) e centraliza.
+        private const int IconSize = 128;
+        private const int IconPad = 8;
+
         private static byte[] ToPng(Image source)
         {
-            const int size = 96;
-            using var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
+            using var src = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
+            using (var g0 = Graphics.FromImage(src))
+            {
+                g0.Clear(Color.Transparent);
+                g0.DrawImage(source, 0, 0, source.Width, source.Height);
+            }
+
+            var box = ContentBounds(src);
+            var inner = IconSize - 2 * IconPad;
+            // Sem ampliar demais: icone pequeno (ex.: 48 px) no maximo 2x.
+            var scale = Math.Min(Math.Min(inner / (double)box.Width, inner / (double)box.Height), 2.0);
+            var w = Math.Max(1, (int)Math.Round(box.Width * scale));
+            var h = Math.Max(1, (int)Math.Round(box.Height * scale));
+
+            using var bmp = new Bitmap(IconSize, IconSize, PixelFormat.Format32bppArgb);
             using (var g = Graphics.FromImage(bmp))
             {
                 g.InterpolationMode = InterpolationMode.HighQualityBicubic;
                 g.SmoothingMode = SmoothingMode.HighQuality;
                 g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                g.CompositingQuality = CompositingQuality.HighQuality;
                 g.Clear(Color.Transparent);
-                g.DrawImage(source, 0, 0, size, size);
+                g.DrawImage(src, new Rectangle((IconSize - w) / 2, (IconSize - h) / 2, w, h), box, GraphicsUnit.Pixel);
             }
             using var o = new MemoryStream();
             bmp.Save(o, ImageFormat.Png);
             return o.ToArray();
         }
 
+        /// <summary>Retangulo com pixels visiveis (alfa > 8). Imagem toda opaca/transparente devolve a imagem inteira.</summary>
+        private static Rectangle ContentBounds(Bitmap bmp)
+        {
+            var full = new Rectangle(0, 0, bmp.Width, bmp.Height);
+            var data = bmp.LockBits(full, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                int minX = bmp.Width, minY = bmp.Height, maxX = -1, maxY = -1;
+                var row = new byte[Math.Abs(data.Stride)];
+                for (int y = 0; y < bmp.Height; y++)
+                {
+                    Marshal.Copy(data.Scan0 + y * data.Stride, row, 0, Math.Abs(data.Stride));
+                    for (int x = 0; x < bmp.Width; x++)
+                    {
+                        if (row[x * 4 + 3] <= 8) continue;
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+                return maxX < 0 ? full : Rectangle.FromLTRB(minX, minY, maxX + 1, maxY + 1);
+            }
+            finally { bmp.UnlockBits(data); }
+        }
+
         // ---- Extracao de icone ----
 
         /// <summary>
-        /// Icone do programa em PNG 96x96. Para .lnk usa o do alvo (sem a seta do atalho);
-        /// cai no do proprio atalho quando o alvo nao e um arquivo (apps da Loja).
+        /// Icone do programa em PNG 128x128 (contain, sem cortar). Para .lnk usa o do alvo (sem a seta do
+        /// atalho); cai no do proprio atalho quando o alvo nao e um arquivo (apps da Loja). Tenta o maior
+        /// icone do proprio arquivo (ate 256 px, inclusive PNG) e so depois a lista de icones do shell,
+        /// que para exes sem 256 px entrega o icone pequeno solto num canto da tela (o "cortado").
         /// </summary>
         public static byte[]? ExtractIconPng(string path)
         {
@@ -194,8 +305,8 @@ namespace DroidDeck.Services
                     var target = ResolveShortcutTarget(path);
                     if (!string.IsNullOrEmpty(target) && File.Exists(target)) source = target;
                 }
-                using var icon = LoadShellIcon(source, jumbo: true) ?? LoadShellIcon(source, jumbo: false)
-                                 ?? Icon.ExtractAssociatedIcon(source);
+                using var icon = ExtractResourceIcon(source) ?? LoadShellIcon(source, jumbo: true)
+                                 ?? LoadShellIcon(source, jumbo: false) ?? Icon.ExtractAssociatedIcon(source);
                 if (icon == null) return null;
                 using var bmp = icon.ToBitmap();
                 return ToPng(bmp);
@@ -206,6 +317,26 @@ namespace DroidDeck.Services
                 return null;
             }
         }
+
+        /// <summary>Maior icone dos recursos do .exe/.dll (256, 128, 64, 48, 32), ou null.</summary>
+        private static Icon? ExtractResourceIcon(string file)
+        {
+            foreach (var size in new[] { 256, 128, 64, 48, 32 })
+            {
+                var handles = new IntPtr[1];
+                var ids = new uint[1];
+                uint n;
+                try { n = PrivateExtractIcons(file, 0, size, size, handles, ids, 1, 0); }
+                catch { return null; }
+                if (n == 0 || n == 0xFFFFFFFF || handles[0] == IntPtr.Zero) continue;
+                try { return (Icon)Icon.FromHandle(handles[0]).Clone(); }
+                finally { DestroyIcon(handles[0]); }
+            }
+            return null;
+        }
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern uint PrivateExtractIcons(string file, int index, int cx, int cy, IntPtr[] icons, uint[] ids, uint count, uint flags);
 
         public static string? ResolveShortcutTarget(string lnk)
         {

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using DroidDeck.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -6,6 +7,13 @@ namespace DroidDeck.Controllers
 {
     public class AudioChange
     {
+        public int? Volume { get; set; }
+        public bool? Mute { get; set; }
+    }
+
+    public class AudioGroupChange
+    {
+        public List<string>? Ids { get; set; }
         public int? Volume { get; set; }
         public bool? Mute { get; set; }
     }
@@ -44,6 +52,17 @@ namespace DroidDeck.Controllers
         {
             if (body.Mute == null) return BadRequest(new { error = "mute is required." });
             var (ok, error) = _audio.SetMic(body.Mute.Value);
+            return ok ? Ok(_audio.GetState(false)) : BadRequest(new { error });
+        }
+
+        /// <summary>Volume/mudo de varias sessoes (o grupo de um aplicativo), cada uma pelo seu id original.</summary>
+        [HttpPut("sessions")]
+        public IActionResult Sessions([FromBody] AudioGroupChange body)
+        {
+            if (body.Ids == null) return BadRequest(new { error = "ids are required." });
+            if (body.Volume == null && body.Mute == null) return BadRequest(new { error = "Nothing to change." });
+            var (ok, error, notFound, _) = _audio.SetSessions(body.Ids, body.Volume, body.Mute);
+            if (notFound) return NotFound(new { error });
             return ok ? Ok(_audio.GetState(false)) : BadRequest(new { error });
         }
 

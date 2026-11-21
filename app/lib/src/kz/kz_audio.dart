@@ -14,9 +14,22 @@ class AudioSession {
     required this.muted,
     required this.active,
     required this.system,
+    this.groupKey = '',
   });
 
   final String id;
+  /// Identidade do aplicativo (hash do .exe no PC): sessoes do mesmo programa se agrupam por ela.
+  final String groupKey;
+
+  AudioSession copyWith({int? volume, bool? muted}) => AudioSession(
+        id: id,
+        name: name,
+        volume: volume ?? this.volume,
+        muted: muted ?? this.muted,
+        active: active,
+        system: system,
+        groupKey: groupKey,
+      );
   final String name;
   final int volume;
   final bool muted;
@@ -30,6 +43,7 @@ class AudioSession {
         muted: j['muted'] == true,
         active: j['active'] == true,
         system: j['system'] == true,
+        groupKey: '${j['groupKey'] ?? j['id']}',
       );
 }
 
@@ -232,7 +246,7 @@ class AudioStore {
   }
 
   void setSessionVolume(String id, int v, {bool commit = false}) {
-    _patch(id, (s) => AudioSession(id: s.id, name: s.name, volume: v, muted: s.muted, active: s.active, system: s.system));
+    _patch(id, (s) => s.copyWith(volume: v));
     _lock(id);
     if (commit || !_throttled(id)) _send(() => client.setAudioSession(id, volume: v));
   }
@@ -241,9 +255,56 @@ class AudioStore {
     final cur = state.value?.sessions.where((s) => s.id == id).firstOrNull;
     if (cur == null) return;
     final m = !cur.muted;
-    _patch(id, (s) => AudioSession(id: s.id, name: s.name, volume: s.volume, muted: m, active: s.active, system: s.system));
+    _patch(id, (s) => s.copyWith(muted: m));
     _lock(id, 600);
     _send(() => client.setAudioSession(id, mute: m));
+  }
+
+  /// Grupos abertos no mixer (por groupKey); fica aqui para sobreviver a reconstrucoes.
+  final expanded = signal<Set<String>>({});
+
+  void toggleExpanded(String groupKey) {
+    final next = {...expanded.value};
+    next.contains(groupKey) ? next.remove(groupKey) : next.add(groupKey);
+    expanded.value = next;
+  }
+
+  /// Slider principal do grupo: aplica o MESMO volume em cada sessao (so quando o usuario o move).
+  void setGroupVolume(String groupKey, List<String> ids, int v, {bool commit = false}) {
+    final s = state.value;
+    if (s == null) return;
+    state.value = AudioState(
+      outputName: s.outputName,
+      volume: s.volume,
+      muted: s.muted,
+      inputMuted: s.inputMuted,
+      deafened: s.deafened,
+      sessions: [for (final x in s.sessions) ids.contains(x.id) ? x.copyWith(volume: v) : x],
+    );
+    for (final id in ids) {
+      _lock(id);
+    }
+    if (commit || !_throttled('g:$groupKey')) _send(() => client.setAudioSessions(ids, volume: v));
+  }
+
+  /// Mudo principal do grupo: se alguma sessao esta sem mudo, muta todas; se todas ja estao, desmuta todas.
+  void toggleGroupMute(List<AudioSession> members) {
+    final mute = !members.every((m) => m.muted);
+    final ids = [for (final m in members) m.id];
+    final s = state.value;
+    if (s == null) return;
+    state.value = AudioState(
+      outputName: s.outputName,
+      volume: s.volume,
+      muted: s.muted,
+      inputMuted: s.inputMuted,
+      deafened: s.deafened,
+      sessions: [for (final x in s.sessions) ids.contains(x.id) ? x.copyWith(muted: mute) : x],
+    );
+    for (final id in ids) {
+      _lock(id, 600);
+    }
+    _send(() async => _applyConfirmed(await client.setAudioSessions(ids, mute: mute)));
   }
 
   void _patch(String id, AudioSession Function(AudioSession) f) {

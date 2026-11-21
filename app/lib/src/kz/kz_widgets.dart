@@ -200,8 +200,11 @@ class KzAppIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     if (app.icon != null) {
-      return Image.memory(app.icon!,
-          width: size, height: size, filterQuality: FilterQuality.medium, gaplessPlayback: true);
+      return SizedBox(
+        width: size,
+        height: size,
+        child: Image.memory(app.icon!, fit: BoxFit.contain, filterQuality: FilterQuality.medium, gaplessPlayback: true),
+      );
     }
     return Container(
       width: size,

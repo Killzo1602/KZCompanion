@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -13,6 +14,11 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace DroidDeck.Controllers
 {
+    public class AppOrder
+    {
+        public List<string>? Ids { get; set; }
+    }
+
     public class AppUpsert
     {
         public string? Name { get; set; }
@@ -121,12 +127,26 @@ namespace DroidDeck.Controllers
         {
             if (!IsLocal) return StatusCode(403, new { error = "Só pelo configurador no PC." });
             if (!AppLibrary.TryValidatePath(body.Path, out var full, out var error)) return BadRequest(new { error });
+            // Sem duplicata: o mesmo caminho, ou o .exe e um atalho que aponta para ele.
+            var dup = _library.FindDuplicate(full);
+            if (dup != null) return Conflict(new { error = $"\"{dup.Name}\" is already in your library.", id = dup.Id });
             var name = string.IsNullOrWhiteSpace(body.Name) ? System.IO.Path.GetFileNameWithoutExtension(full) : body.Name.Trim();
             var entry = _library.Add(
                 new AppEntry { Name = name, Path = full, Group = (body.Group ?? "").Trim(), Favorite = body.Favorite },
                 AppLibrary.NormalizeUserIcon(body.IconBase64));
             await _hub.Clients.All.SendAsync("ReceiveAppsChanged");
             return Ok(Dto(entry));
+        }
+
+        /// <summary>Ordem dos aplicativos (favoritos incluidos): ids na ordem desejada. So o PC edita a biblioteca.</summary>
+        [HttpPut("order")]
+        public async Task<IActionResult> Reorder([FromBody] AppOrder body)
+        {
+            if (!IsLocal) return StatusCode(403, new { error = "Só pelo configurador no PC." });
+            if (body.Ids == null || body.Ids.Count > 2000) return BadRequest(new { error = "Invalid order." });
+            _library.Reorder(body.Ids);
+            await _hub.Clients.All.SendAsync("ReceiveAppsChanged");
+            return NoContent();
         }
 
         [HttpPut("{id}")]

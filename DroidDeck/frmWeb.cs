@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Drawing;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -109,6 +111,11 @@ namespace DroidDeck
                     {
                         if (!IsOurs(e.Uri)) { e.Cancel = true; OpenExternal(e.Uri); }
                     };
+                    // Arrastar arquivos do Explorer: a pagina so enxerga File sem caminho; o WebView2 entrega
+                    // o caminho real ao host (AdditionalObjects), que repassa a lista a pagina. A pagina
+                    // salva pela API existente (so local, com chave) e o servidor valida .exe/.lnk.
+                    _web.AllowExternalDrop = true;
+                    _web.CoreWebView2.WebMessageReceived += OnWebMessage;
                     _web.CoreWebView2.DocumentTitleChanged += (_, _) => Text = "KZ Companion";
                     _web.CoreWebView2.NavigationCompleted += (_, e) =>
                     {
@@ -119,6 +126,29 @@ namespace DroidDeck
                 _web.CoreWebView2.Navigate(Url);
             }
             finally { _starting = false; }
+        }
+
+        private void OnWebMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(e.WebMessageAsJson);
+                if (!doc.RootElement.TryGetProperty("type", out var t) || t.GetString() != "files-dropped") return;
+                var paths = new List<string>();
+                var rejected = new List<string>();
+                foreach (var obj in e.AdditionalObjects.Take(30))
+                {
+                    if (obj is not CoreWebView2File f) continue;
+                    var ext = System.IO.Path.GetExtension(f.Path);
+                    if (System.IO.File.Exists(f.Path) &&
+                        (ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) || ext.Equals(".lnk", StringComparison.OrdinalIgnoreCase)))
+                        paths.Add(f.Path);
+                    else
+                        rejected.Add(System.IO.Path.GetFileName(f.Path));
+                }
+                _web.CoreWebView2.PostWebMessageAsJson(System.Text.Json.JsonSerializer.Serialize(new { type = "dropped", paths, rejected }));
+            }
+            catch (Exception ex) { Log.Warning($"Arrastar e soltar: {ex.Message}"); }
         }
 
         private static bool IsOurs(string uri) =>

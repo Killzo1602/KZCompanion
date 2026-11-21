@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:droiddeck/core/core.dart';
+import 'package:droiddeck/src/kz/config/drop_import.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:flutter/material.dart';
@@ -20,11 +22,70 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
   List<KzApp> _apps = [];
   bool _loading = true;
   String? _error;
+  bool _dragging = false;
+  StreamSubscription<DroppedFiles>? _dropSub;
+  StreamSubscription<bool>? _dragSub;
 
   @override
   void initState() {
     super.initState();
     _load();
+    // Arrastar .exe/.lnk do Explorer para ca (so no WebView2 do app do PC).
+    DropImport.start();
+    _dropSub = DropImport.files.listen(_importDropped);
+    _dragSub = DropImport.dragging.listen((v) {
+      if (mounted && v != _dragging) setState(() => _dragging = v);
+    });
+  }
+
+  @override
+  void dispose() {
+    _dropSub?.cancel();
+    _dragSub?.cancel();
+    super.dispose();
+  }
+
+  /// Cada arquivo solto: valida (.exe/.lnk) no servidor, pega nome e icone sozinho e salva pela
+  /// mesma API do botao Add Application. Duplicata (mesmo caminho ou atalho do mesmo programa) e recusada.
+  Future<void> _importDropped(DroppedFiles dropped) async {
+    var added = 0;
+    final problems = <String>[...dropped.rejected.map((n) => '$n: only .exe and .lnk files are supported')];
+    for (final path in dropped.paths) {
+      try {
+        final preview = await _client.previewApp(path);
+        await _client.saveApp(name: '${preview['name']}', path: '${preview['path']}');
+        added++;
+      } on DioException catch (e) {
+        final msg = e.response?.data is Map ? '${(e.response!.data as Map)['error']}' : friendlyError(e);
+        problems.add(msg);
+      } catch (e) {
+        problems.add(friendlyError(e));
+      }
+    }
+    if (!mounted) return;
+    await _load();
+    if (!mounted) return;
+    final parts = <String>[
+      if (added > 0) 'Added $added application${added == 1 ? '' : 's'}',
+      ...problems,
+    ];
+    if (parts.isNotEmpty) kzToast(context, parts.join(' · '));
+  }
+
+  /// Reordena os favoritos (arrastando) e grava a ordem; os demais ficam depois, como estavam.
+  Future<void> _reorderFavorites(int oldIndex, int newIndex) async {
+    final favs = _apps.where((a) => a.favorite).toList();
+    if (newIndex > oldIndex) newIndex -= 1;
+    final moved = favs.removeAt(oldIndex);
+    favs.insert(newIndex, moved);
+    final others = _apps.where((a) => !a.favorite).toList();
+    setState(() => _apps = [...favs, ...others]);
+    try {
+      await _client.reorderApps([for (final a in _apps) a.id]);
+    } catch (e) {
+      if (mounted) kzToast(context, friendlyError(e));
+      _load();
+    }
   }
 
   Future<void> _load() async {
@@ -49,6 +110,11 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
     try {
       final picked = await _client.pickApp();
       if (picked == null || !mounted) return;
+      final dup = _apps.where((a) => (a.path ?? '').toLowerCase() == '${picked['path']}'.toLowerCase());
+      if (dup.isNotEmpty) {
+        kzToast(context, '"${dup.first.name}" is already in your library.');
+        return;
+      }
       await _edit(draft: picked);
     } catch (e) {
       if (mounted) kzToast(context, friendlyError(e));
@@ -130,7 +196,36 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
           const SizedBox(width: 16),
         ],
       ),
-      body: _loading
+      body: Stack(children: [
+        _content(scheme),
+        if (_dragging)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                margin: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: scheme.primary, width: 2),
+                ),
+                child: Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.file_download_outlined, size: 48, color: scheme.primary),
+                    const SizedBox(height: 8),
+                    const Text('Drop .exe or .lnk files to add them',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+      ]),
+    );
+  }
+
+  Widget _content(ColorScheme scheme) {
+    return Builder(builder: (context) {
+      return _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(child: Text(_error!))
@@ -146,16 +241,57 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
                       ]),
                     )
                   : ListView(padding: const EdgeInsets.all(20), children: [
+                      if (_apps.any((a) => a.favorite)) ...[
+                        _sectionTitle('Favorites', 'drag to reorder; the phone shows them in this order', scheme),
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 460),
+                          child: ReorderableListView(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            buildDefaultDragHandles: false,
+                            onReorder: _reorderFavorites,
+                            children: [
+                              for (final (i, a) in _apps.where((a) => a.favorite).indexed)
+                                Padding(
+                                  key: ValueKey('fav${a.id}'),
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: _card(a, scheme, width: 460, handle: ReorderableDragStartListener(
+                                    index: i,
+                                    child: const MouseRegion(
+                                      cursor: SystemMouseCursors.grab,
+                                      child: Padding(
+                                        padding: EdgeInsets.only(right: 8),
+                                        child: Icon(Icons.drag_indicator_rounded),
+                                      ),
+                                    ),
+                                  )),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      _sectionTitle('Applications', 'drop .exe or .lnk files anywhere in this window to add them', scheme),
                       Wrap(spacing: 14, runSpacing: 14, children: [
-                        for (final a in _apps) _card(a, scheme),
+                        for (final a in _apps.where((a) => !a.favorite)) _card(a, scheme),
                       ]),
-                    ]),
-    );
+                    ]);
+    });
   }
 
-  Widget _card(KzApp a, ColorScheme scheme) {
+  Widget _sectionTitle(String title, String hint, ColorScheme scheme) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
+          Text(title.toUpperCase(),
+              style: TextStyle(fontSize: 12, letterSpacing: 1.1, fontWeight: FontWeight.w700, color: scheme.primary)),
+          const SizedBox(width: 10),
+          Text(hint, style: TextStyle(fontSize: 11.5, color: scheme.onSurface.withValues(alpha: 0.5))),
+        ]),
+      );
+
+  Widget _card(KzApp a, ColorScheme scheme, {double width = 270, Widget? handle}) {
     return Container(
-      width: 270,
+      width: width,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: scheme.surfaceContainerLow,
@@ -163,6 +299,7 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
         border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(children: [
+        if (handle != null) handle,
         KzAppIcon(a, size: 52),
         const SizedBox(width: 12),
         Expanded(
@@ -344,7 +481,7 @@ class _AppEditDialogState extends State<_AppEditDialog> {
               ),
               padding: const EdgeInsets.all(10),
               child: _iconB64 != null
-                  ? Image.memory(base64Decode(_iconB64!), filterQuality: FilterQuality.medium)
+                  ? Image.memory(base64Decode(_iconB64!), fit: BoxFit.contain, filterQuality: FilterQuality.medium)
                   : Icon(Icons.apps_rounded, size: 40, color: scheme.primary),
             ),
             const SizedBox(width: 16),
