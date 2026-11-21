@@ -10,10 +10,11 @@ class DropImport {
 }
 
 class DroppedFiles {
-  const DroppedFiles(this.paths, this.rejected, [this.unresolved = const []]);
+  const DroppedFiles(this.paths, this.rejected, [this.unresolved = const [], this.unsupported = false]);
   final List<String> paths;
   final List<String> rejected;
 
   /// Itens soltos sem caminho de arquivo (ex.: apps do Menu Iniciar): so o nome; abre o seletor.
   final List<String> unresolved;
+  final bool unsupported;
 }

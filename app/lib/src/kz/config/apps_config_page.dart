@@ -77,6 +77,11 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
       ...problems,
     ];
     if (parts.isNotEmpty) kzToast(context, parts.join(' · '));
+    if (dropped.unsupported && dropped.paths.isEmpty && mounted) {
+      kzToast(context, 'This item cannot be dropped here. Pick the application from the installed list.');
+      await _addFromInstalled();
+      return;
+    }
     if (unresolved != null && mounted) {
       kzToast(context, 'Windows did not provide a file for "$unresolved". Pick it from the installed list.');
       await _addFromInstalled(query: unresolved);
