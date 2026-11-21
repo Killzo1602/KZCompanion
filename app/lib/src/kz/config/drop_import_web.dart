@@ -5,9 +5,12 @@ import 'dart:js_interop_unsafe';
 import 'package:web/web.dart' as web;
 
 class DroppedFiles {
-  const DroppedFiles(this.paths, this.rejected);
+  const DroppedFiles(this.paths, this.rejected, [this.unresolved = const []]);
   final List<String> paths;
   final List<String> rejected;
+
+  /// Itens soltos sem caminho de arquivo (ex.: apps do Menu Iniciar): so o nome; abre o seletor.
+  final List<String> unresolved;
 }
 
 /// Arrastar arquivos do Explorer para o configurador (WebView2). O navegador so entrega File sem
@@ -45,8 +48,23 @@ class DropImport {
       e.preventDefault();
       _dragging.add(false);
       final wv = _webview;
-      final list = (e as web.DragEvent).dataTransfer?.files;
-      if (wv == null || list == null || list.length == 0) return;
+      final dt = (e as web.DragEvent).dataTransfer;
+      final list = dt?.files;
+      if (wv == null || dt == null) return;
+      if (list == null || list.length == 0) {
+        // Sem arquivos (o Menu Iniciar do Windows 11 pode nao oferecer um): usa o texto/URI, se vier.
+        final names = <String>{};
+        for (final type in const ['text/uri-list', 'text/plain']) {
+          final raw = dt.getData(type);
+          for (final line in raw.split(RegExp(r'[\r\n]+'))) {
+            final t = line.trim();
+            if (t.isEmpty || t.startsWith('#')) continue;
+            names.add(Uri.decodeFull(t.split(RegExp(r'[\\/]')).last).replaceAll(RegExp(r'\.(lnk|exe|url)$', caseSensitive: false), ''));
+          }
+        }
+        if (names.isNotEmpty) _files.add(DroppedFiles(const [], const [], names.toList()));
+        return;
+      }
       final array = (globalContext['Array'] as JSObject).callMethod('from'.toJS, list);
       wv.callMethod('postMessageWithAdditionalObjects'.toJS, {'type': 'files-dropped'}.jsify(), array);
     }).toJS);
@@ -60,6 +78,7 @@ class DropImport {
             _files.add(DroppedFiles(
               [for (final p in (data['paths'] as List? ?? const [])) '$p'],
               [for (final p in (data['rejected'] as List? ?? const [])) '$p'],
+              [for (final p in (data['unresolved'] as List? ?? const [])) '$p'],
             ));
           }
         }).toJS);

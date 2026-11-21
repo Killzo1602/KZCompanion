@@ -136,17 +136,25 @@ namespace DroidDeck
                 if (!doc.RootElement.TryGetProperty("type", out var t) || t.GetString() != "files-dropped") return;
                 var paths = new List<string>();
                 var rejected = new List<string>();
+                var unresolved = new List<string>();
                 foreach (var obj in e.AdditionalObjects.Take(30))
                 {
                     if (obj is not CoreWebView2File f) continue;
+                    // Item sem arquivo real (arquivo virtual, ex.: app do Menu Iniciar): so o nome chega; o
+                    // configurador abre o seletor de instalados com ele em vez de fingir que tem um caminho.
+                    if (string.IsNullOrEmpty(f.Path) || !System.IO.File.Exists(f.Path))
+                    {
+                        var vn = System.IO.Path.GetFileNameWithoutExtension(f.Path ?? "");
+                        if (!string.IsNullOrWhiteSpace(vn)) unresolved.Add(vn);
+                        continue;
+                    }
                     var ext = System.IO.Path.GetExtension(f.Path);
-                    if (System.IO.File.Exists(f.Path) &&
-                        (ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) || ext.Equals(".lnk", StringComparison.OrdinalIgnoreCase)))
+                    if (ext.Equals(".exe", StringComparison.OrdinalIgnoreCase) || ext.Equals(".lnk", StringComparison.OrdinalIgnoreCase))
                         paths.Add(f.Path);
                     else
                         rejected.Add(System.IO.Path.GetFileName(f.Path));
                 }
-                _web.CoreWebView2.PostWebMessageAsJson(System.Text.Json.JsonSerializer.Serialize(new { type = "dropped", paths, rejected }));
+                _web.CoreWebView2.PostWebMessageAsJson(System.Text.Json.JsonSerializer.Serialize(new { type = "dropped", paths, rejected, unresolved }));
             }
             catch (Exception ex) { Log.Warning($"Arrastar e soltar: {ex.Message}"); }
         }

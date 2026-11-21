@@ -40,11 +40,13 @@ namespace DroidDeck.Controllers
     public class AppsController : ControllerBase
     {
         private readonly AppLibrary _library;
+        private readonly InstalledApps _installed;
         private readonly IHubContext<DeckHub> _hub;
 
-        public AppsController(AppLibrary library, IHubContext<DeckHub> hub)
+        public AppsController(AppLibrary library, InstalledApps installed, IHubContext<DeckHub> hub)
         {
             _library = library;
+            _installed = installed;
             _hub = hub;
         }
 
@@ -56,7 +58,8 @@ namespace DroidDeck.Controllers
             a.Name,
             a.Group,
             a.Favorite,
-            Path = IsLocal ? a.Path : null,
+            a.Kind,
+            Path = IsLocal ? (a.Kind == "packaged" ? a.AppId : a.Path) : null,
             IconBase64 = _library.IconBase64(a.Id),
         };
 
@@ -68,6 +71,21 @@ namespace DroidDeck.Controllers
         {
             var app = _library.Get(id);
             if (app == null) return NotFound(new { error = "Aplicativo não encontrado." });
+            if (app.Kind == "packaged")
+            {
+                // App da Loja: abre pelo AppUserModelID (validado de novo aqui; nunca vem do cliente).
+                if (!InstalledApps.IsValidAumid(app.AppId)) return BadRequest(new { error = "Invalid application id." });
+                try
+                {
+                    Process.Start(new ProcessStartInfo("explorer.exe", "shell:AppsFolder\\" + app.AppId) { UseShellExecute = false });
+                    return Ok(new { launched = app.Name });
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"Falha ao abrir '{app.Name}': {ex.Message}");
+                    return StatusCode(500, new { error = ex.Message });
+                }
+            }
             if (!AppLibrary.TryValidatePath(app.Path, out var full, out var error))
                 return BadRequest(new { error });
             try
@@ -86,11 +104,56 @@ namespace DroidDeck.Controllers
             }
         }
 
+        /// <summary>Aplicativos instalados (Menu Iniciar, programas registrados, apps da Loja), com "ja adicionado".</summary>
         [HttpGet("installed")]
-        public IActionResult Installed()
+        public IActionResult Installed([FromQuery] bool refresh = false)
         {
             if (!IsLocal) return StatusCode(403, new { error = "Só pelo configurador no PC." });
-            return Ok(AppLibrary.InstalledShortcuts().Select(s => new { name = s.Name, path = s.Path }));
+            var have = _library.Identities();
+            return Ok(_installed.List(refresh).Select(i => new
+            {
+                key = i.Key,
+                name = i.Name,
+                kind = i.Kind,
+                source = i.Source,
+                detail = i.Detail,
+                added = have.Contains(i.Identity),
+            }));
+        }
+
+        [HttpGet("installed/{key}/icon")]
+        public IActionResult InstalledIcon(string key)
+        {
+            if (!IsLocal) return StatusCode(403, new { error = "Só pelo configurador no PC." });
+            var item = _installed.Find(key);
+            if (item == null) return NotFound();
+            return Ok(new { iconBase64 = _installed.IconBase64(item) });
+        }
+
+        /// <summary>Adiciona um item da lista de instalados pela CHAVE (o caminho/AUMID vem do servidor, nunca do cliente).</summary>
+        [HttpPost("installed/{key}/add")]
+        public async Task<IActionResult> AddInstalled(string key, [FromBody] AppUpsert? body)
+        {
+            if (!IsLocal) return StatusCode(403, new { error = "Só pelo configurador no PC." });
+            var item = _installed.Find(key);
+            if (item == null) return NotFound(new { error = "Application not found. Refresh the list." });
+            var dup = _library.FindByIdentity(item.Identity);
+            if (dup != null) return Conflict(new { error = $"\"{dup.Name}\" is already in your library.", id = dup.Id });
+            var entry = new AppEntry { Name = item.Name, Group = (body?.Group ?? "").Trim(), Favorite = body?.Favorite ?? false, Kind = item.Kind };
+            if (item.Kind == "packaged")
+            {
+                if (!InstalledApps.IsValidAumid(item.Path)) return BadRequest(new { error = "Invalid application id." });
+                entry.AppId = item.Path;
+                entry.Path = "";
+            }
+            else
+            {
+                if (!AppLibrary.TryValidatePath(item.Path, out var full, out var error)) return BadRequest(new { error });
+                entry.Path = full;
+            }
+            var saved = _library.Add(entry, InstalledApps.IconFor(item));
+            await _hub.Clients.All.SendAsync("ReceiveAppsChanged");
+            return Ok(Dto(saved));
         }
 
         /// <summary>Abre o seletor de arquivos do Windows no PC e devolve o escolhido com o icone.</summary>
@@ -133,7 +196,8 @@ namespace DroidDeck.Controllers
             var name = string.IsNullOrWhiteSpace(body.Name) ? System.IO.Path.GetFileNameWithoutExtension(full) : body.Name.Trim();
             var entry = _library.Add(
                 new AppEntry { Name = name, Path = full, Group = (body.Group ?? "").Trim(), Favorite = body.Favorite },
-                AppLibrary.NormalizeUserIcon(body.IconBase64));
+                AppLibrary.NormalizeUserIcon(body.IconBase64),
+                customIcon: !string.IsNullOrWhiteSpace(body.IconBase64));
             await _hub.Clients.All.SendAsync("ReceiveAppsChanged");
             return Ok(Dto(entry));
         }

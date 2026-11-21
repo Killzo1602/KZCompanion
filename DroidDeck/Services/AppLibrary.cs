@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using DroidDeck.Lib;
 
@@ -21,6 +22,9 @@ namespace DroidDeck.Services
         public bool Favorite { get; set; }
         /// <summary>Icone trocado pelo usuario (nao e regenerado na migracao do extrator).</summary>
         public bool CustomIcon { get; set; }
+        /// <summary>"file" (.lnk/.exe) ou "packaged" (app da Loja, abre pelo AppUserModelID em AppId).</summary>
+        public string Kind { get; set; } = "file";
+        public string AppId { get; set; } = "";
     }
 
     /// <summary>
@@ -83,26 +87,57 @@ namespace DroidDeck.Services
             return true;
         }
 
-        /// <summary>Identidade de um atalho/programa: o alvo do .lnk (quando resolve) ou o proprio caminho, em minusculas.</summary>
-        private static string Identity(string path)
+        /// <summary>
+        /// Identidade canonica de um programa: caminho completo do alvo (em minusculas) + argumentos.
+        /// "--processStart X.exe" apontando para o proprio alvo e ruido (o atalho do Discord que passa
+        /// isso e o que nao passa abrem o mesmo programa); argumentos que mudam o programa (ex.:
+        /// Update.exe --processStart Slack.exe) continuam diferenciando.
+        /// </summary>
+        public static string IdentityOf(string target, string? args)
         {
-            var p = path;
-            if (p.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
-            {
-                var t = ResolveShortcutTarget(p);
-                if (!string.IsNullOrEmpty(t)) p = t;
-            }
-            try { p = System.IO.Path.GetFullPath(p); } catch { }
-            return p.ToLowerInvariant();
+            var full = target;
+            try { full = System.IO.Path.GetFullPath(target); } catch { }
+            full = full.ToLowerInvariant();
+            var a = (args ?? "").Trim().ToLowerInvariant();
+            // Marcador que o Chrome/Edge colocam nos atalhos do Menu Iniciar: nao muda o programa aberto.
+            a = Regex.Replace(a, @"--source-shortcut-location=\S+", "").Trim();
+            var m = Regex.Match(a, @"^--process-?start\s+""?([^""\s]+)""?$");
+            if (m.Success && m.Groups[1].Value == System.IO.Path.GetFileName(full)) a = "";
+            return a.Length == 0 ? full : full + "|" + a;
         }
 
-        /// <summary>Ja existe um aplicativo com o mesmo caminho ou o mesmo alvo? (ex.: o .exe e o atalho dele)</summary>
+        /// <summary>Identidade de um caminho escolhido: .lnk resolve para alvo + argumentos.</summary>
+        public static string IdentityOfPath(string path)
+        {
+            if (path.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+            {
+                var (t, a) = ResolveShortcut(path);
+                if (!string.IsNullOrEmpty(t)) return IdentityOf(t, a);
+            }
+            return IdentityOf(path, "");
+        }
+
+        public static string IdentityOfEntry(AppEntry e) =>
+            e.Kind == "packaged" ? "pkg:" + e.AppId.ToLowerInvariant() : IdentityOfPath(e.Path);
+
+        /// <summary>Identidades de tudo que ja esta na biblioteca (para o "ja adicionado" do seletor).</summary>
+        public HashSet<string> Identities()
+        {
+            lock (_gate) return Load().Select(IdentityOfEntry).ToHashSet();
+        }
+
+        public AppEntry? FindByIdentity(string identity, string? exceptId = null)
+        {
+            lock (_gate) return Load().FirstOrDefault(a => a.Id != exceptId && IdentityOfEntry(a) == identity);
+        }
+
+        /// <summary>Ja existe um aplicativo com o mesmo caminho ou a mesma identidade? (ex.: o .exe e o atalho dele)</summary>
         public AppEntry? FindDuplicate(string fullPath, string? exceptId = null)
         {
-            var id = Identity(fullPath);
+            var id = IdentityOfPath(fullPath);
             lock (_gate)
                 return Load().FirstOrDefault(a => a.Id != exceptId &&
-                    (string.Equals(a.Path, fullPath, StringComparison.OrdinalIgnoreCase) || Identity(a.Path) == id));
+                    (string.Equals(a.Path, fullPath, StringComparison.OrdinalIgnoreCase) || IdentityOfEntry(a) == id));
         }
 
         /// <summary>Define a ordem (a mesma lista guardada no arquivo): ids na ordem pedida primeiro; os demais seguem depois, na ordem atual.</summary>
@@ -123,7 +158,7 @@ namespace DroidDeck.Services
         /// <summary>Extrator novo (128 px, contain): refaz os icones automaticos salvos pela versao anterior, uma vez.</summary>
         public void MigrateIcons()
         {
-            const string version = "2";
+            const string version = "3";
             try
             {
                 var marker = System.IO.Path.Combine(IconDir, ".version");
@@ -132,6 +167,7 @@ namespace DroidDeck.Services
                 lock (_gate) list = Load();
                 foreach (var a in list.Where(a => !a.CustomIcon))
                 {
+                    if (a.Kind == "packaged") { SaveIcon(a.Id, InstalledApps.ExtractPackagedIconPng(a.AppId)); continue; }
                     if (!File.Exists(a.Path)) continue;
                     SaveIcon(a.Id, ExtractIconPng(a.Path));
                 }
@@ -140,13 +176,14 @@ namespace DroidDeck.Services
             catch (Exception ex) { Log.Warning($"Migração de ícones falhou: {ex.Message}"); }
         }
 
-        public AppEntry Add(AppEntry entry, byte[]? icon)
+        /// <param name="customIcon">true so quando o usuario escolheu a imagem (nao e regenerada na migracao).</param>
+        public AppEntry Add(AppEntry entry, byte[]? icon, bool customIcon = false)
         {
             lock (_gate)
             {
                 var list = Load();
                 entry.Id = Guid.NewGuid().ToString("N");
-                entry.CustomIcon = icon != null;
+                entry.CustomIcon = customIcon;
                 list.Add(entry);
                 Save(list);
             }
@@ -229,6 +266,9 @@ namespace DroidDeck.Services
         // recorta so a margem transparente, escala mantendo a proporcao (contain) e centraliza.
         private const int IconSize = 128;
         private const int IconPad = 8;
+
+        /// <summary>Encaixa qualquer imagem no quadro 128x128 (contain, sem cortar), como os icones de apps.</summary>
+        public static byte[] FitToPng(Image source) => ToPng(source);
 
         private static byte[] ToPng(Image source)
         {
@@ -338,6 +378,24 @@ namespace DroidDeck.Services
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern uint PrivateExtractIcons(string file, int index, int cx, int cy, IntPtr[] icons, uint[] ids, uint count, uint flags);
 
+        /// <summary>Alvo e argumentos de um .lnk (vazios se nao resolver).</summary>
+        public static (string Target, string Args) ResolveShortcut(string lnk)
+        {
+            try
+            {
+                var t = Type.GetTypeFromProgID("WScript.Shell");
+                if (t == null) return ("", "");
+                dynamic shell = Activator.CreateInstance(t)!;
+                dynamic sc = shell.CreateShortcut(lnk);
+                string target = sc.TargetPath;
+                string args = sc.Arguments;
+                Marshal.FinalReleaseComObject(sc);
+                Marshal.FinalReleaseComObject(shell);
+                return (target ?? "", args ?? "");
+            }
+            catch { return ("", ""); }
+        }
+
         public static string? ResolveShortcutTarget(string lnk)
         {
             try
@@ -406,32 +464,5 @@ namespace DroidDeck.Services
 
         [DllImport("user32.dll")]
         private static extern bool DestroyIcon(IntPtr hIcon);
-
-        // ---- Aplicativos instalados (atalhos do Menu Iniciar) ----
-
-        public static List<(string Name, string Path)> InstalledShortcuts()
-        {
-            var roots = new[]
-            {
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms),
-                Environment.GetFolderPath(Environment.SpecialFolder.Programs),
-            };
-            var seen = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var root in roots.Where(r => !string.IsNullOrEmpty(r) && Directory.Exists(r)))
-            {
-                IEnumerable<string> files;
-                try { files = Directory.EnumerateFiles(root, "*.lnk", SearchOption.AllDirectories).ToList(); }
-                catch { continue; }
-                foreach (var f in files)
-                {
-                    var name = System.IO.Path.GetFileNameWithoutExtension(f);
-                    if (name.Contains("uninstall", StringComparison.OrdinalIgnoreCase) ||
-                        name.Contains("desinstal", StringComparison.OrdinalIgnoreCase)) continue;
-                    seen.TryAdd(name, f);
-                }
-            }
-            return seen.OrderBy(k => k.Key, StringComparer.CurrentCultureIgnoreCase)
-                       .Select(k => (k.Key, k.Value)).ToList();
-        }
     }
 }

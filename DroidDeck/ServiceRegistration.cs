@@ -16,6 +16,7 @@ namespace DroidDeck
         {
             services.AddSingleton<IAudioControlService, AudioControlService>();
             services.AddSingleton<AppLibrary>();
+            services.AddSingleton<InstalledApps>();
             services.AddSingleton<HardwareSensors>();
             services.AddHostedSingleton<AudioMixerService>();
             services.AddSingleton<IAppActivator, AppActivator>();

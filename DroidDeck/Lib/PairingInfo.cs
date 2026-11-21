@@ -9,7 +9,9 @@ namespace DroidDeck.Lib
     /// </summary>
     public static class PairingInfo
     {
-        public const int Port = 4787;
+        /// <summary>Porta do servidor local. KZCOMPANION_PORT troca (testes; ou conflito com outro programa).</summary>
+        public static int Port { get; } =
+            int.TryParse(Environment.GetEnvironmentVariable("KZCOMPANION_PORT"), out var p) && p is > 1023 and < 65536 ? p : 4787;
 
         /// <summary>URI escaneada pelo app: droiddeck://pair?ip=..&port=..&key=..</summary>
         public static string BuildUri()

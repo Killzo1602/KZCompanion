@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/kz/config/drop_import.dart';
@@ -23,6 +24,7 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
   bool _loading = true;
   String? _error;
   bool _dragging = false;
+  bool _elevated = false;
   StreamSubscription<DroppedFiles>? _dropSub;
   StreamSubscription<bool>? _dragSub;
 
@@ -30,6 +32,9 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
   void initState() {
     super.initState();
     _load();
+    _client.getPing().then((p) {
+      if (mounted) setState(() => _elevated = p['elevated'] == true);
+    }).catchError((_) {});
     // Arrastar .exe/.lnk do Explorer para ca (so no WebView2 do app do PC).
     DropImport.start();
     _dropSub = DropImport.files.listen(_importDropped);
@@ -50,6 +55,8 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
   Future<void> _importDropped(DroppedFiles dropped) async {
     var added = 0;
     final problems = <String>[...dropped.rejected.map((n) => '$n: only .exe and .lnk files are supported')];
+    // Itens sem caminho (Menu Iniciar do Windows 11 / apps da Loja): o seletor de instalados resolve pelo nome.
+    final unresolved = dropped.unresolved.isEmpty ? null : dropped.unresolved.first;
     for (final path in dropped.paths) {
       try {
         final preview = await _client.previewApp(path);
@@ -70,6 +77,10 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
       ...problems,
     ];
     if (parts.isNotEmpty) kzToast(context, parts.join(' · '));
+    if (unresolved != null && mounted) {
+      kzToast(context, 'Windows did not provide a file for "$unresolved". Pick it from the installed list.');
+      await _addFromInstalled(query: unresolved);
+    }
   }
 
   /// Reordena os favoritos (arrastando) e grava a ordem; os demais ficam depois, como estavam.
@@ -121,18 +132,12 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
     }
   }
 
-  Future<void> _addFromInstalled() async {
-    final chosen = await showDialog<Map<String, dynamic>>(
+  Future<void> _addFromInstalled({String query = ''}) async {
+    await showDialog<void>(
       context: context,
-      builder: (_) => _InstalledDialog(client: _client),
+      builder: (_) => _InstalledDialog(client: _client, initialQuery: query, onAdded: _load),
     );
-    if (chosen == null || !mounted) return;
-    try {
-      final preview = await _client.previewApp('${chosen['path']}');
-      if (mounted) await _edit(draft: preview);
-    } catch (e) {
-      if (mounted) kzToast(context, friendlyError(e));
-    }
+    if (mounted) _load();
   }
 
   /// [draft] = {path, name, iconBase64} de um arquivo recém-escolhido; [existing] = edição.
@@ -241,6 +246,7 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
                       ]),
                     )
                   : ListView(padding: const EdgeInsets.all(20), children: [
+                      if (_elevated) _elevatedNotice(scheme),
                       if (_apps.any((a) => a.favorite)) ...[
                         _sectionTitle('Favorites', 'drag to reorder; the phone shows them in this order', scheme),
                         ConstrainedBox(
@@ -278,6 +284,29 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
                     ]);
     });
   }
+
+  /// Windows (UIPI) nao deixa arrastar do Explorer/Menu Iniciar para uma janela de administrador.
+  Widget _elevatedNotice(ColorScheme scheme) => Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFBBF24).withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFFBBF24).withValues(alpha: 0.5)),
+        ),
+        child: const Row(children: [
+          Icon(Icons.shield_outlined, color: Color(0xFFFBBF24)),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'KZ Companion is running as administrator, so Windows blocks dragging files into this window. '
+              'Use "Installed apps" or Add Application, or restart KZ Companion normally and start the sensor '
+              'helper from the tray menu for CPU sensors.',
+              style: TextStyle(fontSize: 12.5),
+            ),
+          ),
+        ]),
+      );
 
   Widget _sectionTitle(String title, String hint, ColorScheme scheme) => Padding(
         padding: const EdgeInsets.only(bottom: 10),
@@ -340,57 +369,165 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
 }
 
 class _InstalledDialog extends StatefulWidget {
-  const _InstalledDialog({required this.client});
+  const _InstalledDialog({required this.client, this.initialQuery = '', required this.onAdded});
   final DroidDeckClient client;
+  final String initialQuery;
+  final Future<void> Function() onAdded;
 
   @override
   State<_InstalledDialog> createState() => _InstalledDialogState();
 }
 
+/// Seletor de aplicativos instalados: Menu Iniciar (usuario e sistema), programas registrados e
+/// apps da Loja. Busca, icone, Adicionar e "Added". Cada item abre pelo mecanismo certo (atalho
+/// com argumentos, .exe ou AppUserModelID); duplicatas sao reconhecidas pela identidade do programa.
 class _InstalledDialogState extends State<_InstalledDialog> {
   List<Map<String, dynamic>>? _all;
-  String _q = '';
+  late final TextEditingController _search;
+  final Map<String, Uint8List?> _icons = {};
+  final Set<String> _loadingIcon = {};
+  final Set<String> _adding = {};
 
   @override
   void initState() {
     super.initState();
-    widget.client.getInstalledApps().then((v) {
+    _search = TextEditingController(text: widget.initialQuery);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load({bool refresh = false}) async {
+    try {
+      final v = await widget.client.getInstalledApps(refresh: refresh);
       if (mounted) setState(() => _all = v);
-    }).catchError((_) {
+    } catch (_) {
       if (mounted) setState(() => _all = []);
-    });
+    }
+  }
+
+  Future<void> _icon(String key) async {
+    if (_icons.containsKey(key) || !_loadingIcon.add(key)) return;
+    try {
+      final b64 = await widget.client.getInstalledIcon(key);
+      if (mounted) setState(() => _icons[key] = (b64 == null || b64.isEmpty) ? null : base64Decode(b64));
+    } catch (_) {
+      if (mounted) setState(() => _icons[key] = null);
+    }
+  }
+
+  Future<void> _add(Map<String, dynamic> item) async {
+    final key = '${item['key']}';
+    setState(() => _adding.add(key));
+    try {
+      await widget.client.addInstalled(key);
+      item['added'] = true;
+      kzToast(context, 'Added ${item['name']}');
+      await widget.onAdded();
+    } on DioException catch (e) {
+      final msg = e.response?.data is Map ? '${(e.response!.data as Map)['error']}' : friendlyError(e);
+      if (e.response?.statusCode == 409) item['added'] = true;
+      if (mounted) kzToast(context, msg);
+    } catch (e) {
+      if (mounted) kzToast(context, friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _adding.remove(key));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final list = (_all ?? []).where((a) => '${a['name']}'.toLowerCase().contains(_q.toLowerCase())).toList();
+    final scheme = Theme.of(context).colorScheme;
+    final q = _search.text.trim().toLowerCase();
+    final list = (_all ?? [])
+        .where((a) => q.isEmpty || '${a['name']}'.toLowerCase().contains(q) || '${a['detail']}'.toLowerCase().contains(q))
+        .toList();
     return AlertDialog(
-      title: const Text('Installed applications'),
+      title: Row(children: [
+        const Expanded(child: Text('Installed applications')),
+        IconButton(
+          tooltip: 'Refresh',
+          onPressed: () {
+            setState(() => _all = null);
+            _icons.clear();
+            _loadingIcon.clear();
+            _load(refresh: true);
+          },
+          icon: const Icon(Icons.refresh_rounded),
+        ),
+      ]),
       content: SizedBox(
-        width: 420,
-        height: 420,
+        width: 560,
+        height: 480,
         child: Column(children: [
           TextField(
+            controller: _search,
             autofocus: true,
-            decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search'),
-            onChanged: (v) => setState(() => _q = v),
+            decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search installed applications'),
+            onChanged: (_) => setState(() {}),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(_all == null ? 'Looking for applications…' : '${list.length} of ${_all!.length} applications',
+                style: TextStyle(fontSize: 11.5, color: scheme.onSurface.withValues(alpha: 0.55))),
+          ),
+          const SizedBox(height: 4),
           Expanded(
             child: _all == null
                 ? const Center(child: CircularProgressIndicator())
-                : ListView.builder(
-                    itemCount: list.length,
-                    itemBuilder: (_, i) => ListTile(
-                      dense: true,
-                      title: Text('${list[i]['name']}'),
-                      onTap: () => Navigator.pop(context, list[i]),
-                    ),
-                  ),
+                : list.isEmpty
+                    ? const Center(child: Text('No matching applications'))
+                    : ListView.builder(
+                        itemCount: list.length,
+                        itemExtent: 56,
+                        itemBuilder: (_, i) {
+                          final item = list[i];
+                          final key = '${item['key']}';
+                          _icon(key); // so as linhas visiveis pedem o icone
+                          final added = item['added'] == true;
+                          final icon = _icons[key];
+                          final detail = '${item['detail']}'.isNotEmpty ? '${item['detail']}' : '${item['source']}';
+                          return ListTile(
+                            dense: true,
+                            leading: SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: icon != null
+                                  ? Image.memory(icon, fit: BoxFit.contain, filterQuality: FilterQuality.medium)
+                                  : Icon(item['kind'] == 'packaged' ? Icons.store_rounded : Icons.apps_rounded,
+                                      color: scheme.primary.withValues(alpha: 0.6)),
+                            ),
+                            title: Text('${item['name']}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text(
+                              item['kind'] == 'packaged' ? 'Microsoft Store app' : detail,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 11),
+                            ),
+                            trailing: added
+                                ? Chip(
+                                    visualDensity: VisualDensity.compact,
+                                    avatar: Icon(Icons.check_rounded, size: 16, color: scheme.primary),
+                                    label: const Text('Added', style: TextStyle(fontSize: 12)),
+                                  )
+                                : FilledButton.tonal(
+                                    onPressed: _adding.contains(key) ? null : () => _add(item),
+                                    child: _adding.contains(key)
+                                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                                        : const Text('Add'),
+                                  ),
+                          );
+                        },
+                      ),
           ),
         ]),
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Done'))],
     );
   }
 }

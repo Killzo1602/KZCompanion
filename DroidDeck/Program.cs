@@ -89,6 +89,16 @@ namespace DroidDeck
                 try { Process.GetProcessById(waitPid).WaitForExit(15000); } catch { }
             }
 
+            // Auxiliar elevado de sensores (so le hardware e responde por um pipe; sem janela nem bandeja).
+            if (args.Contains("--sensor-helper"))
+            {
+                var pp = args.FirstOrDefault(a => a.StartsWith("--parent-pid=", StringComparison.Ordinal));
+                var us = args.FirstOrDefault(a => a.StartsWith("--user-sid=", StringComparison.Ordinal));
+                if (pp != null && us != null && int.TryParse(pp["--parent-pid=".Length..], out var ppid))
+                    DroidDeck.Services.SensorHelper.RunServer(ppid, us["--user-sid=".Length..]);
+                return;
+            }
+
             Lib.Log.DropOversizedLegacyLog();
 
             // Bind em todas as interfaces — senão o celular na mesma rede recebe "connection
@@ -138,6 +148,7 @@ namespace DroidDeck
                 return;
             }
             StartMinimized = args.Contains("--minimized");
+            DroidDeck.Services.SensorHelper.StartClient();
 
             if (args.Contains("--headless") || args.Contains("--no-tray"))
             {
@@ -353,7 +364,7 @@ namespace DroidDeck
                         {
                             // Endpoint anônimo para o app checar conectividade (antes de ter a chave).
                             endpoints.MapGet("/api/ping", () =>
-                                Microsoft.AspNetCore.Http.Results.Ok(new { ok = true, name = Environment.MachineName, os = WindowsName(), features = new[] { "audio" } }))
+                                Microsoft.AspNetCore.Http.Results.Ok(new { ok = true, name = Environment.MachineName, os = WindowsName(), features = new[] { "audio", "installed-apps", "sensor-helper" }, elevated = DroidDeck.Services.HardwareSensors.IsElevated }))
                                 .AllowAnonymous();
 
                             // Entrega a API key APENAS para quem acessa via loopback (o próprio PC).

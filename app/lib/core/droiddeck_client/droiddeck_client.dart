@@ -628,8 +628,9 @@ class DroidDeckClient {
     return (r.data as Map).cast<String, dynamic>();
   }
 
-  Future<List<Map<String, dynamic>>> getInstalledApps() async {
-    final r = await _dio.get('/api/apps/installed');
+  /// Aplicativos instalados (Menu Iniciar, programas registrados, apps da Loja) com "added".
+  Future<List<Map<String, dynamic>>> getInstalledApps({bool refresh = false}) async {
+    final r = await _dio.get('/api/apps/installed', queryParameters: {if (refresh) 'refresh': true});
     return (r.data as List).map((e) => (e as Map).cast<String, dynamic>()).toList();
   }
 
@@ -658,6 +659,16 @@ class DroidDeckClient {
     } else {
       await _dio.put('/api/apps/$id', data: body);
     }
+  }
+
+  Future<String?> getInstalledIcon(String key) async {
+    final r = await _dio.get('/api/apps/installed/$key/icon');
+    return (r.data as Map)['iconBase64'] as String?;
+  }
+
+  /// Adiciona um item da lista de instalados pela chave (o PC resolve caminho/AUMID).
+  Future<void> addInstalled(String key, {String group = '', bool favorite = false}) async {
+    await _dio.post('/api/apps/installed/$key/add', data: {'group': group, 'favorite': favorite});
   }
 
   /// Ordem dos aplicativos (favoritos incluidos). So o configurador no PC pode gravar.

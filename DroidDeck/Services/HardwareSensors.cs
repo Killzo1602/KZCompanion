@@ -97,6 +97,17 @@ namespace DroidDeck.Services
         /// <summary>Le os sensores e preenche os campos de <paramref name="stats"/>.</summary>
         public void Fill(SystemStats stats)
         {
+            // App sem elevacao + auxiliar elevado conectado: as leituras completas (CPU, SSD, ventoinhas)
+            // vem dele; sem auxiliar, le localmente (GPU funciona sem administrador).
+            if (!IsElevated && SensorHelper.TryGet(out var h))
+            {
+                stats.CpuTemp = h.CpuTemp; stats.CpuPower = h.CpuPower; stats.GpuTemp = h.GpuTemp;
+                stats.GpuHotspot = h.GpuHotspot; stats.GpuPower = h.GpuPower; stats.SsdTemp = h.SsdTemp;
+                stats.Drives = h.Drives; stats.Fans = h.Fans; stats.CpuSensorCount = h.CpuSensorCount;
+                stats.SensorsElevated = h.SensorsElevated; stats.CpuDriverMissing = h.CpuDriverMissing;
+                stats.SensorSource = "helper";
+                return;
+            }
             EnsureOpen();
             if (_computer == null) return;
             try

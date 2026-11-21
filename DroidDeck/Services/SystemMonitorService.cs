@@ -127,6 +127,7 @@ namespace DroidDeck.Services
                         stats.Drives = ls.Drives; stats.Fans = ls.Fans;
                         stats.CpuSensorCount = ls.CpuSensorCount;
                         stats.CpuDriverMissing = ls.CpuDriverMissing;
+                        stats.SensorSource = ls.SensorSource;
                     }
                     stats.SensorsElevated = HardwareSensors.IsElevated;
                     stats.NetAdapter = _netAdapter;

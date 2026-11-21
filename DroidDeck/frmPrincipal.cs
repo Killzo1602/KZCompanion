@@ -217,12 +217,15 @@ namespace DroidDeck
             _updateItem = new ToolStripMenuItem(Program.Updater.IsInstalled ? L.Ui("Procurar atualização") : L.Ui("Baixar versão mais recente…"));
             _updateItem.Click += (_, _) => OnUpdateClick();
 
-            var elevated = DroidDeck.Services.HardwareSensors.IsElevated;
-            var adminItem = new ToolStripMenuItem(elevated
-                ? "Sensors: running as administrator"
-                : "Restart as administrator (CPU temperature/power)…")
-            { Enabled = !elevated };
-            adminItem.Click += (_, _) => RestartAsAdmin();
+            var adminItem = new ToolStripMenuItem("Start sensor helper (administrator)…");
+            adminItem.Click += (_, _) => StartSensorHelper();
+            menu.Opening += (_, _) =>
+            {
+                adminItem.Text = DroidDeck.Services.SensorHelper.Connected
+                    ? "Sensor helper: running"
+                    : (DroidDeck.Services.HardwareSensors.IsElevated ? "Sensors: this app runs as administrator" : "Start sensor helper (administrator)…");
+                adminItem.Enabled = !DroidDeck.Services.SensorHelper.Connected && !DroidDeck.Services.HardwareSensors.IsElevated;
+            };
 
             var driverItem = new ToolStripMenuItem(DroidDeck.Services.HardwareSensors.PawnIoInstalled
                 ? "CPU sensor driver (PawnIO): installed"
@@ -251,31 +254,20 @@ namespace DroidDeck
         }
 
         /// <summary>
-        /// CPU temperatura/potencia (e sensores da placa-mae e SSDs) exigem o driver do
-        /// LibreHardwareMonitor, que so carrega como administrador. Opcional e explicito:
-        /// o app nunca se eleva sozinho.
+        /// Sensores de CPU/SSD/ventoinhas exigem administrador. Em vez de elevar o app inteiro (o que
+        /// impede arrastar arquivos do Explorer para a janela), sobe so um auxiliar elevado que le os
+        /// sensores. Opcional e explicito: o Windows pede a permissao na hora.
         /// </summary>
-        private void RestartAsAdmin()
+        private void StartSensorHelper()
         {
             var answer = MessageBox.Show(
-                "CPU temperature and power (and some fan/SSD sensors) can only be read when KZ Companion runs as administrator.\n\n" +
-                "Restart KZ Companion as administrator now? Windows will ask for permission. You can always restart it normally.",
+                "CPU temperature/power, SSD temperature and fan speeds can only be read with administrator rights.\n\n" +
+                "KZ Companion starts a small helper for that. It only reads sensors, accepts no commands, and the main app (with drag and drop) stays non-elevated.\n\n" +
+                "Start the helper now? Windows will ask for permission.",
                 "KZ Companion", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (answer != DialogResult.Yes) return;
-            try
-            {
-                Process.Start(new ProcessStartInfo(Application.ExecutablePath, $"--wait-pid={Environment.ProcessId}")
-                {
-                    Verb = "runas",
-                    UseShellExecute = true,
-                });
-            }
-            catch (System.ComponentModel.Win32Exception)
-            {
-                return; // permissao negada no UAC: segue rodando como estava
-            }
-            Program.Exiting = true;
-            Application.Exit();
+            if (!DroidDeck.Services.SensorHelper.LaunchElevated())
+                TrayHint("Permission was not granted. The sensor helper did not start.");
         }
 
         /// <summary>
@@ -287,7 +279,7 @@ namespace DroidDeck
             var answer = MessageBox.Show(
                 "CPU temperature and power need the free PawnIO driver (signed, used by LibreHardwareMonitor).\n\n" +
                 "Install it now with winget (package namazso.PawnIO)? Windows will ask for administrator permission. " +
-                "After it finishes, restart KZ Companion as administrator.",
+                "After it finishes, start the sensor helper from this menu.",
                 "KZ Companion", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (answer != DialogResult.Yes) return;
             try
