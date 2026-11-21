@@ -11,21 +11,46 @@ class DashboardPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Ordem: CPU/GPU/RAM, favoritos, controles de audio, mixer. Rola na vertical; cada bloco
-    // tem o seu proprio Watch, entao arrastar um slider nao reconstrói o resto do painel.
-    return ListView(
-      padding: const EdgeInsets.all(12),
-      children: [
-        _statsRow(),
-        const SizedBox(height: 12),
-        _favorites(context),
-        const SizedBox(height: 12),
-        KzAudioControls(c.audio),
-        const SizedBox(height: 12),
-        KzMixer(c.audio),
-        const SizedBox(height: 4),
-      ],
-    );
+    return LayoutBuilder(builder: (context, box) {
+      // Paisagem (o painel e travado assim): esquerda = CPU/GPU/RAM + favoritos; direita = audio.
+      // Em tela estreita (nao deveria ocorrer) empilha, para nunca cortar nem estourar.
+      if (box.maxWidth < 620) {
+        return ListView(
+          padding: const EdgeInsets.all(12),
+          children: [
+            _statsRow(),
+            const SizedBox(height: 12),
+            _favorites(context, expand: false),
+            const SizedBox(height: 12),
+            KzAudioControls(c.audio),
+            const SizedBox(height: 12),
+            KzMixer(c.audio),
+          ],
+        );
+      }
+      final rightWidth = (box.maxWidth * 0.42).clamp(320.0, 430.0);
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              _statsRow(),
+              const SizedBox(height: 12),
+              Expanded(child: _favorites(context, expand: true)),
+            ]),
+          ),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: rightWidth,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              KzAudioControls(c.audio),
+              const SizedBox(height: 12),
+              Expanded(child: KzMixer(c.audio, scroll: true)),
+            ]),
+          ),
+        ]),
+      );
+    });
   }
 
   Widget _statsRow() {
@@ -50,32 +75,32 @@ class DashboardPage extends StatelessWidget {
 
   Widget _stat(String title, IconData icon, double usage, double? temp, List<double> history,
       {String? sub}) {
+    final secondary = title == 'RAM' ? sub : fmtTemp(temp);
     return KzCard(
       title: title,
       icon: icon,
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text(fmtPercent(usage), style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700, height: 1)),
-          const Spacer(),
-          if (title != 'RAM')
-            Text(fmtTemp(temp),
-                style: TextStyle(
-                    fontSize: 12,
-                    color: temp == null ? Colors.white38 : null,
-                    fontWeight: FontWeight.w600))
-          else if (sub != null)
-            Text(sub, style: const TextStyle(fontSize: 12)),
-        ]),
-        const SizedBox(height: 8),
+        Text(fmtPercent(usage), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, height: 1.05)),
+        const SizedBox(height: 2),
+        Text(secondary ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: secondary == 'Unavailable' ? Colors.white38 : null)),
+        const SizedBox(height: 6),
         KzBar(usage),
-        const SizedBox(height: 8),
-        KzSparkline(history, height: 30),
+        const SizedBox(height: 6),
+        KzSparkline(history, height: 26),
       ]),
     );
   }
 
-  Widget _favorites(BuildContext context) {
+  Widget _favorites(BuildContext context, {required bool expand}) {
     return KzCard(
+      expand: expand,
       title: 'Favorites',
       icon: Icons.star_rounded,
       trailing: TextButton(onPressed: onOpenApps, child: const Text('All apps')),
@@ -95,7 +120,7 @@ class DashboardPage extends StatelessWidget {
             ),
           );
         }
-        return Wrap(
+        final wrap = Wrap(
           spacing: 10,
           runSpacing: 10,
           children: [
@@ -109,6 +134,7 @@ class DashboardPage extends StatelessWidget {
               ),
           ],
         );
+        return expand ? SingleChildScrollView(child: wrap) : wrap;
       }),
     );
   }

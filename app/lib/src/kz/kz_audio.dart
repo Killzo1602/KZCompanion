@@ -67,23 +67,29 @@ class AudioState {
 /// comandos do celular so aplicam no PC e o estado confirmado volta pelo mesmo push. Itens que o
 /// usuario esta arrastando (ou acabou de soltar) ignoram o push por um instante, sem loop.
 class AudioStore {
-  AudioStore() {
+  AudioStore({DroidDeckClient? client, SignalRService? signalR})
+      : client = client ?? Injector.get<DroidDeckClient>(),
+        signalR = signalR ?? Injector.get<SignalRService>() {
     _disposers.add(effect(() {
-      final push = signalR.audioPush.value;
+      final push = this.signalR.audioPush.value;
       if (push != null) untracked(() => _apply(push, fromPush: true));
     }));
     var wasOnline = false;
     _disposers.add(effect(() {
-      final online = signalR.linkState.value == 'online';
+      final online = this.signalR.linkState.value == 'online';
       if (online && !wasOnline) untracked(refresh);
       wasOnline = online;
     }));
   }
 
-  final client = Injector.get<DroidDeckClient>();
-  final signalR = Injector.get<SignalRService>();
+  final DroidDeckClient client;
+  final SignalRService signalR;
 
   final state = signal<AudioState?>(null);
+
+  /// null = ainda nao sabe; false = o app do PC e antigo (sem /api/audio): a tela avisa em vez de ficar muda.
+  final supported = signal<bool?>(null);
+  final lastError = signal<String?>(null);
   final icons = signal<Map<String, Uint8List>>({});
 
   final _disposers = <void Function()>[];
@@ -107,9 +113,21 @@ class AudioStore {
         }
       }
       icons.value = newIcons;
+      supported.value = true;
+      lastError.value = null;
       _apply(j, fromPush: false);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      if (code == 404) {
+        supported.value = false; // PC com versao antiga do KZ Companion
+        signalR.diag('audio: PC app has no /api/audio (404): outdated');
+      } else {
+        lastError.value = friendlyError(e);
+        signalR.diag('audio refresh failed: ${code ?? e.type.name}');
+      }
     } catch (e) {
-      debugPrint('KZ audio: $e');
+      lastError.value = '$e';
+      signalR.diag('audio refresh failed: $e');
     }
   }
 
@@ -230,13 +248,16 @@ class AudioStore {
       await call();
     } on DioException catch (e) {
       // 404 = a sessao fechou enquanto o dedo estava no slider: so atualiza a lista.
-      if (e.response?.statusCode == 404) {
+      final code = e.response?.statusCode;
+      signalR.diag('audio command failed: ${code ?? e.type.name}');
+      if (code == 404) {
         refresh();
       } else {
-        debugPrint('KZ audio command: $e');
+        lastError.value = friendlyError(e);
       }
     } catch (e) {
-      debugPrint('KZ audio command: $e');
+      signalR.diag('audio command failed: $e');
+      lastError.value = '$e';
     }
   }
 

@@ -48,18 +48,22 @@ class KzApp {
 /// Estado compartilhado das telas do KZ Companion: biblioteca de apps, histórico dos
 /// sensores (gráficos) e o mixer/mídia já existentes do DroidDeck.
 class KzController {
-  KzController() {
+  KzController({DroidDeckClient? client, SignalRService? signalR})
+      : client = client ?? Injector.get<DroidDeckClient>(),
+        signalR = signalR ?? Injector.get<SignalRService>() {
+    home = HomeController(client: this.client, signalR: this.signalR);
+    audio = AudioStore(client: this.client, signalR: this.signalR);
     _disposers.add(effect(() {
-      final s = signalR.systemStats.value;
+      final s = this.signalR.systemStats.value;
       untracked(() => _push(s));
     }));
     _disposers.add(effect(() {
-      signalR.appsChanged.value;
+      this.signalR.appsChanged.value;
       untracked(refreshApps);
     }));
     var wasConnected = false;
     _disposers.add(effect(() {
-      final connected = signalR.connectionStatus.value == 'Connected';
+      final connected = this.signalR.connectionStatus.value == 'Connected';
       if (connected && !wasConnected) {
         untracked(() {
           refreshPcInfo();
@@ -77,10 +81,10 @@ class KzController {
 
   static const historyLength = 60;
 
-  final client = Injector.get<DroidDeckClient>();
-  final signalR = Injector.get<SignalRService>();
-  final home = HomeController();
-  final audio = AudioStore();
+  final DroidDeckClient client;
+  final SignalRService signalR;
+  late final HomeController home;
+  late final AudioStore audio;
 
   final apps = signal<List<KzApp>>([]);
   final appsError = signal<String?>(null);

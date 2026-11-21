@@ -4,8 +4,14 @@ import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/services/signalr_service.dart';
 
 class HomeController {
-  final DroidDeckClient _client = Injector.get<DroidDeckClient>();
-  final SignalRService _signalR = Injector.get<SignalRService>();
+  HomeController({DroidDeckClient? client, SignalRService? signalR})
+      : _client = client ?? Injector.get<DroidDeckClient>(),
+        _signalR = signalR ?? Injector.get<SignalRService>() {
+    _init();
+  }
+
+  final DroidDeckClient _client;
+  final SignalRService _signalR;
 
   late final outputs = signal<List<MixerEntity>>([]);
   late final inputs = signal<List<MixerEntity>>([]);
@@ -19,7 +25,7 @@ class HomeController {
   void Function()? _volumeSubDispose;
   void Function()? _mediaSubDispose;
 
-  HomeController() {
+  void _init() {
     // Subscribe to SignalR volume updates and refresh when they arrive.
     // Guarda o dispose da assinatura pra cancelar no dispose() — senao o callback
     // continua vivo e dispara fetch num controller ja descartado (leak + erro).

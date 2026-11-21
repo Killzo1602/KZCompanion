@@ -353,7 +353,7 @@ namespace DroidDeck
                         {
                             // Endpoint anônimo para o app checar conectividade (antes de ter a chave).
                             endpoints.MapGet("/api/ping", () =>
-                                Microsoft.AspNetCore.Http.Results.Ok(new { ok = true, name = Environment.MachineName, os = WindowsName() }))
+                                Microsoft.AspNetCore.Http.Results.Ok(new { ok = true, name = Environment.MachineName, os = WindowsName(), features = new[] { "audio" } }))
                                 .AllowAnonymous();
 
                             // Entrega a API key APENAS para quem acessa via loopback (o próprio PC).

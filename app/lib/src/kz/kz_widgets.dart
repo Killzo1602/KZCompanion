@@ -10,6 +10,7 @@ class KzCard extends StatelessWidget {
     this.icon,
     this.trailing,
     this.padding = const EdgeInsets.all(14),
+    this.expand = false,
   });
 
   final Widget child;
@@ -17,6 +18,9 @@ class KzCard extends StatelessWidget {
   final IconData? icon;
   final Widget? trailing;
   final EdgeInsets padding;
+
+  /// Dentro de um Expanded: o conteudo ocupa o que sobra e rola por conta propria.
+  final bool expand;
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +58,7 @@ class KzCard extends StatelessWidget {
                 if (trailing != null) trailing!,
               ]),
             ),
-          child,
+          if (expand) Flexible(child: child) else child,
         ],
       ),
     );
