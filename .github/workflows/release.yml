@@ -78,7 +78,7 @@ jobs:
 
       - name: Zip
         shell: pwsh
-        run: Compress-Archive -Path publish/* -DestinationPath DroidDeck-win-x64.zip -Force
+        run: Compress-Archive -Path publish/* -DestinationPath KZCompanion-win-x64.zip -Force
 
       # Instalador com atualizacao automatica. O app procura releases.win.json e o .nupkg
       # na ultima Release do GitHub, entao os dois vao anexados junto com o Setup.
@@ -86,17 +86,17 @@ jobs:
         shell: pwsh
         run: |
           dotnet tool install -g vpk --version 1.2.161
-          vpk pack --packId DroidDeckPC --packVersion $env:VERSION --packDir publish `
-            --mainExe DroidDeck.exe --packTitle DroidDeck --packAuthors "Gabriel Freitas" `
-            --icon DroidDeck/droiddeck.ico --outputDir velopack
-          Move-Item velopack/DroidDeckPC-win-Setup.exe velopack/DroidDeck-Setup.exe
-          Remove-Item velopack/DroidDeckPC-win-Portable.zip
+          vpk pack --packId KZCompanionPC --packVersion $env:VERSION --packDir publish `
+            --mainExe KZCompanion.exe --packTitle "KZ Companion" --packAuthors "KZ Dev Studio" `
+            --icon DroidDeck/kzcompanion.ico --outputDir velopack
+          Move-Item velopack/KZCompanionPC-win-Setup.exe velopack/KZCompanion-Setup.exe
+          Remove-Item velopack/KZCompanionPC-win-Portable.zip
 
       - uses: actions/upload-artifact@v7
         with:
           name: backend
           path: |
-            DroidDeck-win-x64.zip
+            KZCompanion-win-x64.zip
             velopack/
 
   app:
@@ -140,12 +140,12 @@ jobs:
           flutter build apk --release --build-number=${{ github.run_number }}
 
       - name: Renomeia o APK
-        run: cp app/build/app/outputs/flutter-apk/app-release.apk DroidDeck.apk
+        run: cp app/build/app/outputs/flutter-apk/app-release.apk KZCompanion.apk
 
       - uses: actions/upload-artifact@v7
         with:
           name: app
-          path: DroidDeck.apk
+          path: KZCompanion.apk
 
   release:
     name: semantic-release

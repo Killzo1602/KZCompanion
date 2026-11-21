@@ -569,4 +569,64 @@ class DroidDeckClient {
       'volume': volume,
     });
   }
+
+  // ---- KZ Companion: biblioteca de aplicativos e energia ----
+
+  Future<List<Map<String, dynamic>>> getApps() async {
+    final r = await _dio.get('/api/apps');
+    return (r.data as List).map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
+
+  Future<void> launchApp(String id) async {
+    await _dio.post('/api/apps/$id/launch');
+  }
+
+  /// Abre o seletor de arquivos do Windows NO PC. Null = o usuário cancelou.
+  Future<Map<String, dynamic>?> pickApp() async {
+    final r = await _dio.post('/api/apps/pick',
+        options: Options(receiveTimeout: const Duration(minutes: 5)));
+    if (r.statusCode == 204 || r.data == null || r.data == '') return null;
+    return (r.data as Map).cast<String, dynamic>();
+  }
+
+  Future<List<Map<String, dynamic>>> getInstalledApps() async {
+    final r = await _dio.get('/api/apps/installed');
+    return (r.data as List).map((e) => (e as Map).cast<String, dynamic>()).toList();
+  }
+
+  Future<Map<String, dynamic>> previewApp(String path) async {
+    final r = await _dio.post('/api/apps/preview', data: {'path': path});
+    return (r.data as Map).cast<String, dynamic>();
+  }
+
+  Future<void> saveApp({
+    String? id,
+    required String name,
+    String? path,
+    String group = '',
+    bool favorite = false,
+    String? iconBase64,
+  }) async {
+    final body = {
+      'name': name,
+      'path': path,
+      'group': group,
+      'favorite': favorite,
+      'iconBase64': iconBase64,
+    };
+    if (id == null) {
+      await _dio.post('/api/apps', data: body);
+    } else {
+      await _dio.put('/api/apps/$id', data: body);
+    }
+  }
+
+  Future<void> deleteApp(String id) async {
+    await _dio.delete('/api/apps/$id');
+  }
+
+  /// lock | sleep | restart | shutdown | cancel (restart/shutdown exigem [confirm]).
+  Future<void> power(String operation, {bool confirm = false}) async {
+    await _dio.post('/api/power', data: {'operation': operation, 'confirm': confirm});
+  }
 }

@@ -5,6 +5,11 @@
     <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>kzcompanion.ico</ApplicationIcon>
+    <AssemblyName>KZCompanion</AssemblyName>
+    <RootNamespace>DroidDeck</RootNamespace>
+    <Product>KZ Companion</Product>
+    <Company>KZ Dev Studio</Company>
+    <Description>KZ Companion - Windows agent (based on DroidDeck, Apache-2.0)</Description>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>

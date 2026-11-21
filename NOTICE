@@ -1,0 +1,8 @@
+KZ Companion
+Copyright 2026 KZ Dev Studio
+
+This product is a modified fork of DroidDeck (https://github.com/ggfto/DroidDeck),
+Copyright Gabriel Freitas, licensed under the Apache License, Version 2.0 (see LICENSE).
+Changes: rebranding, application library with native file picker and icon extraction,
+Android dashboard redesign, hardware sensors (LibreHardwareMonitorLib, MPL-2.0),
+power controls.

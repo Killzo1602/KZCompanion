@@ -149,3 +149,7 @@ discovery_debug.txt
 monitor_debug.txt
 # Site (MkDocs + landing) gerado localmente
 _site/
+
+# KZ Companion build outputs
+dist/
+app/android/build/

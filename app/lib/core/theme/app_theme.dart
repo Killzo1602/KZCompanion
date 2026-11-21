@@ -30,10 +30,23 @@ class ThemePreset {
   final DeckTileStyle tileStyle;
 }
 
+/// Ciano do KZ Companion: o destaque padrão.
+const kKzCyan = Color(0xFF2DD4FF);
+
 /// Amarelo do logo (e do site): o destaque padrão do DroidDeck.
 const kBrandYellow = Color(0xFFFDD400);
 
 const kThemePresets = <ThemePreset>[
+  ThemePreset(
+    id: 'kz',
+    name: 'KZ Grafite',
+    accent: kKzCyan,
+    background: Color(0xFF0E1013),
+    surface: Color(0xFF16191E),
+    tile: Color(0xFF1D2128),
+    outline: Color(0xFFD8DEE6),
+    tileStyle: DeckTileStyle.solid,
+  ),
   ThemePreset(
     id: 'classico',
     name: 'Clássico',
@@ -89,6 +102,7 @@ const kThemePresets = <ThemePreset>[
 
 /// Cores oferecidas para trocar o destaque do tema.
 const kAccentChoices = <Color>[
+  kKzCyan, // ciano KZ
   kBrandYellow, // amarelo DroidDeck
   Color(0xFF42A5F5), // azul
   Color(0xFF4FC3F7), // ciano
@@ -111,7 +125,7 @@ ThemePreset presetById(String? id) => kThemePresets.firstWhere(
 @immutable
 class ThemeSettings {
   const ThemeSettings({
-    this.presetId = 'classico',
+    this.presetId = 'kz',
     this.mode = ThemeMode.dark,
     this.accent,
     this.tileStyle,

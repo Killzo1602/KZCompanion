@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:droiddeck/src/connection/browser_url.dart';
 import 'package:droiddeck/src/connection/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:droiddeck/src/kz/config/kz_config_shell.dart';
+import 'package:droiddeck/src/kz/kz_shell.dart';
 import 'home_controller.dart';
 import 'audio_page.dart';
 import '../stream_deck/stream_deck_page.dart';
@@ -56,12 +58,10 @@ class HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     // No navegador (configurador no PC), abre direto no editor de deck.
-    if (WebMode.configurator) {
-      return StreamDeckPage(
-        onToggleFullscreen: () {},
-        isFullscreen: false,
-      );
-    }
+    if (WebMode.configurator) return const KzConfigShell();
+    // App do celular: painel KZ Companion (o deck de botões continua em Settings → More,
+    // ou como tela principal no modo "só deck").
+    if (!kIsWeb && !ThemeController.instance.deckOnly.value) return const KzShell();
     final body = Watch((context) {
         final deckOnly = ThemeController.instance.deckOnly.value;
         // O deck tem carregamento e modo offline próprios; a espera aqui é só do áudio.

@@ -28,6 +28,14 @@ class SystemStats {
   final double netDown; // KB/s
   final double gpuUsage; // % (0-100)
   final List<DiskStat> disks; // unidades fixas, em ordem de letra
+  // Sensores: null = o PC não expõe (mostrar "Unavailable", nunca inventar).
+  final double? cpuTemp;
+  final double? cpuPower;
+  final double? gpuTemp;
+  final double? gpuHotspot;
+  final double? gpuPower;
+  final double? ssdTemp;
+  final List<FanStat> fans;
 
   SystemStats({
     this.cpuUsage = 0,
@@ -38,6 +46,13 @@ class SystemStats {
     this.netDown = 0,
     this.gpuUsage = 0,
     this.disks = const [],
+    this.cpuTemp,
+    this.cpuPower,
+    this.gpuTemp,
+    this.gpuHotspot,
+    this.gpuPower,
+    this.ssdTemp,
+    this.fans = const [],
   });
 
   /// % de RAM em uso (usa o valor do backend; se faltar, calcula de total/disponível).
@@ -55,7 +70,23 @@ class SystemStats {
       return 0;
     }
 
+    double? opt(String k) {
+      final v = json[k] ?? json[k[0].toUpperCase() + k.substring(1)];
+      return v is num ? v.toDouble() : null;
+    }
+
     return SystemStats(
+      cpuTemp: opt('cpuTemp'),
+      cpuPower: opt('cpuPower'),
+      gpuTemp: opt('gpuTemp'),
+      gpuHotspot: opt('gpuHotspot'),
+      gpuPower: opt('gpuPower'),
+      ssdTemp: opt('ssdTemp'),
+      fans: ((json['fans'] ?? json['Fans']) as List? ?? const [])
+          .whereType<Map>()
+          .map((f) => FanStat('${f['name'] ?? f['Name'] ?? ''}',
+              ((f['rpm'] ?? f['Rpm']) as num?)?.toInt() ?? 0))
+          .toList(),
       cpuUsage: parseDouble(json['cpuUsage'] ?? json['CpuUsage']),
       ramUsage: parseDouble(json['ramUsage'] ?? json['RamUsage']),
       ramTotal: parseDouble(json['ramTotal'] ?? json['RamTotal']),
@@ -74,6 +105,13 @@ class SystemStats {
           .toList(),
     );
   }
+}
+
+/// Uma ventoinha com leitura de RPM.
+class FanStat {
+  final String name;
+  final int rpm;
+  const FanStat(this.name, this.rpm);
 }
 
 /// Uma unidade de disco do PC ("C:").
@@ -111,6 +149,9 @@ class SignalRService {
 
   // Incrementa quando o backend avisa que um perfil do deck mudou (sync ao vivo).
   final deckUpdated = signal<int>(0);
+
+  // Incrementa quando a biblioteca de aplicativos mudou no PC (configurador).
+  final appsChanged = signal<int>(0);
 
   // Estado de mute por processo (para botões toggle refletirem a realidade).
   final muteStates = signal<Map<String, bool>>({});
@@ -302,6 +343,10 @@ class SignalRService {
       connectionStatus.value = "Build Error";
       return;
     }
+
+    _hubConnection?.on('ReceiveAppsChanged', (_) {
+      appsChanged.value = appsChanged.value + 1;
+    });
 
     _hubConnection?.on('ReceiveSystemStats', (arguments) {
       if (arguments != null && arguments.isNotEmpty) {
