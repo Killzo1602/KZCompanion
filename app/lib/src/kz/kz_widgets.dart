@@ -36,34 +36,41 @@ class KzCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: scheme.outlineVariant),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (title != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 16, color: scheme.primary),
-                  const SizedBox(width: 6),
-                ],
-                Expanded(
-                  child: Text(
-                    title!.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 11,
-                      letterSpacing: 1.1,
-                      fontWeight: FontWeight.w600,
-                      color: scheme.onSurface.withValues(alpha: 0.6),
+      // A transparent Material between the painted background and the content lets ListTiles (and other
+      // ink widgets) inside the card show their splash and selection colors. Newer Flutter asserts on this.
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (title != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
+                  children: [
+                    if (icon != null) ...[
+                      Icon(icon, size: 16, color: scheme.primary),
+                      const SizedBox(width: 6),
+                    ],
+                    Expanded(
+                      child: Text(
+                        title!.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 11,
+                          letterSpacing: 1.1,
+                          fontWeight: FontWeight.w600,
+                          color: scheme.onSurface.withValues(alpha: 0.6),
+                        ),
+                      ),
                     ),
-                  ),
+                    if (trailing != null) trailing!,
+                  ],
                 ),
-                if (trailing != null) trailing!,
-              ]),
-            ),
-          if (expand) Flexible(child: child) else child,
-        ],
+              ),
+            if (expand) Flexible(child: child) else child,
+          ],
+        ),
       ),
     );
   }
@@ -71,7 +78,8 @@ class KzCard extends StatelessWidget {
 
 String fmtPercent(double v) => '${v.round()}%';
 String fmtTemp(double? v) => v == null ? 'Unavailable' : '${v.round()}°C';
-String fmtPower(double? v) => v == null ? 'Unavailable' : '${v.toStringAsFixed(v < 10 ? 1 : 0)} W';
+String fmtPower(double? v) =>
+    v == null ? 'Unavailable' : '${v.toStringAsFixed(v < 10 ? 1 : 0)} W';
 
 /// Linha "rótulo ........ valor"; valor ausente aparece esmaecido como "Unavailable".
 class KzMetricRow extends StatelessWidget {
@@ -85,20 +93,27 @@ class KzMetricRow extends StatelessWidget {
     final onSurface = Theme.of(context).colorScheme.onSurface;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(children: [
-        Expanded(
-          child: Text(label,
-              style: TextStyle(fontSize: 12, color: onSurface.withValues(alpha: 0.65))),
-        ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: available ? onSurface : onSurface.withValues(alpha: 0.4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: onSurface.withValues(alpha: 0.65),
+              ),
+            ),
           ),
-        ),
-      ]),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: available ? onSurface : onSurface.withValues(alpha: 0.4),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -157,7 +172,11 @@ class _SparkPainter extends CustomPainter {
     final base = Paint()
       ..color = color.withValues(alpha: 0.12)
       ..strokeWidth = 1;
-    canvas.drawLine(Offset(0, size.height - 0.5), Offset(size.width, size.height - 0.5), base);
+    canvas.drawLine(
+      Offset(0, size.height - 0.5),
+      Offset(size.width, size.height - 0.5),
+      base,
+    );
     if (values.length < 2) return;
     var top = max ?? values.reduce((a, b) => a > b ? a : b);
     var low = max == null ? values.reduce((a, b) => a < b ? a : b) : 0.0;
@@ -168,7 +187,11 @@ class _SparkPainter extends CustomPainter {
     final path = Path();
     for (var i = 0; i < values.length; i++) {
       final x = startX + dx * i;
-      final y = size.height - ((values[i] - low) / (top - low)).clamp(0.0, 1.0) * (size.height - 3) - 1.5;
+      final y =
+          size.height -
+          ((values[i] - low) / (top - low)).clamp(0.0, 1.0) *
+              (size.height - 3) -
+          1.5;
       if (i == 0) {
         path.moveTo(x, y);
       } else {
@@ -191,7 +214,8 @@ class _SparkPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SparkPainter old) => !identical(old.values, values) || old.color != color;
+  bool shouldRepaint(_SparkPainter old) =>
+      !identical(old.values, values) || old.color != color;
 }
 
 /// Ícone do aplicativo (extraído no PC) ou inicial do nome quando não há.
@@ -207,7 +231,12 @@ class KzAppIcon extends StatelessWidget {
       return SizedBox(
         width: size,
         height: size,
-        child: Image.memory(app.icon!, fit: BoxFit.contain, filterQuality: FilterQuality.medium, gaplessPlayback: true),
+        child: Image.memory(
+          app.icon!,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+          gaplessPlayback: true,
+        ),
       );
     }
     return Container(
@@ -220,7 +249,11 @@ class KzAppIcon extends StatelessWidget {
       ),
       child: Text(
         app.name.isEmpty ? '?' : app.name.characters.first.toUpperCase(),
-        style: TextStyle(fontSize: size * 0.42, fontWeight: FontWeight.w700, color: scheme.primary),
+        style: TextStyle(
+          fontSize: size * 0.42,
+          fontWeight: FontWeight.w700,
+          color: scheme.primary,
+        ),
       ),
     );
   }
@@ -228,7 +261,12 @@ class KzAppIcon extends StatelessWidget {
 
 /// Atalho de aplicativo: ícone + nome, toque abre no PC.
 class KzAppTile extends StatelessWidget {
-  const KzAppTile({super.key, required this.app, required this.onTap, this.width = 92});
+  const KzAppTile({
+    super.key,
+    required this.app,
+    required this.onTap,
+    this.width = 92,
+  });
   final KzApp app;
   final VoidCallback onTap;
   final double width;
@@ -246,15 +284,20 @@ class KzAppTile extends StatelessWidget {
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              KzAppIcon(app, size: 48),
-              const SizedBox(height: 6),
-              Text(app.name,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                KzAppIcon(app, size: 48),
+                const SizedBox(height: 6),
+                Text(
+                  app.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 12)),
-            ]),
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -265,5 +308,7 @@ class KzAppTile extends StatelessWidget {
 void kzToast(BuildContext context, String message) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(content: Text(message), duration: const Duration(seconds: 2)));
+    ..showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
 }
