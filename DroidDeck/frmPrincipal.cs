@@ -15,7 +15,7 @@ namespace DroidDeck
     {
         private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private const string AppRunName = "KZCompanion";
-        private const string WebUrl = "http://localhost:4787/";
+        
 
         private ToolStripMenuItem _autoStartItem = null!;
         private ToolStripMenuItem _firewallItem = null!;
@@ -47,7 +47,9 @@ namespace DroidDeck
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            ntiTray.ShowBalloonTip(3000, "KZ Companion", L.Ui("Rodando na bandeja — servidor em {url}", ("url", WebUrl)), ToolTipIcon.Info);
+
+            if (!Program.StartMinimized || Program.FirstRunAfterInstall) BeginInvoke(ShowWindow);
+            else TrayHint("KZ Companion is running in the tray.");
 
             if (Program.FirstRunAfterInstall)
                 BeginInvoke(FirstRunSetup);
@@ -170,7 +172,7 @@ namespace DroidDeck
         {
             var menu = new ContextMenuStrip();
 
-            var openItem = new ToolStripMenuItem(L.Ui("Abrir no navegador"));
+            var openItem = new ToolStripMenuItem(L.Ui("Abrir o KZ Companion"));
             openItem.Click += (_, _) => OpenWebUi();
 
             var pairItem = new ToolStripMenuItem(L.Ui("Parear dispositivo (QR)…"));
@@ -216,7 +218,7 @@ namespace DroidDeck
             _updateItem.Click += (_, _) => OnUpdateClick();
 
             var exitItem = new ToolStripMenuItem(L.Ui("Encerrar"));
-            exitItem.Click += (_, _) => Application.Exit();
+            exitItem.Click += (_, _) => { Program.Exiting = true; Application.Exit(); };
 
             menu.Items.Add(openItem);
             menu.Items.Add(pairItem);
@@ -233,7 +235,19 @@ namespace DroidDeck
             ntiTray.DoubleClick += (_, _) => OpenWebUi();
         }
 
-        private static void OpenWebUi() => OpenUrl(WebUrl);
+        private frmWeb? _window;
+
+        /// <summary>Mostra (ou cria) a janela do KZ Companion; nunca abre navegador externo.</summary>
+        public void ShowWindow()
+        {
+            if (_window == null || _window.IsDisposed) _window = new frmWeb();
+            _window.Bring();
+        }
+
+        public void TrayHint(string text) =>
+            ntiTray.ShowBalloonTip(3000, "KZ Companion", text, ToolTipIcon.Info);
+
+        private void OpenWebUi() => ShowWindow();
 
         private static void OpenUrl(string url)
         {
@@ -270,7 +284,7 @@ namespace DroidDeck
                 if (key == null) return;
 
                 if (enable)
-                    key.SetValue(AppRunName, $"\"{Application.ExecutablePath}\"");
+                    key.SetValue(AppRunName, $"\"{Application.ExecutablePath}\" --minimized");
                 else
                     key.DeleteValue(AppRunName, throwOnMissingValue: false);
             }
@@ -291,7 +305,7 @@ namespace DroidDeck
                 using var key = Registry.CurrentUser.OpenSubKey(RunKey, true);
                 var current = key?.GetValue(AppRunName) as string;
                 if (current != null &&
-                    current.Trim('"').Equals(Application.ExecutablePath, StringComparison.OrdinalIgnoreCase))
+                    current.Replace(" --minimized", "").Trim('"').Equals(Application.ExecutablePath, StringComparison.OrdinalIgnoreCase))
                     key!.DeleteValue(AppRunName, throwOnMissingValue: false);
             }
             catch (Exception ex)

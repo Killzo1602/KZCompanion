@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.Diagnostics;
 using System.IO;
 using DroidDeck.Lib;
@@ -22,6 +22,48 @@ namespace DroidDeck
         public static bool FirstRunAfterInstall { get; private set; }
 
         public static readonly AppUpdater Updater = new();
+
+        /// <summary>Erro que derrubou (ou impediu de subir) o servidor local; a janela o mostra.</summary>
+        public static Exception? BackendError { get; private set; }
+
+        /// <summary>True quando o usuario pediu para encerrar (senao fechar a janela so esconde).</summary>
+        public static bool Exiting { get; set; }
+
+        public static bool StartMinimized { get; private set; }
+
+        public static string DescribeBackendError(Exception ex)
+        {
+            if (ex is System.IO.IOException || ex is System.Net.Sockets.SocketException ||
+                ex.InnerException is System.Net.Sockets.SocketException ||
+                ex.Message.Contains("address already in use", StringComparison.OrdinalIgnoreCase) ||
+                ex.Message.Contains("Only one usage", StringComparison.OrdinalIgnoreCase))
+                return $"KZ Companion could not start its local server because port {Lib.PairingInfo.Port} is already in use.\r\n\r\n" +
+                       "Another program is using it, most likely the original DroidDeck. Close it (check the system tray) and press Retry.\r\n\r\n" + ex.Message;
+            return "KZ Companion could not start its local server.\r\n\r\n" + ex.Message;
+        }
+
+        /// <summary>Sobe o servidor e guarda a falha (porta ocupada, runtime ausente...) em vez de engoli-la.</summary>
+        private static string[] _args = Array.Empty<string>();
+        private static CancellationToken _token;
+
+        /// <summary>Botao Retry da janela: sobe o servidor de novo depois de uma falha (ex.: porta liberada).</summary>
+        public static void RestartBackend() => StartBackend(_args, _token);
+
+        private static Task StartBackend(string[] args, CancellationToken token)
+        {
+            _args = args; _token = token;
+            BackendError = null;
+            return Task.Run(async () =>
+            {
+                try { await RunWebAppAsync(args, token); }
+                catch (OperationCanceledException) { }
+                catch (Exception ex)
+                {
+                    BackendError = ex;
+                    Lib.Log.Error($"Falha no servidor: {ex}");
+                }
+            });
+        }
 
         [STAThread]
         public static void Main(string[] args)
@@ -65,7 +107,14 @@ namespace DroidDeck
             var instanceName = @"Local\KZCompanion.Instance." +
                 (Environment.GetEnvironmentVariable("DROIDDECK_DATA_DIR") ?? "default").Replace('\\', '/');
             using var instance = new Mutex(true, instanceName, out var firstInstance);
-            if (!firstInstance) return;
+            var showEvent = new EventWaitHandle(false, EventResetMode.AutoReset, @"Local\KZCompanion.Show." + instanceName.GetHashCode());
+            if (!firstInstance)
+            {
+                // Ja esta rodando: so traz a janela dele para a frente.
+                try { showEvent.Set(); } catch { }
+                return;
+            }
+            StartMinimized = args.Contains("--minimized");
 
             if (args.Contains("--headless") || args.Contains("--no-tray"))
             {
@@ -77,13 +126,19 @@ namespace DroidDeck
             var cts = new CancellationTokenSource();
 
             // Inicializa e roda o servidor web em paralelo, observando o token
-            var webTask = RunWebAppAsync(args, cts.Token);
+            var webTask = StartBackend(args, cts.Token);
 
             // App de bandeja: a janela fica invisível e toda a interação é pelo ícone na bandeja.
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
             FrmPrincipal = new frmPrincipal();
+            var showThread = new Thread(() =>
+            {
+                while (showEvent.WaitOne())
+                    try { FrmPrincipal.BeginInvoke(FrmPrincipal.ShowWindow); } catch { }
+            }) { IsBackground = true };
+            showThread.Start();
 
             Application.Run(FrmPrincipal);
 
