@@ -56,7 +56,6 @@ def flutter_packages():
 
 
 def nuget_packages():
-    # Direct references plus the transitive packages that end up next to the executable.
     wanted = ["librehardwaremonitorlib", "diskinfotoolkit", "ramspdtoolkit-ndd", "blacksharp.core", "hidsharp",
               "mono.posix.netstandard", "localstorage", "microsoft.web.webview2", "mqttnet", "naudio", "nlog",
               "nlog.extensions.logging", "qrcoder", "swashbuckle.aspnetcore", "velopack", "newtonsoft.json",
@@ -93,7 +92,6 @@ def nuget_packages():
     return out
 
 
-# Packages whose metadata declares no license; verified by hand against the project's own repository.
 OVERRIDES = {
     "LocalStorage": "MIT (GitHub license record of hanssens/localstorage-for-dotnet; not declared in the package)",
     "Mono.Posix.NETStandard": "MIT (Mono class libraries; the package's license link points to the Mono project license)",

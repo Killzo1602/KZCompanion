@@ -12,11 +12,6 @@ using Microsoft.Web.WebView2.WinForms;
 
 namespace DroidDeck
 {
-    /// <summary>
-    /// A janela do KZ Companion: o configurador (servido pelo backend local) dentro de um
-    /// WebView2, sem navegador externo. Fechar ou minimizar esconde na bandeja; quem
-    /// encerra o app e o item "Encerrar" da bandeja.
-    /// </summary>
     public sealed class frmWeb : Form
     {
         public static readonly string Url = $"http://127.0.0.1:{PairingInfo.Port}/";
@@ -127,12 +122,6 @@ namespace DroidDeck
                     {
                         if (!IsOurs(e.Uri)) { e.Cancel = true; OpenExternal(e.Uri); }
                     };
-                    // Arrastar e soltar e tratado AQUI, nativamente (OLE no formulario), e nunca pela pagina:
-                    // o Chromium nao recebe o arrasto (AllowExternalDrop = false), entao nenhum objeto de
-                    // arquivo/IDataObject chega ao renderizador. Antes a pagina repassava os arquivos com
-                    // postMessageWithAdditionalObjects; um item do Menu Iniciar (sem arquivo real) fazia o
-                    // navegador matar o renderizador (RESULT_CODE_KILLED_BAD_MESSAGE). A pagina so recebe
-                    // JSON simples ja validado pelo host.
                     _web.AllowExternalDrop = false;
                     _web.CoreWebView2.ProcessFailed += OnProcessFailed;
                     _web.CoreWebView2.DocumentTitleChanged += (_, _) => Text = "KZ Companion";
@@ -147,12 +136,6 @@ namespace DroidDeck
             finally { _starting = false; }
         }
 
-        /// <summary>
-        /// Um processo do WebView2 caiu (ex.: o renderizador morto por mensagem invalida,
-        /// RESULT_CODE_KILLED_BAD_MESSAGE). Registra o motivo, mostra uma mensagem clara e deixa o
-        /// usuario recarregar. NAO recarrega sozinho: sem laco de queda/recarga. Os dados salvos
-        /// (apps, favoritos) ficam no PC e nao dependem da pagina.
-        /// </summary>
         private void OnProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
         {
             var now = DateTime.UtcNow;
@@ -164,7 +147,7 @@ namespace DroidDeck
                       $"process='{e.ProcessDescription}' frames=[{frames}] failuresIn5min={_failures.Count}");
 
             if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.BrowserProcessExited) _recreateWebView = true;
-            if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.RenderProcessUnresponsive) return; // o WebView2 decide; nao derrubamos
+            if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.RenderProcessUnresponsive) return;
 
             var detail = $"({e.ProcessFailedKind}, {e.Reason}, exit code {e.ExitCode})";
             var repeated = _failures.Count >= 3
@@ -173,8 +156,6 @@ namespace DroidDeck
             BeginInvoke(() => ShowStatus("The configurator window had a problem and was stopped by Windows " + detail + "." + repeated + "\r\n\r\nPress Retry to reload it.", canRetry: true));
         }
 
-        // ---- arrastar e soltar nativo ----
-
         private readonly DropCatcher _catcher = null!;
         private readonly System.Windows.Forms.Timer _dragTimer = new();
         private bool _btnWasDown, _armed;
@@ -182,26 +163,20 @@ namespace DroidDeck
         [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
         [System.Runtime.InteropServices.DllImport("user32.dll")] private static extern bool GetCursorPos(out System.Drawing.Point p);
 
-        /// <summary>
-        /// Detecta um arrasto EXTERNO: o botao esquerdo foi apertado fora desta janela e o cursor entra nela
-        /// com o botao ainda apertado. So entao a janela-captadora (nossa, nativa) cobre a area web para
-        /// receber o OLE; o Chromium nunca ve o arrasto. Custo: uma leitura de botao a cada 30 ms.
-        /// </summary>
         private void WatchExternalDrag()
         {
             if (!Visible || WindowState == FormWindowState.Minimized) { _armed = false; _catcher.Hide(); return; }
-            var down = (GetAsyncKeyState(0x01) & 0x8000) != 0; // VK_LBUTTON
+            var down = (GetAsyncKeyState(0x01) & 0x8000) != 0;
             GetCursorPos(out var pt);
             var area = _web.RectangleToScreen(_web.ClientRectangle);
             var inside = area.Contains(pt);
-            if (down && !_btnWasDown) _armed = !inside;      // o clique comecou fora: pode virar arrasto externo
+            if (down && !_btnWasDown) _armed = !inside;
             if (!down) { _armed = false; if (_catcher.Visible) _catcher.Hide(); }
             _btnWasDown = down;
             if (_armed && inside && !_catcher.Visible) _catcher.ShowOver(area);
             else if (_catcher.Visible && !inside) _catcher.Hide();
         }
 
-        /// <summary>Janela quase invisivel, sem ativar, que e o alvo OLE do arrasto externo.</summary>
         private sealed class DropCatcher : Form
         {
             private readonly frmWeb _owner;
@@ -222,7 +197,7 @@ namespace DroidDeck
             protected override bool ShowWithoutActivation => true;
             protected override CreateParams CreateParams
             {
-                get { var cp = base.CreateParams; cp.ExStyle |= 0x08000000 | 0x80; return cp; } // NOACTIVATE | TOOLWINDOW
+                get { var cp = base.CreateParams; cp.ExStyle |= 0x08000000 | 0x80; return cp; }
             }
             public void ShowOver(System.Drawing.Rectangle area)
             {
@@ -230,8 +205,6 @@ namespace DroidDeck
                 if (!Visible) Show(_owner);
             }
         }
-
-        // ---- arrastar e soltar nativo ----
 
         private bool _dragShown;
 
@@ -246,7 +219,6 @@ namespace DroidDeck
         {
             try
             {
-                // "Shell IDList Array" (apps do Menu Iniciar/Loja) e aceito so para orientar ao seletor.
                 return d.GetDataPresent(DataFormats.FileDrop) || d.GetDataPresent("FileGroupDescriptorW") ||
                        d.GetDataPresent(DataFormats.UnicodeText) || d.GetDataPresent("Shell IDList Array");
             }
@@ -273,7 +245,6 @@ namespace DroidDeck
                 if (d == null) return;
                 if (d.GetDataPresent(DataFormats.FileDrop) && d.GetData(DataFormats.FileDrop) is string[] files)
                 {
-                    // Arquivos reais (Explorer, atalhos do Menu Iniciar que sao .lnk de verdade).
                     foreach (var f in files.Take(30))
                     {
                         var ext = System.IO.Path.GetExtension(f);
@@ -286,8 +257,6 @@ namespace DroidDeck
                 }
                 else
                 {
-                    // Sem arquivo real (apps do Menu Iniciar do Windows 11, apps da Loja, texto): so da para
-                    // tirar um NOME seguro; o configurador abre o seletor de instalados com ele.
                     var names = new List<string>();
                     if (d.GetDataPresent("FileGroupDescriptorW") && d.GetData("FileGroupDescriptorW") is System.IO.MemoryStream ms)
                         names.AddRange(DescriptorNames(ms));
@@ -312,10 +281,9 @@ namespace DroidDeck
             catch (Exception ex) { Log.Warning($"Arrastar e soltar (mensagem): {ex.Message}"); }
         }
 
-        /// <summary>Nomes de FILEGROUPDESCRIPTORW (arquivos virtuais). Leitura limitada e conferida; nada e executado.</summary>
         private static IEnumerable<string> DescriptorNames(System.IO.MemoryStream ms)
         {
-            const int item = 592, nameOffset = 72, nameBytes = 520; // FILEDESCRIPTORW
+            const int item = 592, nameOffset = 72, nameBytes = 520;
             var buf = ms.ToArray();
             if (buf.Length < 4) yield break;
             var count = BitConverter.ToUInt32(buf, 0);
@@ -331,7 +299,6 @@ namespace DroidDeck
             }
         }
 
-        /// <summary>Texto vira um nome so se parecer um nome de programa (sem URLs, comandos ou caminhos longos).</summary>
         private static string? SafeName(string raw)
         {
             if (string.IsNullOrWhiteSpace(raw) || raw.Length > 260) return null;
@@ -347,14 +314,12 @@ namespace DroidDeck
 
         private static void OpenExternal(string uri)
         {
-            // So http(s): nada de file:, ms-* ou outros esquemas vindos de uma pagina.
             if (Uri.TryCreate(uri, UriKind.Absolute, out var u) && (u.Scheme == "http" || u.Scheme == "https"))
             {
                 try { Process.Start(new ProcessStartInfo(u.AbsoluteUri) { UseShellExecute = true }); } catch { }
             }
         }
 
-        /// <summary>Espera o backend responder; se ele caiu ou nao subiu, mostra o motivo na janela.</summary>
         private async Task<bool> WaitForBackendAsync()
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
@@ -370,7 +335,6 @@ namespace DroidDeck
                     var r = await http.GetAsync(Url + "api/ping");
                     if (r.IsSuccessStatusCode)
                     {
-                        // O index.html faltando (build incompleto) viraria um 401 mudo.
                         var idx = await http.GetAsync(Url);
                         if (idx.IsSuccessStatusCode) return true;
                         ShowStatus($"The backend is running but the configurator files are missing (HTTP {(int)idx.StatusCode}). Reinstall KZ Companion.", canRetry: true);

@@ -10,7 +10,6 @@ if (keystorePropertiesFile.exists()) {
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -29,18 +28,13 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "dev.kzstudio.kzcompanion"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
-    // The release is ARM64-only (KZCompanion-Android-arm64-*.apk). Native libraries bundled by
-    // dependencies (ML Kit, CameraX) would otherwise add armeabi-v7a and x86_64 copies.
     packaging {
         jniLibs {
             excludes += listOf("lib/armeabi-v7a/**", "lib/x86/**", "lib/x86_64/**")
@@ -58,9 +52,6 @@ android {
 
     buildTypes {
         release {
-            // Release key when key.properties exists. Without it, local builds fall back to the debug
-            // key (development only), but a release build that sets KZ_REQUIRE_RELEASE_SIGNING=true
-            // (the GitHub Release workflow does) fails instead of producing a debug-signed APK.
             if (!keystorePropertiesFile.exists() && System.getenv("KZ_REQUIRE_RELEASE_SIGNING") == "true") {
                 throw GradleException("KZ_REQUIRE_RELEASE_SIGNING is set but app/android/key.properties is missing: refusing to sign a release with the debug key.")
             }

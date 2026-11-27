@@ -4,9 +4,6 @@ using System.Collections.Generic;
 
 namespace DroidDeck.Audio
 {
-    // Ambas as abstrações são IDisposable porque a implementação real (NAudio) é COM: o
-    // device e cada sessão são proxies que precisam ser liberados de forma determinística.
-    // Quem obtém um IAudioDevice/IAudioSession é dono dele e deve descartá-lo.
     public interface IAudioSession : IDisposable
     {
         bool IsSystemSoundsSession { get; }

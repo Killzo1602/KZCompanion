@@ -2,7 +2,6 @@ import 'package:web/web.dart' as web;
 
 void clearPairingFromUrl() => clearUrlParam('pair');
 
-/// Tira um parâmetro da barra de endereço (sem recarregar a página).
 void clearUrlParam(String name) {
   final uri = Uri.base;
   final rest = Map<String, String>.from(uri.queryParameters)..remove(name);
@@ -11,8 +10,6 @@ void clearUrlParam(String name) {
   web.window.history.replaceState(null, '', '${uri.path}$query$fragment');
 }
 
-/// Tela cheia do navegador (some a barra de endereço). Só vale depois de um toque do
-/// usuário; o iPhone não tem a API — lá a saída é "Adicionar à Tela de Início".
 void setBrowserFullscreen(bool on) {
   try {
     final doc = web.document;

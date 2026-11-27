@@ -1,13 +1,10 @@
-# Builds the Flutter web configurator and deploys it into the backend's wwwroot.
-# Usage:  .\scripts\deploy-web.ps1
-$root = Split-Path -Parent $PSScriptRoot          # repo root (parent of scripts/)
+$root = Split-Path -Parent $PSScriptRoot
 $app = Join-Path $root 'app'
 $wwwroot = Join-Path $root 'DroidDeck\wwwroot'
 
 Write-Host "Building Flutter web in $app ..."
 Push-Location $app
-# Sem service worker é tratado no web/index.html (não registra + desregistra SW antigo).
-flutter build web --release   # warnings vão pro stderr; checamos o exit code
+flutter build web --release
 $code = $LASTEXITCODE
 Pop-Location
 if ($code -ne 0) { Write-Error "flutter build web failed (exit $code)"; exit 1 }

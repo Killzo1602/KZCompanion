@@ -28,7 +28,6 @@ namespace DroidDeck.Tests
             public async Task ExecuteAsync(ActionContext context)
             {
                 Calls.Add((context.Action, context.ButtonId));
-                // Uma acao que dispara outra (como a multi) leva junto o botao de origem.
                 if (context.Get("chain") is { Length: > 0 } next)
                     await context.ExecuteAsync(new DeckAction { Type = next });
             }

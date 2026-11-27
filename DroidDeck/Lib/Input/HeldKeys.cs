@@ -5,19 +5,6 @@ using System.Threading;
 
 namespace DroidDeck.Lib.Input
 {
-    /// <summary>
-    /// Teclas que o deck esta segurando, com o dono de cada uma (a conexao do celular que a
-    /// apertou, ou a trava de um botao). Uma conexao que cai solta so as teclas dela, e a
-    /// tecla so sobe quando nenhum dono a segura mais.
-    ///
-    /// Como um teclado de verdade, a ultima tecla apertada (fora os modificadores) repete
-    /// enquanto fica apertada, no atraso e na velocidade configurados no Windows: sem isso,
-    /// segurar a seta num editor andava uma posicao so.
-    ///
-    /// Dono com o prefixo <see cref="OneShotPrefix"/> e a trava "ate a proxima tecla" (as
-    /// teclas de aderencia do Windows): solta sozinho quando outra tecla do deck, fora os
-    /// modificadores, sobe. Quem quer saber disso ouve <see cref="OneShotReleased"/>.
-    /// </summary>
     public sealed class HeldKeys : IDisposable
     {
         public static HeldKeys Shared { get; } = new(KeyboardInput.KeyDown, KeyboardInput.KeyUp);
@@ -38,10 +25,8 @@ namespace DroidDeck.Lib.Input
 
         public const string OneShotPrefix = "oneshot:";
 
-        /// <summary>Uma trava "ate a proxima tecla" soltou sozinha (recebe o dono).</summary>
         public event Action<string>? OneShotReleased;
 
-        /// <summary>Atraso ate a primeira repeticao e intervalo entre elas.</summary>
         public TimeSpan RepeatDelay { get; set; } = SystemRepeatDelay();
         public TimeSpan RepeatInterval { get; set; } = SystemRepeatInterval();
 
@@ -52,7 +37,6 @@ namespace DroidDeck.Lib.Input
             _repeatTimer = new System.Threading.Timer(_ => Repeat());
         }
 
-        /// <summary>Teclas apertadas agora (por qualquer dono).</summary>
         public IReadOnlyCollection<ushort> Keys
         {
             get { lock (_sync) return _owners.Values.SelectMany(s => s).ToHashSet(); }
@@ -75,7 +59,6 @@ namespace DroidDeck.Lib.Input
                 {
                     _repeatKey = vk;
                     _repeatTimer.Change(RepeatDelay, RepeatInterval);
-                    // A trava solta quando esta tecla subir (Shift+seta segurada seleciona ate soltar).
                     if (!owner.StartsWith(OneShotPrefix, StringComparison.Ordinal)) _oneShotTrigger = vk;
                 }
             }
@@ -92,7 +75,6 @@ namespace DroidDeck.Lib.Input
             FireReleased();
         }
 
-        /// <summary>Solta tudo o que o dono segura (conexao que caiu).</summary>
         public void ReleaseOwner(string owner)
         {
             lock (_sync)
@@ -103,10 +85,6 @@ namespace DroidDeck.Lib.Input
             FireReleased();
         }
 
-        /// <summary>
-        /// Uma tecla foi tocada fora daqui (toque rapido, atalho). Nulo = combinacao inteira.
-        /// Solta as travas "ate a proxima tecla", a nao ser que o toque fosse so um modificador.
-        /// </summary>
         public void KeyTapped(ushort? vk = null)
         {
             if (vk is ushort k && Modifiers.Contains(k)) return;
@@ -114,7 +92,6 @@ namespace DroidDeck.Lib.Input
             FireReleased();
         }
 
-        /// <summary>Solta tudo (o DroidDeck fechando).</summary>
         public void ReleaseAll()
         {
             lock (_sync)
@@ -146,7 +123,6 @@ namespace DroidDeck.Lib.Input
             }
         }
 
-        // Fora do lock: quem ouve (o KeyProvider) avisa os celulares.
         private void FireReleased()
         {
             string[] owners;
@@ -174,7 +150,6 @@ namespace DroidDeck.Lib.Input
             }
         }
 
-        // Painel de Controle > Teclado: atraso 0..3 = 250..1000 ms; velocidade 0..31 = ~2,5..30 por segundo.
         private static TimeSpan SystemRepeatDelay()
         {
             try { return TimeSpan.FromMilliseconds(250 * (1 + System.Windows.Forms.SystemInformation.KeyboardDelay)); }

@@ -9,7 +9,6 @@ import 'package:droiddeck/src/kz/kz_running_apps.dart';
 import 'package:droiddeck/src/services/signalr_service.dart';
 import 'package:flutter/foundation.dart';
 
-/// Um aplicativo da biblioteca do PC (o caminho nunca chega ao celular).
 class KzApp {
   KzApp({
     required this.id,
@@ -25,7 +24,7 @@ class KzApp {
   final String group;
   final bool favorite;
   final Uint8List? icon;
-  final String? path; // só vem para o configurador no próprio PC
+  final String? path;
 
   factory KzApp.fromJson(Map<String, dynamic> j) {
     Uint8List? icon;
@@ -46,8 +45,6 @@ class KzApp {
   }
 }
 
-/// Estado compartilhado das telas do KZ Companion: biblioteca de apps, histórico dos
-/// sensores (gráficos) e o mixer/mídia já existentes do DroidDeck.
 class KzController {
   KzController({DroidDeckClient? client, SignalRService? signalR})
       : client = client ?? Injector.get<DroidDeckClient>(),
@@ -109,7 +106,6 @@ class KzController {
   }
 
   void _push(SystemStats s) {
-    // Sem dado novo (PC desconectado) não enche o gráfico com zeros.
     if (!connected) return;
     cpuHistory.value = _append(cpuHistory.value, s.cpuUsage);
     gpuHistory.value = _append(gpuHistory.value, s.gpuUsage);
@@ -118,7 +114,6 @@ class KzController {
     if (s.gpuTemp != null) gpuTempHistory.value = _append(gpuTempHistory.value, s.gpuTemp!);
   }
 
-  /// Nome do PC e versao do Windows para o cabecalho.
   Future<void> refreshPcInfo() async {
     try {
       final p = await client.getPing();
@@ -147,14 +142,12 @@ class KzController {
     }
   }
 
-  /// Sessão de mídia principal (a que está tocando, senão a primeira).
   MediaSession? get mediaSession {
     final all = home.mediaSessions.value.values.toList();
     if (all.isEmpty) return null;
     return all.firstWhere((s) => s.playbackStatus == 'Playing', orElse: () => all.first);
   }
 
-  /// Saída de áudio padrão do Windows (a primeira que o mixer lista).
   MixerEntity? get mainOutput {
     final o = home.outputs.value;
     return o.isEmpty ? null : o.first;

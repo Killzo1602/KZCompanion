@@ -1,12 +1,5 @@
 name: Release
 
-# Manual only: Actions -> Release -> Run workflow, with the version to publish (for example 1.0.0).
-#
-# Safety rules enforced here:
-#   * the tag v<version> must not exist yet, and docs/release-notes/v<version>.md must exist;
-#   * the Android release keystore secrets must exist; a build that would be debug-signed fails;
-#   * the Windows front-end is rebuilt from source and compared byte for byte with what the installer contains;
-#   * the release is created as a DRAFT, the annotated tag is pushed, and only then is it published.
 on:
   workflow_dispatch:
     inputs:
@@ -58,7 +51,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.9'   # pinned: the version the release was verified with (newer stable needs Gradle 9)
+          flutter-version: '3.38.9'
           channel: stable
           cache: true
 
@@ -69,7 +62,6 @@ jobs:
       - name: Backend tests (a release never ships with a failing test)
         run: dotnet test DroidDeck.sln -c Release --filter "Category!=RequiresDesktop"
 
-      # Fresh web build, clean wwwroot, legacy-UI and byte-identity checks, licenses copied in.
       - name: Publish (verified)
         shell: pwsh
         run: ./scripts/publish-windows.ps1 -Out publish -Version $env:VERSION
@@ -101,7 +93,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.9'   # pinned: the version the release was verified with (newer stable needs Gradle 9)
+          flutter-version: '3.38.9'
           channel: stable
           cache: true
 
@@ -131,7 +123,6 @@ jobs:
       - name: Verify signature, package, version and ABI
         run: |
           cp app/build/app/outputs/flutter-apk/app-release.apk "KZCompanion-Android-arm64-v$VERSION.apk"
-          # EXPECTED_CERT_SHA256 is the public SHA-256 fingerprint of the release certificate.
           bash scripts/verify-apk.sh "KZCompanion-Android-arm64-v$VERSION.apk" "$VERSION" dev.kzstudio.kzcompanion "$EXPECTED_CERT_SHA256"
 
       - name: Remove signing material
@@ -169,7 +160,6 @@ jobs:
           { cat "docs/release-notes/v$VERSION.md"
             printf '\n## SHA-256 checksums\n\n```\n'; cat assets/SHA256SUMS.txt; printf '```\n'; } > notes.md
 
-      # Draft first, so nothing is public until the tag and every asset exist.
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}

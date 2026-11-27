@@ -23,11 +23,6 @@ namespace DroidDeck.Services
         public string? RefreshToken { get; set; }
     }
 
-    /// <summary>
-    /// Cliente Discord RPC (IPC via named pipe). Controla mute/deafen do próprio
-    /// usuário e reflete o estado ao vivo. Requer um app no Discord Developer Portal
-    /// (Client ID + Secret) e redirect http://localhost:4787/discord. Funciona p/ o dono do app.
-    /// </summary>
     public class DiscordRpcService : Integrations.IIntegration
     {
         private const string RedirectUri = "http://localhost:4787/discord";
@@ -41,7 +36,7 @@ namespace DroidDeck.Services
         private TaskCompletionSource<bool>? _readyTcs;
         private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonElement>> _pending = new();
         private readonly SemaphoreSlim _writeLock = new(1, 1);
-        private readonly SemaphoreSlim _connectLock = new(1, 1); // serializa watchdog + Conectar manual
+        private readonly SemaphoreSlim _connectLock = new(1, 1);
 
         public bool Connected { get; private set; }
 
@@ -55,14 +50,12 @@ namespace DroidDeck.Services
         public string? VoiceGuildId { get; private set; }
         public int InputVolume { get; private set; }
         public int OutputVolume { get; private set; }
-        public string VoiceMode { get; private set; } = ""; // PUSH_TO_TALK | VOICE_ACTIVITY
+        public string VoiceMode { get; private set; } = "";
         private volatile List<object> _participants = new();
 
-        /// <summary>Quem esta no canal de voz agora ({id, username, nick}).</summary>
         public IReadOnlyList<object> Participants => _participants;
         private readonly ConcurrentDictionary<string, bool> _userMute = new();
 
-        /// <summary>True quando há Client ID + Secret salvos (app Discord configurado).</summary>
         public bool Configured
         {
             get
@@ -73,12 +66,9 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Estado completo do Discord enviado aos clientes (SignalR/REST).</summary>
         public object GetStatePayload() => new
         {
             configured = Configured,
-            // O Client ID e o ID publico do app no Discord (vai em toda URL de OAuth), entao pode
-            // ir para o celular preencher o formulario. O Secret nunca sai do PC.
             clientId = LoadConfig().ClientId,
             connected = Connected,
             mute = SelfMute,
@@ -97,7 +87,6 @@ namespace DroidDeck.Services
             _hub = hub;
         }
 
-        // ---- Config persistida em %LocalAppData%\DroidDeck\discord.json ----
         private static string ConfigPath
         {
             get
@@ -107,9 +96,6 @@ namespace DroidDeck.Services
             }
         }
 
-        // O estado vai para o app a cada VOICE_SETTINGS_UPDATE (arrastar o volume no Discord
-        // dispara dezenas), e cada envio lia e decifrava (DPAPI) o discord.json duas vezes.
-        // A copia em memoria e trocada inteira a cada gravacao.
         private DiscordConfig? _configCache;
 
         public DiscordConfig LoadConfig()
@@ -145,12 +131,11 @@ namespace DroidDeck.Services
             var cfg = LoadConfig();
             cfg.ClientId = clientId;
             cfg.ClientSecret = clientSecret;
-            cfg.AccessToken = null;  // força reautorizar com as novas credenciais
+            cfg.AccessToken = null;
             cfg.RefreshToken = null;
             SaveConfig(cfg);
         }
 
-        // ---- Conexão + autenticação ----
         public async Task ConnectAsync(bool interactive = true)
         {
             await _connectLock.WaitAsync();
@@ -162,14 +147,10 @@ namespace DroidDeck.Services
         {
             var cfg = LoadConfig();
             if (string.IsNullOrWhiteSpace(cfg.ClientId) || string.IsNullOrWhiteSpace(cfg.ClientSecret))
-                throw new InvalidOperationException("Configure o Client ID e o Secret do Discord primeiro.");
+                throw new InvalidOperationException("Set up the Discord Client ID and Secret first.");
 
             Disconnect();
             await ConnectPipeAsync();
-            // Cada reconexão do watchdog cria um CTS novo. Ele é descartado pelo PRÓPRIO loop
-            // ao terminar — o loop é o último a usar o token, e descartá-lo no Disconnect()
-            // arriscaria ObjectDisposedException numa leitura em voo. Antes nunca era
-            // descartado, então cada reconexão deixava um CTS para trás.
             var readCts = new CancellationTokenSource();
             _readCts = readCts;
             _readyTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -180,10 +161,10 @@ namespace DroidDeck.Services
             });
 
             _logger.LogInformation("Discord: enviando handshake (client_id={Id})", cfg.ClientId);
-            await WriteFrameAsync(0, new { v = 1, client_id = cfg.ClientId }); // handshake
+            await WriteFrameAsync(0, new { v = 1, client_id = cfg.ClientId });
             await Task.WhenAny(_readyTcs.Task, Task.Delay(10000));
             if (!_readyTcs.Task.IsCompletedSuccessfully)
-                throw new Exception("Discord não respondeu ao handshake (READY). Se continuar, feche o Discord pela bandeja (Sair do Discord) e abra de novo.");
+                throw new Exception("Discord didn't answer the handshake (READY). If it keeps happening, quit Discord from the tray (Quit Discord) and open it again.");
 
             bool authed = false;
             if (!string.IsNullOrEmpty(cfg.AccessToken))
@@ -191,9 +172,6 @@ namespace DroidDeck.Services
                 try { await SendCommandAsync("AUTHENTICATE", new { access_token = cfg.AccessToken }); authed = true; }
                 catch { authed = false; }
             }
-            // Token expirado (Discord expira em ~7 dias)? Renova SEM popup usando o
-            // refresh_token salvo. Isso faz a auto-conexão voltar a funcionar sozinha em
-            // vez de exigir reautorização manual toda semana.
             if (!authed && !string.IsNullOrEmpty(cfg.RefreshToken))
             {
                 try
@@ -206,10 +184,6 @@ namespace DroidDeck.Services
                 }
                 catch (DiscordGrantRevokedException ex)
                 {
-                    // O Discord recusou o refresh_token: a autorização foi revogada ou expirou de
-                    // vez. Sem apagar os tokens, o watchdog repetia handshake + AUTHENTICATE +
-                    // chamada HTTP a cada 10 s, para sempre, e nada mudava. Apagados, ele para
-                    // de tentar até o usuário tocar "Conectar" (que pede o popup de novo).
                     cfg.AccessToken = null;
                     cfg.RefreshToken = null;
                     SaveConfig(cfg);
@@ -219,10 +193,9 @@ namespace DroidDeck.Services
             }
             if (!authed)
             {
-                // Auto-conexão (startup) nunca abre popup; só reusa/renova o token salvo.
                 if (!interactive)
-                    throw new InvalidOperationException("A autorização do Discord expirou: abra Configurações → Discord e toque em Conectar.");
-                await AuthorizeAndGetTokenAsync(cfg); // salva access+refresh internamente
+                    throw new InvalidOperationException("The Discord authorization expired: open Settings → Discord and tap Connect.");
+                await AuthorizeAndGetTokenAsync(cfg);
                 await SendCommandAsync("AUTHENTICATE", new { access_token = cfg.AccessToken });
             }
 
@@ -232,16 +205,13 @@ namespace DroidDeck.Services
             if (vs.TryGetProperty("data", out var data)) UpdateVoiceFromData(data);
 
             Connected = true;
-            await RefreshVoiceChannelAsync(); // canal atual + participantes (também faz o broadcast)
+            await RefreshVoiceChannelAsync();
             _logger.LogInformation("Discord RPC conectado (mute={Mute}, deaf={Deaf}, canal={Ch})",
                 SelfMute, SelfDeaf, VoiceChannelName);
         }
 
         private async Task AuthorizeAndGetTokenAsync(DiscordConfig cfg)
         {
-            // O usuário precisa APROVAR no cliente Discord (timeout maior).
-            // No fluxo RPC o redirect_uri NÃO vai nos args (mas o app precisa ter um
-            // Redirect URI cadastrado no portal; usamos o mesmo na troca de token).
             var resp = await SendCommandAsync("AUTHORIZE",
                 new { client_id = cfg.ClientId, scopes = Scopes }, timeoutMs: 60000);
             var code = resp.GetProperty("data").GetProperty("code").GetString()!;
@@ -256,7 +226,6 @@ namespace DroidDeck.Services
             });
         }
 
-        /// <summary>Renova o access_token com o refresh_token salvo (sem popup).</summary>
         private Task<bool> RefreshAccessTokenAsync(DiscordConfig cfg) =>
             ExchangeTokenAsync(cfg, new Dictionary<string, string>
             {
@@ -266,11 +235,6 @@ namespace DroidDeck.Services
                 ["refresh_token"] = cfg.RefreshToken!,
             });
 
-        /// <summary>
-        /// Troca no endpoint OAuth2 do Discord (authorization_code ou refresh_token).
-        /// Salva access_token E refresh_token em cfg (persistidos), pra próxima renovação
-        /// não precisar de popup. Retorna true se veio um access_token válido.
-        /// </summary>
         private async Task<bool> ExchangeTokenAsync(DiscordConfig cfg, Dictionary<string, string> form)
         {
             using var http = new HttpClient();
@@ -279,8 +243,6 @@ namespace DroidDeck.Services
             var body = await tokenResp.Content.ReadAsStringAsync();
             if (!tokenResp.IsSuccessStatusCode)
             {
-                // 400 invalid_grant = refresh_token/código que o Discord não aceita mais. O corpo
-                // é só {"error": ...}: não carrega segredo, pode ir para o log.
                 if ((int)tokenResp.StatusCode == 400 && body.Contains("invalid_grant"))
                     throw new DiscordGrantRevokedException(body);
                 throw new Exception($"Troca de token falhou ({(int)tokenResp.StatusCode}): {body}");
@@ -293,11 +255,6 @@ namespace DroidDeck.Services
             return !string.IsNullOrEmpty(cfg.AccessToken);
         }
 
-        // ---- Comandos de voz ----
-        // O alvo do toggle e gravado ANTES de esperar o Discord: dois toques seguidos liam o
-        // mesmo estado velho, mandavam o mesmo valor duas vezes e o botao voltava sozinho.
-        // A resposta do SET_VOICE_SETTINGS traz as configuracoes completas e vale sobre o
-        // palpite -- desmutar estando surdo, por exemplo, tambem tira o surdo.
         public async Task SetMuteAsync(bool? mute)
         {
             EnsureConnected();
@@ -336,7 +293,6 @@ namespace DroidDeck.Services
             }
         }
 
-        // ---- Servidores / canais de voz ----
         public async Task<object> GetGuildsAsync()
         {
             EnsureConnected();
@@ -362,7 +318,6 @@ namespace DroidDeck.Services
                 && cs.ValueKind == JsonValueKind.Array)
                 foreach (var c in cs.EnumerateArray())
                 {
-                    // type 2 = GUILD_VOICE, 13 = STAGE_VOICE
                     int type = c.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.Number
                         ? t.GetInt32() : -1;
                     if (type != 2 && type != 13) continue;
@@ -375,7 +330,6 @@ namespace DroidDeck.Services
             return list;
         }
 
-        /// <summary>Entra no canal (ou desconecta se channelId for nulo/vazio).</summary>
         public async Task SelectVoiceChannelAsync(string? channelId)
         {
             EnsureConnected();
@@ -384,7 +338,6 @@ namespace DroidDeck.Services
             await RefreshVoiceChannelAsync();
         }
 
-        /// <summary>Lê o canal de voz atual e os participantes; atualiza estado + broadcast.</summary>
         public async Task RefreshVoiceChannelAsync()
         {
             try
@@ -428,7 +381,6 @@ namespace DroidDeck.Services
             await BroadcastStateAsync();
         }
 
-        // ---- Volume de entrada (mic, 0-100) e saída (0-200) ----
         public async Task SetInputVolumeAsync(double volume)
         {
             EnsureConnected();
@@ -448,7 +400,6 @@ namespace DroidDeck.Services
         public Task NudgeInputVolumeAsync(double delta) => SetInputVolumeAsync(InputVolume + delta);
         public Task NudgeOutputVolumeAsync(double delta) => SetOutputVolumeAsync(OutputVolume + delta);
 
-        // ---- Modo de voz: PUSH_TO_TALK | VOICE_ACTIVITY ----
         public async Task SetVoiceModeAsync(string type)
         {
             EnsureConnected();
@@ -459,7 +410,6 @@ namespace DroidDeck.Services
         public Task ToggleVoiceModeAsync() =>
             SetVoiceModeAsync(VoiceMode == "PUSH_TO_TALK" ? "VOICE_ACTIVITY" : "PUSH_TO_TALK");
 
-        // ---- Por usuário (mute/volume local na call) ----
         public async Task SetUserVoiceAsync(string userId, bool? mute, double? volume)
         {
             EnsureConnected();
@@ -471,7 +421,6 @@ namespace DroidDeck.Services
             if (volume.HasValue) _userVolume[userId] = Math.Clamp(volume.Value, 0, 200);
         }
 
-        /// <summary>Volume local de uma pessoa na call (0-200; 100 = normal). Null se nao se sabe.</summary>
         public double? GetUserVolume(string userId) =>
             _userVolume.TryGetValue(userId, out var v) ? v : null;
 
@@ -480,13 +429,6 @@ namespace DroidDeck.Services
         public Task ToggleUserMuteAsync(string userId) =>
             SetUserVoiceAsync(userId, !(_userMute.TryGetValue(userId, out var m) && m), null);
 
-        // ---- Soundboard nativa do Discord (RPC) ----
-        // NOTA: GET_SOUNDBOARD_SOUNDS / PLAY_SOUNDBOARD_SOUND não estão na lista oficial de
-        // comandos RPC — usam os scopes que já temos (rpc/rpc.voice.write). Parsing defensivo.
-        /// <summary>
-        /// Lista os sons da soundboard disponíveis (padrão + do servidor). Cada item:
-        /// { soundId, name, guildId, emojiName }.
-        /// </summary>
         public async Task<object> GetSoundboardSoundsAsync()
         {
             EnsureConnected();
@@ -494,8 +436,6 @@ namespace DroidDeck.Services
             var list = new List<object>();
             if (r.TryGetProperty("data", out var d))
             {
-                // A resposta vem com "data" sendo o array direto; algumas variações usam
-                // {data:{sounds:[...]}}. Cobre os dois.
                 JsonElement arr = d;
                 if (d.ValueKind == JsonValueKind.Object)
                 {
@@ -506,8 +446,6 @@ namespace DroidDeck.Services
                 if (arr.ValueKind == JsonValueKind.Array)
                     foreach (var s in arr.EnumerateArray())
                     {
-                        // Sons padrão do Discord (guild_id "0") não tocam via PLAY_SOUNDBOARD_SOUND;
-                        // só devolve os sons de servidor (que funcionam) p/ não haver botão morto.
                         var g = s.TryGetProperty("guild_id", out var gv) && gv.ValueKind == JsonValueKind.String
                             ? gv.GetString() : null;
                         if (string.IsNullOrEmpty(g) || g == "0") continue;
@@ -525,7 +463,7 @@ namespace DroidDeck.Services
                         : v.ValueKind == JsonValueKind.Number ? v.GetRawText() : null)
                     : null;
             var guildId = Str("guild_id");
-            if (guildId == "0") guildId = null; // sons padrão do Discord não têm guild
+            if (guildId == "0") guildId = null;
             return new
             {
                 soundId = Str("sound_id") ?? Str("id"),
@@ -535,12 +473,6 @@ namespace DroidDeck.Services
             };
         }
 
-        /// <summary>
-        /// Toca um som da soundboard nativa no canal de voz atual do Discord.
-        /// Args verificados ao vivo: { sound_id, guild_id } — guild_id é o servidor DONO do som.
-        /// Só funciona p/ sons do mesmo servidor do canal de voz (som de outro servidor exige
-        /// Nitro; sons padrão do Discord não tocam por esta via — "Invalid Sound").
-        /// </summary>
         public async Task PlaySoundboardSoundAsync(string soundId, string? guildId)
         {
             EnsureConnected();
@@ -552,10 +484,9 @@ namespace DroidDeck.Services
         private void EnsureConnected()
         {
             if (!Connected || _pipe is not { IsConnected: true })
-                throw new InvalidOperationException("Discord não está conectado.");
+                throw new InvalidOperationException("Discord is not connected.");
         }
 
-        // ---- IPC: pipe, framing, read loop ----
         private async Task ConnectPipeAsync()
         {
             for (int i = 0; i < 10; i++)
@@ -568,9 +499,9 @@ namespace DroidDeck.Services
                     _pipe = p;
                     return;
                 }
-                catch { /* tenta o próximo */ }
+                catch {  }
             }
-            throw new IOException("Pipe do Discord não encontrado — o Discord está aberto?");
+            throw new IOException("Discord pipe not found — is Discord open?");
         }
 
         private Task WriteFrameAsync(int opcode, object payload)
@@ -579,7 +510,7 @@ namespace DroidDeck.Services
         private async Task WriteRawFrameAsync(int opcode, byte[] data)
         {
             var frame = new byte[8 + data.Length];
-            BitConverter.GetBytes(opcode).CopyTo(frame, 0);      // little-endian (Windows)
+            BitConverter.GetBytes(opcode).CopyTo(frame, 0);
             BitConverter.GetBytes(data.Length).CopyTo(frame, 4);
             data.CopyTo(frame, 8);
             await _writeLock.WaitAsync();
@@ -624,26 +555,21 @@ namespace DroidDeck.Services
                     var buf = new byte[len];
                     await ReadExactAsync(buf, len, ct);
 
-                    // Debug: frames recebidos (útil pra diagnosticar; fica fora do Info
-                    // pra não spammar nem logar dados de usuário na operação normal).
                     if (_logger.IsEnabled(LogLevel.Debug))
                         _logger.LogDebug("Discord IPC recv op={Op} len={Len}: {Body}",
                             opcode, len, len <= 600 ? Encoding.UTF8.GetString(buf) : "(payload grande)");
 
-                    // Opcodes IPC do Discord: 0=HANDSHAKE, 1=FRAME, 2=CLOSE, 3=PING, 4=PONG.
-                    // Antes tudo era tratado como FRAME — o PING nunca era respondido, então
-                    // o Discord fechava conexões ociosas e o deck "parava de reagir".
                     switch (opcode)
                     {
-                        case 3: // PING → devolver PONG com o MESMO payload (mantém a conexão viva)
+                        case 3:
                             await WriteRawFrameAsync(4, buf);
                             break;
-                        case 2: // CLOSE → o Discord está encerrando; derruba limpo (dispara reconexão)
+                        case 2:
                             _logger.LogWarning("Discord RPC CLOSE: {Msg}", Encoding.UTF8.GetString(buf));
-                            throw new IOException("Discord fechou a conexão (CLOSE).");
-                        case 4: // PONG (resposta a um PING nosso, se houver) → ignora
+                            throw new IOException("Discord closed the connection (CLOSE).");
+                        case 4:
                             break;
-                        default: // 0=HANDSHAKE (resposta), 1=FRAME
+                        default:
                             HandleFrame(Encoding.UTF8.GetString(buf));
                             break;
                     }
@@ -653,8 +579,6 @@ namespace DroidDeck.Services
             {
                 _logger.LogWarning("Discord RPC desconectado: {Msg}", ex.Message);
                 Connected = false;
-                // Comando em voo nao vai ter resposta: falha agora em vez de segurar o toque
-                // ate o timeout de 10 s.
                 foreach (var kv in _pending)
                     if (_pending.TryRemove(kv.Key, out var t))
                         t.TrySetException(new IOException("Discord desconectou."));
@@ -668,7 +592,7 @@ namespace DroidDeck.Services
             while (read < count)
             {
                 int n = await _pipe!.ReadAsync(buf.AsMemory(read, count - read), ct);
-                if (n <= 0) throw new IOException("Pipe fechado.");
+                if (n <= 0) throw new IOException("Pipe closed.");
                 read += n;
             }
         }
@@ -745,7 +669,6 @@ namespace DroidDeck.Services
         }
     }
 
-    /// <summary>O Discord recusou o refresh_token (invalid_grant): só uma nova autorização resolve.</summary>
     public class DiscordGrantRevokedException : Exception
     {
         public DiscordGrantRevokedException(string message) : base(message) { }

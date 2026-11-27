@@ -11,20 +11,15 @@ using Microsoft.Win32;
 
 namespace DroidDeck.Services
 {
-    /// <summary>Um jogo instalado numa loja/launcher (Steam, Battle.net).</summary>
     public sealed class GameInfo
     {
-        /// <summary>"steam" ou "battlenet".</summary>
         public string Kind { get; init; } = "";
-        /// <summary>Steam: App ID numerico. Battle.net: codigo de lancamento (ex.: WTCG).</summary>
         public string Id { get; init; } = "";
         public string Name { get; init; } = "";
         public string InstallDir { get; init; } = "";
-        /// <summary>Battle.net: caminho do Battle.net.exe que abre o jogo.</summary>
         public string Launcher { get; init; } = "";
     }
 
-    /// <summary>Leitor minimo do formato KeyValues da Valve (libraryfolders.vdf, appmanifest_*.acf).</summary>
     public static class Vdf
     {
         public sealed class Node
@@ -47,7 +42,7 @@ namespace DroidDeck.Services
             while (true)
             {
                 var key = NextToken(s, ref i, out var isBrace);
-                if (key == null) return;                  // fim do texto
+                if (key == null) return;
                 if (isBrace) { if (key == "}") return; continue; }
                 var value = NextToken(s, ref i, out var valueBrace);
                 if (value == null) return;
@@ -83,15 +78,13 @@ namespace DroidDeck.Services
                 else sb.Append(s[i]);
                 i++;
             }
-            i++; // aspas finais
+            i++;
             return sb.ToString();
         }
     }
 
-    /// <summary>Steam: bibliotecas (libraryfolders.vdf), appmanifest_*.acf e artes locais do cache da Steam.</summary>
     public static class SteamGames
     {
-        // Ferramentas/runtimes que a Steam instala como "app" mas nao sao jogos.
         private static readonly HashSet<string> NotGames = new() { "228980", "1070560", "1391110", "1493710", "1826330", "1628350", "2180100", "1113280", "2805730", "3658110" };
         private static readonly Regex ToolName = new(@"^(Steamworks Common|Steam Linux Runtime|Proton\b|Steam Controller|SteamVR\b|Steam Client)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -111,7 +104,6 @@ namespace DroidDeck.Services
             return null;
         }
 
-        /// <summary>Todas as pastas de biblioteca (a da Steam + as do libraryfolders.vdf, em qualquer disco).</summary>
         public static List<string> Libraries(string steam)
         {
             var libs = new List<string> { steam };
@@ -125,7 +117,6 @@ namespace DroidDeck.Services
                     if (folders != null)
                         foreach (var f in folders.Children.Values)
                         {
-                            // formato novo: "0" { "path" "..." ... }; formato antigo: "1" "D:\\Lib"
                             var path = f.Value ?? f["path"]?.Value;
                             if (!string.IsNullOrWhiteSpace(path)) libs.Add(path);
                         }
@@ -161,7 +152,6 @@ namespace DroidDeck.Services
                         var dir = state["installdir"]?.Value ?? "";
                         if (!Regex.IsMatch(id, @"^\d{1,10}$") || name.Length == 0) continue;
                         if (NotGames.Contains(id) || ToolName.IsMatch(name)) continue;
-                        // Instalado de verdade: StateFlags tem o bit 4 (FullyInstalled) e a pasta existe.
                         if (!int.TryParse(state["StateFlags"]?.Value, out var flags) || (flags & 4) == 0) continue;
                         var installDir = dir.Length > 0 ? Path.Combine(apps, "common", dir) : "";
                         if (installDir.Length == 0 || !Directory.Exists(installDir)) continue;
@@ -173,14 +163,9 @@ namespace DroidDeck.Services
             return games.Values.ToList();
         }
 
-        /// <summary>Tira ® e ™ (e o "Â®" de textos mal decodificados) do nome.</summary>
         public static string CleanName(string n) =>
             n.Replace("\u00C2\u00AE", "").Replace("\u00AE", "").Replace("\u2122", "").Trim();
 
-        /// <summary>
-        /// Arte LOCAL da Steam para o jogo (nada e baixado): capa vertical, depois o icone pequeno, depois
-        /// cabecalho/logo; sem nenhuma, o icone do .exe do jogo. Null se nao houver.
-        /// </summary>
         public static byte[]? IconPng(GameInfo g)
         {
             var steam = InstallPath();
@@ -195,7 +180,6 @@ namespace DroidDeck.Services
                     {
                         string? file = null;
                         if (pattern.Length == 1 && pattern[0] == "icon")
-                            // icone pequeno: jpg com nome de hash (40 hex) direto na pasta do app
                             file = Directory.EnumerateFiles(dir, "*.jpg", SearchOption.TopDirectoryOnly)
                                 .FirstOrDefault(f => Regex.IsMatch(Path.GetFileNameWithoutExtension(f), "^[0-9a-f]{40}$"));
                         else
@@ -217,12 +201,11 @@ namespace DroidDeck.Services
             try
             {
                 using var img = Image.FromFile(file);
-                return AppLibrary.FitToPng(img); // contain: nao corta, mantem a proporcao
+                return AppLibrary.FitToPng(img);
             }
             catch { return null; }
         }
 
-        /// <summary>Icone do executavel principal do jogo (o maior .exe da raiz que nao seja instalador/anti-cheat).</summary>
         public static byte[]? ExeIconPng(string installDir)
         {
             try
@@ -237,11 +220,8 @@ namespace DroidDeck.Services
         }
     }
 
-    /// <summary>Battle.net: jogos instalados lidos do product.db (protobuf) do agente da Blizzard.</summary>
     public static class BattleNetGames
     {
-        // uid do produto (product.db) -> codigo de lancamento do cliente (--exec="launch CODIGO").
-        // So jogos com codigo conhecido entram: sem codigo confiavel nao ha como abrir pelo launcher.
         private static readonly Dictionary<string, (string Code, string Name)> Known = new(StringComparer.OrdinalIgnoreCase)
         {
             ["hs_beta"] = ("WTCG", "Hearthstone"), ["wow"] = ("WoW", "World of Warcraft"),
@@ -271,7 +251,7 @@ namespace DroidDeck.Services
                 foreach (var p in products)
                 {
                     if (!Known.TryGetValue(p.Uid, out var k)) continue;
-                    if (p.Path.Length == 0 || !Directory.Exists(p.Path)) continue; // instalado de verdade
+                    if (p.Path.Length == 0 || !Directory.Exists(p.Path)) continue;
                     result.Add(new GameInfo { Kind = "battlenet", Id = k.Code, Name = k.Name, InstallDir = p.Path, Launcher = launcher });
                 }
             }
@@ -281,8 +261,6 @@ namespace DroidDeck.Services
 
         public static string? FindLauncher() => Enumerate().Select(g => g.Launcher).FirstOrDefault()
             ?? new[] { @"C:\Program Files (x86)\Battle.net\Battle.net.exe", @"C:\Program Files\Battle.net\Battle.net.exe" }.FirstOrDefault(File.Exists);
-
-        // ---- leitor tolerante de protobuf ----
 
         private sealed record Product(string Uid, string Path);
 
@@ -315,7 +293,6 @@ namespace DroidDeck.Services
 
         private static bool LooksNested(byte[] p)
         {
-            // string de caminho/uid nao e tentada como mensagem aninhada
             var s = Encoding.UTF8.GetString(p);
             return !Regex.IsMatch(s, @"^[ -~]+$") && Fields(p, 0, p.Length).Any();
         }

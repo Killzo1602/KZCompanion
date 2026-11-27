@@ -24,16 +24,16 @@ namespace DroidDeck.Actions.Providers
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Mídia",
+            Title = "Media",
             Icon = "play",
-            Category = "Mídia",
+            Category = "Media",
             Fields =
             {
-                ActionField.Select("command", "Comando",
+                ActionField.Select("command", "Command",
                     ("playpause", "Play / Pause"),
-                    ("next", "Próxima faixa"),
-                    ("previous", "Faixa anterior"),
-                    ("stop", "Parar"),
+                    ("next", "Next track"),
+                    ("previous", "Previous track"),
+                    ("stop", "Stop"),
                     ("play", "Play"),
                     ("pause", "Pause")),
             },
@@ -44,11 +44,6 @@ namespace DroidDeck.Actions.Providers
             var command = c.Get("command");
             if (command.Length == 0) return;
 
-            // sessionId vazio = "a sessao que esta tocando" (como as teclas de midia). Quem
-            // resolve isso e o MediaControlService, dentro da MESMA operacao serializada
-            // que envia o comando: antes eram duas idas ao WinRT por toque (listar sessoes,
-            // com capa de album e tudo, e so depois mandar o comando) e perder a disputa pelo
-            // semaforo em qualquer uma delas fazia o botao nao fazer nada, sem log.
             var sessionId = c.Get("sessionId") is { Length: > 0 } s ? s : null;
 
             var result = await _media.SendCommandAsync(sessionId, command);
@@ -58,8 +53,6 @@ namespace DroidDeck.Actions.Providers
                 return;
             }
 
-            // Empurra o estado real pros clientes: o botao pinta otimista no toque e precisa
-            // ser corrigido se o comando pegou uma sessao diferente da esperada.
             if (result.Playing.HasValue)
                 await _hub.Clients.All.SendAsync("ReceiveMediaStatus", new { playing = result.Playing.Value });
         }

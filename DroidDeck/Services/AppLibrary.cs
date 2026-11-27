@@ -20,18 +20,11 @@ namespace DroidDeck.Services
         public string Path { get; set; } = "";
         public string Group { get; set; } = "";
         public bool Favorite { get; set; }
-        /// <summary>Icone trocado pelo usuario (nao e regenerado na migracao do extrator).</summary>
         public bool CustomIcon { get; set; }
-        /// <summary>"file" (.lnk/.exe) ou "packaged" (app da Loja, abre pelo AppUserModelID em AppId).</summary>
         public string Kind { get; set; } = "file";
         public string AppId { get; set; } = "";
     }
 
-    /// <summary>
-    /// Biblioteca de aplicativos do KZ Companion: nome, caminho (.exe/.lnk), grupo, favorito e
-    /// o icone extraido do proprio programa. Vive em %AppData%\KZCompanion\apps.json; os icones,
-    /// em app-icons\{id}.png. O celular so lista e abre por id: o caminho nunca vem dele.
-    /// </summary>
     public sealed class AppLibrary
     {
         private static readonly string[] AllowedExtensions = { ".exe", ".lnk" };
@@ -72,7 +65,6 @@ namespace DroidDeck.Services
             catch { return null; }
         }
 
-        /// <summary>Valida o caminho escolhido. Devolve o caminho completo ou o motivo da recusa.</summary>
         public static bool TryValidatePath(string? path, out string full, out string error)
         {
             full = "";
@@ -87,26 +79,18 @@ namespace DroidDeck.Services
             return true;
         }
 
-        /// <summary>
-        /// Identidade canonica de um programa: caminho completo do alvo (em minusculas) + argumentos.
-        /// "--processStart X.exe" apontando para o proprio alvo e ruido (o atalho do Discord que passa
-        /// isso e o que nao passa abrem o mesmo programa); argumentos que mudam o programa (ex.:
-        /// Update.exe --processStart Slack.exe) continuam diferenciando.
-        /// </summary>
         public static string IdentityOf(string target, string? args)
         {
             var full = target;
             try { full = System.IO.Path.GetFullPath(target); } catch { }
             full = full.ToLowerInvariant();
             var a = (args ?? "").Trim().ToLowerInvariant();
-            // Marcador que o Chrome/Edge colocam nos atalhos do Menu Iniciar: nao muda o programa aberto.
             a = Regex.Replace(a, @"--source-shortcut-location=\S+", "").Trim();
             var m = Regex.Match(a, @"^--process-?start\s+""?([^""\s]+)""?$");
             if (m.Success && m.Groups[1].Value == System.IO.Path.GetFileName(full)) a = "";
             return a.Length == 0 ? full : full + "|" + a;
         }
 
-        /// <summary>Identidade de um caminho escolhido: .lnk resolve para alvo + argumentos.</summary>
         public static string IdentityOfPath(string path)
         {
             if (path.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
@@ -122,7 +106,6 @@ namespace DroidDeck.Services
             : e.Kind is "steam" or "battlenet" ? e.Kind + ":" + e.AppId.ToLowerInvariant()
             : IdentityOfPath(e.Path);
 
-        /// <summary>Identidades de tudo que ja esta na biblioteca (para o "ja adicionado" do seletor).</summary>
         public HashSet<string> Identities()
         {
             lock (_gate) return Load().Select(IdentityOfEntry).ToHashSet();
@@ -133,7 +116,6 @@ namespace DroidDeck.Services
             lock (_gate) return Load().FirstOrDefault(a => a.Id != exceptId && IdentityOfEntry(a) == identity);
         }
 
-        /// <summary>Ja existe um aplicativo com o mesmo caminho ou a mesma identidade? (ex.: o .exe e o atalho dele)</summary>
         public AppEntry? FindDuplicate(string fullPath, string? exceptId = null)
         {
             var id = IdentityOfPath(fullPath);
@@ -142,7 +124,6 @@ namespace DroidDeck.Services
                     (string.Equals(a.Path, fullPath, StringComparison.OrdinalIgnoreCase) || IdentityOfEntry(a) == id));
         }
 
-        /// <summary>Define a ordem (a mesma lista guardada no arquivo): ids na ordem pedida primeiro; os demais seguem depois, na ordem atual.</summary>
         public void Reorder(IReadOnlyList<string> ids)
         {
             lock (_gate)
@@ -157,7 +138,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Extrator novo (128 px, contain): refaz os icones automaticos salvos pela versao anterior, uma vez.</summary>
         public void MigrateIcons()
         {
             const string version = "3";
@@ -170,7 +150,7 @@ namespace DroidDeck.Services
                 foreach (var a in list.Where(a => !a.CustomIcon))
                 {
                     if (a.Kind == "packaged") { SaveIcon(a.Id, InstalledApps.ExtractPackagedIconPng(a.AppId)); continue; }
-                    if (a.Kind is "steam" or "battlenet") continue; // arte local do jogo ja salva ao adicionar
+                    if (a.Kind is "steam" or "battlenet") continue;
                     if (!File.Exists(a.Path)) continue;
                     SaveIcon(a.Id, ExtractIconPng(a.Path));
                 }
@@ -179,7 +159,6 @@ namespace DroidDeck.Services
             catch (Exception ex) { Log.Warning($"Migração de ícones falhou: {ex.Message}"); }
         }
 
-        /// <param name="customIcon">true so quando o usuario escolheu a imagem (nao e regenerada na migracao).</param>
         public AppEntry Add(AppEntry entry, byte[]? icon, bool customIcon = false)
         {
             lock (_gate)
@@ -250,7 +229,6 @@ namespace DroidDeck.Services
             try { File.WriteAllBytes(IconFile(id), png); } catch (Exception ex) { Log.Warning($"Ícone não salvo: {ex.Message}"); }
         }
 
-        /// <summary>Normaliza uma imagem enviada pelo usuario para PNG 96x96 (recusa o que nao for imagem).</summary>
         public static byte[]? NormalizeUserIcon(string? base64)
         {
             if (string.IsNullOrWhiteSpace(base64)) return null;
@@ -265,12 +243,9 @@ namespace DroidDeck.Services
             catch { return null; }
         }
 
-        // Quadro final: 128x128 com 8 px de folga. O icone NUNCA e cortado nem esticado:
-        // recorta so a margem transparente, escala mantendo a proporcao (contain) e centraliza.
         private const int IconSize = 128;
         private const int IconPad = 8;
 
-        /// <summary>Encaixa qualquer imagem no quadro 128x128 (contain, sem cortar), como os icones de apps.</summary>
         public static byte[] FitToPng(Image source) => ToPng(source);
 
         private static byte[] ToPng(Image source)
@@ -284,7 +259,6 @@ namespace DroidDeck.Services
 
             var box = ContentBounds(src);
             var inner = IconSize - 2 * IconPad;
-            // Sem ampliar demais: icone pequeno (ex.: 48 px) no maximo 2x.
             var scale = Math.Min(Math.Min(inner / (double)box.Width, inner / (double)box.Height), 2.0);
             var w = Math.Max(1, (int)Math.Round(box.Width * scale));
             var h = Math.Max(1, (int)Math.Round(box.Height * scale));
@@ -304,7 +278,6 @@ namespace DroidDeck.Services
             return o.ToArray();
         }
 
-        /// <summary>Retangulo com pixels visiveis (alfa > 8). Imagem toda opaca/transparente devolve a imagem inteira.</summary>
         private static Rectangle ContentBounds(Bitmap bmp)
         {
             var full = new Rectangle(0, 0, bmp.Width, bmp.Height);
@@ -330,14 +303,6 @@ namespace DroidDeck.Services
             finally { bmp.UnlockBits(data); }
         }
 
-        // ---- Extracao de icone ----
-
-        /// <summary>
-        /// Icone do programa em PNG 128x128 (contain, sem cortar). Para .lnk usa o do alvo (sem a seta do
-        /// atalho); cai no do proprio atalho quando o alvo nao e um arquivo (apps da Loja). Tenta o maior
-        /// icone do proprio arquivo (ate 256 px, inclusive PNG) e so depois a lista de icones do shell,
-        /// que para exes sem 256 px entrega o icone pequeno solto num canto da tela (o "cortado").
-        /// </summary>
         public static byte[]? ExtractIconPng(string path)
         {
             try
@@ -361,7 +326,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Maior icone dos recursos do .exe/.dll (256, 128, 64, 48, 32), ou null.</summary>
         private static Icon? ExtractResourceIcon(string file)
         {
             foreach (var size in new[] { 256, 128, 64, 48, 32 })
@@ -381,7 +345,6 @@ namespace DroidDeck.Services
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern uint PrivateExtractIcons(string file, int index, int cx, int cy, IntPtr[] icons, uint[] ids, uint count, uint flags);
 
-        /// <summary>Alvo e argumentos de um .lnk (vazios se nao resolver).</summary>
         public static (string Target, string Args) ResolveShortcut(string lnk)
         {
             try
@@ -420,7 +383,7 @@ namespace DroidDeck.Services
             var info = new SHFILEINFO();
             var r = SHGetFileInfo(file, 0, ref info, (uint)Marshal.SizeOf<SHFILEINFO>(), SHGFI_SYSICONINDEX);
             if (r == IntPtr.Zero) return null;
-            var iid = new Guid("46EB5926-582E-4017-9FDF-E8998DAA0950"); // IImageList
+            var iid = new Guid("46EB5926-582E-4017-9FDF-E8998DAA0950");
             if (SHGetImageList(jumbo ? SHIL_JUMBO : SHIL_EXTRALARGE, ref iid, out var list) != 0 || list == null) return null;
             try
             {

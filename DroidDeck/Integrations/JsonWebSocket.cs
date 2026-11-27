@@ -9,11 +9,6 @@ using System.Threading.Tasks;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Conexao WebSocket que troca JSON com pedido e resposta casados por um id (Streamer.bot,
-    /// VTube Studio). Quem usa le as primeiras mensagens com <see cref="ReceiveAsync"/> (aperto
-    /// de mao, autenticacao) e depois deixa <see cref="RunAsync"/> distribuindo as respostas.
-    /// </summary>
     public sealed class JsonWebSocket : IDisposable
     {
         private readonly ClientWebSocket _socket = new();
@@ -21,7 +16,6 @@ namespace DroidDeck.Integrations
         private readonly ConcurrentDictionary<string, TaskCompletionSource<JsonNode>> _pending = new();
         private readonly Func<JsonNode, string?> _idOf;
 
-        /// <param name="idOf">Le o id de uma resposta (null = mensagem sem pedido, ex.: evento).</param>
         public JsonWebSocket(Func<JsonNode, string?> idOf) => _idOf = idOf;
 
         public bool IsOpen => _socket.State == WebSocketState.Open;
@@ -36,7 +30,6 @@ namespace DroidDeck.Integrations
             finally { _sendLock.Release(); }
         }
 
-        /// <summary>Proxima mensagem (null = conexao fechada). So antes de <see cref="RunAsync"/>.</summary>
         public async Task<JsonNode?> ReceiveAsync(CancellationToken ct)
         {
             var buffer = new byte[16 * 1024];
@@ -51,10 +44,6 @@ namespace DroidDeck.Integrations
             return JsonNode.Parse(ms.ToArray());
         }
 
-        /// <summary>
-        /// Manda o pedido e espera a resposta com o mesmo id. <paramref name="timeout"/> longo
-        /// serve para pedidos que esperam o usuario (o VTube Studio pergunta se permite o plugin).
-        /// </summary>
         public async Task<JsonNode> RequestAsync(string id, JsonNode message, TimeSpan timeout, CancellationToken ct = default)
         {
             var tcs = new TaskCompletionSource<JsonNode>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -76,7 +65,6 @@ namespace DroidDeck.Integrations
             }
         }
 
-        /// <summary>Le ate a conexao cair, entregando as respostas aos pedidos pendentes.</summary>
         public async Task RunAsync(Action<JsonNode>? onOther, CancellationToken ct)
         {
             try

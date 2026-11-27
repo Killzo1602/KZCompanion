@@ -12,10 +12,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Estado ligado/desligado dos botoes com Toggle. Mora no PC (e em toggles.json) para
-    /// que todos os celulares mostrem o mesmo estado e ele sobreviva a um reinicio.
-    /// </summary>
     public class ButtonToggleService
     {
         public const string Event = "ReceiveButtonToggles";
@@ -39,16 +35,11 @@ namespace DroidDeck.Services
             lock (_lock) return _states.TryGetValue(buttonId, out var on) && on;
         }
 
-        /// <summary>Ids dos botoes ligados.</summary>
         public object GetState()
         {
             lock (_lock) return _states.Where(kv => kv.Value).ToDictionary(kv => kv.Key, _ => true);
         }
 
-        /// <summary>
-        /// Aperta um botao com Toggle: escolhe a acao do estado atual, inverte o estado e
-        /// avisa os clientes. Devolve a acao a executar (pode ser null).
-        /// </summary>
         public DeckAction? Press(DeckButton button)
         {
             bool wasOn;

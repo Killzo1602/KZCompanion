@@ -13,21 +13,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Automacao: um acontecimento no PC aperta um botao do deck, sem tocar no celular.
-    ///
-    ///   schedule  Time "HH:mm" + Days (como na condicao "weekday"; vazio = todo dia)
-    ///   app_start App abriu (processo, sem .exe)
-    ///   app_exit  App fechou
-    ///   resume    PC voltou da suspensao/hibernacao
-    ///   startup   DroidDeck iniciou (logo depois de ligar o PC, com o autostart)
-    ///   tally_on  Target (alvo do tally) entrou no ar
-    ///   tally_off Target saiu do ar. Perder a conexao nao conta: nao se sabe se saiu
-    ///
-    /// O gatilho aperta um botao salvo (como o celular faria): o que ele pode fazer ja foi
-    /// decidido quando o botao foi criado (ver ActionPolicy), entao gatilho nao abre brecha.
-    /// Guardado em %AppData%\DroidDeck\triggers.json.
-    /// </summary>
     public class TriggerService : BackgroundService
     {
         public class Trigger
@@ -40,12 +25,10 @@ namespace DroidDeck.Services
             public string? Days { get; set; }
             public string? App { get; set; }
 
-            /// <summary>Alvo do tally e o nome dele quando foi escolhido (o id de uma entrada do vMix nao diz nada).</summary>
             public string? Target { get; set; }
             public string? TargetLabel { get; set; }
             public string? ProfileId { get; set; }
             public string? ButtonId { get; set; }
-            /// <summary>Condicao extra (mesma da multi-acao), ex.: so se o OBS estiver aberto.</summary>
             public StepCondition? If { get; set; }
         }
 
@@ -67,10 +50,8 @@ namespace DroidDeck.Services
         private readonly object _lock = new();
         private List<Trigger> _triggers;
 
-        /// <summary>Relogio (os testes trocam).</summary>
         public Func<DateTime> Now { get; set; } = () => DateTime.Now;
 
-        /// <summary>Processos abertos (os testes trocam).</summary>
         public Func<HashSet<string>> RunningProcesses { get; set; } = DefaultRunningProcesses;
 
         public TriggerService(StreamDeckConfigService config, ButtonToggleService toggles,
@@ -86,7 +67,6 @@ namespace DroidDeck.Services
             if (tally != null)
             {
                 tally.WatchRequested = () => GetAll().Any(t => t.Enabled && t.Event is "tally_on" or "tally_off");
-                // Na hora, sem esperar a volta de 2 s: a luz de "no ar" acende junto com o tally.
                 tally.TargetChanged += (target, previous) => _ = SafeTallyChangedAsync(target.Id, previous, target.State);
             }
         }
@@ -97,7 +77,6 @@ namespace DroidDeck.Services
             catch (Exception ex) { _logger.LogWarning("Gatilhos: {Message}", ex.Message); }
         }
 
-        /// <summary>Um alvo do tally mudou de estado. Programa para preview tambem e sair do ar.</summary>
         public async Task OnTallyChangedAsync(string id, string previous, string current)
         {
             var wasOn = previous == TallyTarget.Program;
@@ -137,15 +116,12 @@ namespace DroidDeck.Services
             return new();
         }
 
-        // ---- Laco ----
-
         private HashSet<string>? _lastProcesses;
         private DateTime _lastTick;
         private string? _lastMinute;
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // Da tempo de o resto subir (OBS, Discord) antes do gatilho de inicio.
             try { await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken); }
             catch (OperationCanceledException) { return; }
             await FireAsync(t => t.Event == "startup");
@@ -160,12 +136,10 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Uma volta: horario, apps que abriram/fecharam e volta da suspensao.</summary>
         public async Task TickAsync()
         {
             var now = Now();
 
-            // Um intervalo bem maior que o normal entre duas voltas = o PC estava dormindo.
             if (_lastTick != default && now - _lastTick > TimeSpan.FromSeconds(30))
                 await FireAsync(t => t.Event == "resume");
             _lastTick = now;
@@ -208,7 +182,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Aperta o botao do gatilho. False se o botao nao existe mais.</summary>
         public async Task<bool> RunAsync(Trigger t)
         {
             var button = _config.GetProfile(t.ProfileId ?? "")?.Buttons?.Find(b => b.Id == t.ButtonId);

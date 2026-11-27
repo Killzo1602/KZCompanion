@@ -4,8 +4,6 @@ import 'package:signals_flutter/signals_flutter.dart';
 
 import 'app_theme.dart';
 
-/// Guarda a aparência escolhida e a persiste no aparelho. O MaterialApp observa
-/// [settings], então qualquer mudança vale na hora.
 class ThemeController {
   ThemeController._();
   static final instance = ThemeController._();
@@ -22,13 +20,10 @@ class ThemeController {
       final accent = prefs.getInt(_accentKey);
       settings.value = ThemeSettings(
         presetId: presetById(prefs.getString(_presetKey)).id,
-        // Escuro por padrão: o painel fica ao lado do monitor. Quem quiser escolhe
-        // "Sistema" ou "Claro".
         mode: ThemeMode.values.asNameMap()[prefs.getString(_modeKey)] ?? ThemeMode.dark,
         accent: accent != null ? Color(accent) : null,
       );
     } catch (_) {
-      // Preferências ilegíveis: fica no padrão em vez de travar o startup.
     }
   }
 

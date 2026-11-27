@@ -23,31 +23,31 @@ namespace DroidDeck.Actions.Providers
             Settings = "obs",
             Fields =
             {
-                ActionField.Select("operation", "Ação do OBS",
-                    ("setScene", "Trocar de cena"),
-                    ("toggleRecord", "Gravar (alternar)"),
-                    ("toggleStream", "Transmitir / Live (alternar)"),
-                    ("toggleVirtualCam", "Câmera virtual (alternar)"),
-                    ("toggleReplayBuffer", "Replay buffer (alternar)"),
-                    ("saveReplay", "Salvar replay"),
-                    ("toggleInputMute", "Mutar fonte de áudio (alternar)"),
-                    ("toggleSourceVisibility", "Mostrar / ocultar fonte"),
-                    ("toggleFilter", "Ligar / desligar filtro"),
-                    ("toggleRecordPause", "Pausar gravação (alternar)"),
-                    ("createChapter", "Marcador de capítulo na gravação"),
-                    ("screenshot", "Captura de tela da cena")),
-                ActionField.Dynamic("scene", "Cena", "/api/obs/scenes")
+                ActionField.Select("operation", "OBS action",
+                    ("setScene", "Switch scene"),
+                    ("toggleRecord", "Record (toggle)"),
+                    ("toggleStream", "Stream / Go live (toggle)"),
+                    ("toggleVirtualCam", "Virtual camera (toggle)"),
+                    ("toggleReplayBuffer", "Replay buffer (toggle)"),
+                    ("saveReplay", "Save replay"),
+                    ("toggleInputMute", "Mute audio source (toggle)"),
+                    ("toggleSourceVisibility", "Show / hide source"),
+                    ("toggleFilter", "Enable / disable filter"),
+                    ("toggleRecordPause", "Pause recording (toggle)"),
+                    ("createChapter", "Chapter marker in recording"),
+                    ("screenshot", "Scene screenshot")),
+                ActionField.Dynamic("scene", "Scene", "/api/obs/scenes")
                     .When("operation", "setScene", "toggleSourceVisibility"),
-                ActionField.Dynamic("sourceName", "Fonte", "/api/obs/scene-items?scene={scene}")
+                ActionField.Dynamic("sourceName", "Source", "/api/obs/scene-items?scene={scene}")
                     .When("operation", "toggleSourceVisibility"),
-                ActionField.Dynamic("filterSource", "Fonte ou cena do filtro", "/api/obs/sources")
+                ActionField.Dynamic("filterSource", "Source or scene with the filter", "/api/obs/sources")
                     .When("operation", "toggleFilter"),
-                ActionField.Dynamic("filterName", "Filtro", "/api/obs/filters?source={filterSource}")
+                ActionField.Dynamic("filterName", "Filter", "/api/obs/filters?source={filterSource}")
                     .When("operation", "toggleFilter"),
-                ActionField.Text("chapterName", "Nome do capítulo (opcional)",
-                    help: "Exige OBS 30.2 ou mais novo, gravando em MP4 híbrido.")
+                ActionField.Text("chapterName", "Chapter name (optional)",
+                    help: "Requires OBS 30.2 or newer, recording to hybrid MP4.")
                     .When("operation", "createChapter"),
-                ActionField.Dynamic("inputName", "Fonte de áudio", "/api/obs/audio-inputs")
+                ActionField.Dynamic("inputName", "Audio source", "/api/obs/audio-inputs")
                     .When("operation", "toggleInputMute"),
             },
         };

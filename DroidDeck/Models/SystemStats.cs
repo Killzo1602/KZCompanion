@@ -12,33 +12,31 @@ namespace DroidDeck.Models
         public float NetDownKBps { get; set; }
         public float GpuUsage { get; set; }
 
-        // Sensores de hardware: null = o PC/driver não expõe (o app mostra "Indisponível").
         public float? CpuTemp { get; set; }
         public float? CpuPower { get; set; }
         public float? GpuTemp { get; set; }
         public float? GpuHotspot { get; set; }
         public float? GpuPower { get; set; }
         public float? SsdTemp { get; set; }
+        public float? CpuClock { get; set; }
+        public float? GpuClock { get; set; }
+        public float? GpuMemUsed { get; set; }
+        public float? GpuMemTotal { get; set; }
         public int CpuSensorCount { get; set; }
         public bool SensorsElevated { get; set; }
-        /// <summary>De onde vieram as leituras: "helper" (auxiliar elevado) ou "local".</summary>
         public string SensorSource { get; set; } = "local";
-        /// <summary>O driver PawnIO (que o LibreHardwareMonitor usa para ler temperatura/potencia da CPU) nao esta instalado.</summary>
         public bool CpuDriverMissing { get; set; }
         public string NetAdapter { get; set; } = "";
         public List<DriveTemp> Drives { get; set; } = new();
         public List<FanStat> Fans { get; set; } = new();
 
-        /// <summary>Unidades de disco fixas do PC (atualiza a cada 30 s).</summary>
         public List<DiskStat> Disks { get; set; } = new();
     }
 
     public class DiskStat
     {
-        /// <summary>Letra da unidade: "C:".</summary>
         public string Name { get; set; } = "";
 
-        /// <summary>Nome do volume no Windows ("Dados"); vazio quando não tem.</summary>
         public string Label { get; set; } = "";
 
         public long TotalBytes { get; set; }

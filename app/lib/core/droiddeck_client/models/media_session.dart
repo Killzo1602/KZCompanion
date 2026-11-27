@@ -56,8 +56,6 @@ class MediaSession {
 
   Map<String, dynamic> toJson() => _$MediaSessionToJson(this);
 
-  /// Copia trocando so o que foi passado. Usado para aplicar o estado que o
-  /// backend devolve junto do comando, sem esperar o proximo fetch.
   MediaSession copyWith({
     String? id,
     String? title,

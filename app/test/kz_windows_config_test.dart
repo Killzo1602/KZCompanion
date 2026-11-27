@@ -10,9 +10,6 @@ import 'package:droiddeck/src/services/signalr_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Regressao do configurador do Windows: o deck antigo (Buttons, Profiles, Automations, importar do
-/// Stream Deck) saiu no 546ed96 e um front-end velho o trouxe de volta. Estes testes travam a
-/// navegacao e o texto do codigo-fonte.
 const _legacy = ['Buttons', 'Profiles', 'Automations', 'Import from Stream Deck', 'Stream Deck'];
 
 class _Pc implements HttpClientAdapter {
@@ -94,7 +91,6 @@ void main() {
       for (final f in Directory('lib').listSync(recursive: true).whereType<File>().where((f) => f.path.endsWith('.dart'))) {
         final text = f.readAsStringSync();
         for (final word in _legacy) {
-          // Texto entre aspas (o que aparece na tela); comentarios e nomes de codigo nao contam.
           if (RegExp('''['"][^'"\\n]*\\b$word\\b[^'"\\n]*['"]''').hasMatch(text)) hits.add('${f.path}: $word');
         }
       }
@@ -137,7 +133,7 @@ void main() {
       expect(a.capabilities.where((c) => c.contains('unverified')).length, greaterThanOrEqualTo(3));
       expect(a.summary.toLowerCase(), contains('not a native'));
       expect(a.verification.toLowerCase(), contains('nothing here has been tested'));
-      expect(a.backendName, isNull); // nada no PC para ele ainda
+      expect(a.backendName, isNull);
     });
 
     test('only integrations with a setup screen say "Setup available"', () {
@@ -157,9 +153,8 @@ void main() {
       for (final n in ['Discord', 'Spotify', 'OBS Studio', 'Apple Music', 'Home Assistant', 'Tuya / Smart Life']) {
         expect(find.text(n), findsOneWidget, reason: n);
       }
-      // Estado vem do PC: Spotify conectado, Discord e OBS nao; nada e "conectado" por palpite.
       expect(find.textContaining('Connected · kz'), findsOneWidget);
-      expect(find.text('Not set up'), findsNWidgets(2)); // Discord e OBS: o PC diz que nao ha configuracao
+      expect(find.text('Not set up'), findsNWidgets(2));
       expect(find.text('Not connected'), findsNothing);
       expect(find.text('Candidate'), findsOneWidget);
       expect(find.text('On hold'), findsOneWidget);

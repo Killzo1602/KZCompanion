@@ -5,11 +5,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Corte de tosse: o microfone fica mudo so enquanto o dedo estiver no botao. Ao soltar (ou se
-    /// o celular cair com o dedo em cima), volta ao que era antes: microfone aberto nao pode ficar
-    /// mudo no ar por causa de uma conexao perdida, e o que ja estava mudo continua mudo.
-    /// </summary>
     public class MicHoldService
     {
         private sealed class Hold
@@ -55,7 +50,6 @@ namespace DroidDeck.Integrations
             lock (_lock) Release(owner, parameter);
         }
 
-        /// <summary>A conexao caiu: solta tudo o que ela estava segurando.</summary>
         public void ReleaseOwner(string owner)
         {
             lock (_lock)

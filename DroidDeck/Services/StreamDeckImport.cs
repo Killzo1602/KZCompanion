@@ -13,18 +13,6 @@ using DroidDeck.Models;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Importa um perfil exportado pelo app da Elgato (.streamDeckProfile, um zip).
-    ///
-    /// Formatos conhecidos:
-    ///   1.0 (Stream Deck 4/5): &lt;id&gt;.sdProfile/manifest.json com "Actions" {"col,row": ...};
-    ///       pastas em Profiles/&lt;id&gt;.sdProfile; imagens em "col,row/CustomImages/stateN.png".
-    ///   2.0 (Stream Deck 6+):  &lt;id&gt;.sdProfile/manifest.json com "Pages"; cada pagina (e cada
-    ///       pasta) em Profiles/&lt;pasta&gt;/manifest.json com "Controllers"[{"Type":"Keypad",
-    ///       "Actions": {...}}]; imagens em Images/ dentro da pagina.
-    /// Cada pagina vira um perfil do DroidDeck; pastas viram perfis abertos por "Abrir perfil".
-    /// O que nao tem equivalente fica com o titulo e a imagem, sem acao.
-    /// </summary>
     public static class StreamDeckImport
     {
         public const long MaxSize = 50 * 1024 * 1024;
@@ -34,14 +22,13 @@ namespace DroidDeck.Services
         {
             public List<DeckProfile> Profiles { get; } = new();
             public int Buttons { get; set; }
-            /// <summary>Nomes das acoes sem equivalente (sem repeticao).</summary>
             public SortedSet<string> Unsupported { get; } = new(StringComparer.OrdinalIgnoreCase);
         }
 
         private class Page
         {
-            public string Dir = "";          // pasta da pagina dentro do zip, com "/" no fim
-            public string Key = "";          // nome da pasta, sem ".sdProfile", em maiusculas
+            public string Dir = "";
+            public string Key = "";
             public JsonObject Actions = new();
             public string? Name;
             public DeckProfile Profile = new();
@@ -82,7 +69,6 @@ namespace DroidDeck.Services
 
                 if (json["Pages"] is JsonObject pagesInfo)
                 {
-                    // Manifesto do perfil (2.0): nome e ordem das paginas.
                     profileName ??= (string?)json["Name"];
                     pageOrder = (pagesInfo["Pages"] as JsonArray)?.Select(p => Normalize((string?)p ?? "")).ToList();
                     if (actions == null) continue;
@@ -97,19 +83,16 @@ namespace DroidDeck.Services
                     Actions = actions,
                     Name = (string?)json["Name"] is { Length: > 0 } n ? n : null,
                 });
-                // 1.0: o manifesto da raiz tem o nome do perfil e as acoes juntos.
                 if (dir.Count(c => c == '/') == 1) profileName ??= (string?)json["Name"];
             }
 
             if (pages.Count == 0)
-                throw new InvalidDataException("O arquivo não parece um perfil do Stream Deck.");
+                throw new InvalidDataException("This file does not look like a Stream Deck profile.");
 
             profileName = string.IsNullOrWhiteSpace(profileName) ? "Stream Deck" : profileName.Trim();
 
-            // Ids novos: importar duas vezes nao sobrescreve nada.
             foreach (var page in pages) page.Profile.Id = Guid.NewGuid().ToString();
 
-            // Pastas apontam para outras paginas pelo UUID.
             var byKey = new Dictionary<string, Page>(StringComparer.OrdinalIgnoreCase);
             foreach (var page in pages) byKey.TryAdd(page.Key, page);
 
@@ -146,13 +129,12 @@ namespace DroidDeck.Services
                 result.Profiles.Add(profile);
             }
 
-            // Pastas: nome do botao que as abre.
             foreach (var page in ordered.Where(p => p.IsChild))
             {
                 var opener = result.Profiles.SelectMany(p => p.Buttons)
                     .FirstOrDefault(b => b.Action?.Type == "open_profile" &&
                                          b.Action.Parameters.GetValueOrDefault("profileId") == page.Profile.Id);
-                var label = !string.IsNullOrWhiteSpace(opener?.Label) ? opener!.Label!.Replace('\n', ' ') : page.Name ?? "Pasta";
+                var label = !string.IsNullOrWhiteSpace(opener?.Label) ? opener!.Label!.Replace('\n', ' ') : page.Name ?? "Folder";
                 page.Profile.Name = $"{profileName} — {label}";
             }
 
@@ -180,7 +162,6 @@ namespace DroidDeck.Services
                 if (button.Action == null)
                 {
                     var uuid = (string?)a["UUID"] ?? "";
-                    // Sem imagem nem titulo, o botao vazio nao diz nada: usa o nome da acao.
                     if (string.IsNullOrEmpty(button.Label) && button.IconBase64 == null)
                         button.Label = (string?)a["Name"];
                     if (!uuid.StartsWith("com.elgato.streamdeck.page.", StringComparison.OrdinalIgnoreCase))
@@ -195,20 +176,16 @@ namespace DroidDeck.Services
                     button.IconName = "arrow_back";
                 }
 
-                // Segundo estado (mudo/desmudo, gravando...): rotulo e imagem do estado ativo.
                 if (states.Count > 1)
                 {
                     var activeLabel = Title(states[1]);
                     if (!string.IsNullOrEmpty(activeLabel) && activeLabel != button.Label) button.ActiveLabel = activeLabel;
                     button.ActiveIconBase64 = Image(entries, page, coord, states[1], 1);
-                    // Acao sem estado proprio (atalho alternado): o DroidDeck guarda o estado.
                     if (button.Action?.Type is "hotkey" or "launch_app") button.Toggle = true;
                 }
                 buttons.Add((row, col, button));
             }
 
-            // Perfil de um Stream Deck maior que a grade do celular: reorganiza em ordem de
-            // leitura para nenhum botao ficar fora da tela.
             var fits = buttons.All(b => b.row < rows && b.col < columns);
             var ordered = buttons.OrderBy(b => b.row).ThenBy(b => b.col).ToList();
             for (var i = 0; i < ordered.Count; i++)
@@ -219,8 +196,6 @@ namespace DroidDeck.Services
             }
             return ordered.Select(b => b.button).Where(b => b.Row < rows).ToList();
         }
-
-        // ---- Acoes ----
 
         private static bool IsFolder(JsonObject a) =>
             ((string?)a["UUID"] ?? "").Equals("com.elgato.streamdeck.profile.openchild", StringComparison.OrdinalIgnoreCase);
@@ -270,13 +245,11 @@ namespace DroidDeck.Services
                 case "com.elgato.streamdeck.multiactions.routine2":
                     return MultiAction(settings, byKey, result);
 
-                // Plugin oficial do Discord
                 case "com.elgato.discord.mute":
                     return Act("discord", ("operation", "toggleMute"));
                 case "com.elgato.discord.deafen":
                     return Act("discord", ("operation", "toggleDeafen"));
 
-                // Plugin oficial do OBS
                 case "com.elgato.obsstudio.record":
                     return Act("obs", ("operation", "toggleRecord"));
                 case "com.elgato.obsstudio.stream":
@@ -327,9 +300,6 @@ namespace DroidDeck.Services
             return action;
         }
 
-        // ---- Teclas ----
-
-        /// <summary>Hotkeys da Elgato (virtual-key do Windows + modificadores) na sintaxe do SendKeys.</summary>
         public static string Hotkeys(JsonArray? hotkeys)
         {
             if (hotkeys == null) return "";
@@ -359,7 +329,6 @@ namespace DroidDeck.Services
             [0x90] = "{NUMLOCK}", [0x91] = "{SCROLLLOCK}",
             [0xAD] = "{VOLUME_MUTE}", [0xAE] = "{VOLUME_DOWN}", [0xAF] = "{VOLUME_UP}",
             [0xB0] = "{MEDIA_NEXT}", [0xB1] = "{MEDIA_PREV}", [0xB2] = "{MEDIA_STOP}", [0xB3] = "{MEDIA_PLAY_PAUSE}",
-            // Pontuacao no layout americano (o da Elgato grava a tecla, nao o caractere).
             [0xBA] = ";", [0xBB] = "=", [0xBC] = ",", [0xBD] = "-", [0xBE] = ".", [0xBF] = "/", [0xC0] = "`",
             [0xDB] = "[", [0xDC] = "\\", [0xDD] = "]", [0xDE] = "'",
         };
@@ -372,7 +341,6 @@ namespace DroidDeck.Services
             return VkNames.GetValueOrDefault(vk);
         }
 
-        /// <summary>Texto para digitar, com os caracteres especiais do SendKeys entre chaves.</summary>
         public static string EscapeText(string text)
         {
             var sb = new StringBuilder();
@@ -384,8 +352,6 @@ namespace DroidDeck.Services
             }
             return sb.ToString();
         }
-
-        // ---- Paginas e imagens ----
 
         private static string Normalize(string name)
         {
@@ -401,10 +367,6 @@ namespace DroidDeck.Services
             return byKey.Values.FirstOrDefault(p => Matches(key, p.Key));
         }
 
-        /// <summary>
-        /// A pasta de uma pagina 2.0 nao tem o UUID escrito como na referencia: e o UUID em
-        /// base32. Compara pelas formas conhecidas.
-        /// </summary>
         private static bool Matches(string uuid, string folder)
         {
             if (string.Equals(uuid, folder, StringComparison.OrdinalIgnoreCase)) return true;
@@ -467,18 +429,15 @@ namespace DroidDeck.Services
                 }
                 catch
                 {
-                    // Imagem corrompida ou formato que o GDI+ nao le (SVG): segue sem ela.
                 }
             }
             return null;
         }
 
-        /// <summary>Reduz para 144 px em PNG (as imagens da Elgato chegam a 288 px).</summary>
         private static string Resize(byte[] bytes)
         {
             using var input = new MemoryStream(bytes);
             using var source = System.Drawing.Image.FromStream(input);
-            // GIF animado vai como esta: reduzir perderia a animacao.
             if (source.RawFormat.Equals(ImageFormat.Gif) && bytes.Length <= 2 * 1024 * 1024)
                 return Convert.ToBase64String(bytes);
             if (source.Width <= IconSize && source.Height <= IconSize && source.RawFormat.Equals(ImageFormat.Png))

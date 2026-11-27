@@ -17,11 +17,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Home Assistant pela API WebSocket (token de longa duracao): le todos os estados,
-    /// acompanha state_changed e chama servicos. Para os celulares vao so as entidades usadas
-    /// em algum botao.
-    /// </summary>
     public class HomeAssistantIntegration : AccountIntegration
     {
         public const string Event = "ReceiveHomeAssistantState";
@@ -51,10 +46,8 @@ namespace DroidDeck.Integrations
             public string? Name { get; set; }
             public string? Unit { get; set; }
 
-            /// <summary>Brilho de 0 a 100 (luzes acesas).</summary>
             public int? Brightness { get; set; }
 
-            /// <summary>Cor da luz em #RRGGBB, quando tem.</summary>
             public string? Color { get; set; }
 
             public string Domain => Id.Split('.')[0];
@@ -93,13 +86,12 @@ namespace DroidDeck.Integrations
             var url = (fields.GetValueOrDefault("url") ?? "").Trim().TrimEnd('/');
             if (url.Length > 0 && !url.StartsWith("http", StringComparison.OrdinalIgnoreCase)) url = "http://" + url;
             if (!Uri.TryCreate(url, UriKind.Absolute, out _))
-                throw new InvalidOperationException("Endereço inválido. Ex.: http://homeassistant.local:8123");
+                throw new InvalidOperationException("Invalid address. E.g.: http://homeassistant.local:8123");
             var token = (fields.GetValueOrDefault("token") ?? "").Trim();
             Set(("url", url), ("token", token.Length > 0 ? token : Token));
-            if (Token == null) throw new InvalidOperationException("Falta o token de acesso.");
+            if (Token == null) throw new InvalidOperationException("The access token is missing.");
 
             Restart();
-            // Espera a primeira tentativa para a tela ja mostrar o resultado.
             for (var i = 0; i < 40 && !_connected && _error == null; i++) await Task.Delay(250);
             return GetStatus();
         }
@@ -139,7 +131,7 @@ namespace DroidDeck.Integrations
                     if (!_reconnect.IsCancellationRequested)
                     {
                         _error = ex is WebSocketException or System.Net.Http.HttpRequestException
-                            ? "Não foi possível conectar ao Home Assistant. Confira o endereço."
+                            ? "Couldn't connect to Home Assistant. Check the address."
                             : ex.Message;
                         Logger.LogInformation("Home Assistant: {Error}", ex.Message);
                     }
@@ -168,11 +160,11 @@ namespace DroidDeck.Integrations
             await socket.ConnectAsync(ws, ct);
 
             var hello = await ReceiveAsync(socket, ct);
-            if (hello?["type"]?.GetValue<string>() != "auth_required") throw new InvalidOperationException("Resposta inesperada do Home Assistant.");
+            if (hello?["type"]?.GetValue<string>() != "auth_required") throw new InvalidOperationException("Unexpected response from Home Assistant.");
             await SendRawAsync(socket, new JsonObject { ["type"] = "auth", ["access_token"] = Token }, ct);
             var auth = await ReceiveAsync(socket, ct);
             if (auth?["type"]?.GetValue<string>() != "auth_ok")
-                throw new InvalidOperationException("Token recusado pelo Home Assistant. Gere outro no seu perfil.");
+                throw new InvalidOperationException("Home Assistant rejected the token. Create a new one in your profile.");
 
             await SendRawAsync(socket, new JsonObject { ["id"] = 1, ["type"] = "get_states" }, ct);
             await SendRawAsync(socket, new JsonObject { ["id"] = 2, ["type"] = "subscribe_events", ["event_type"] = "state_changed" }, ct);
@@ -208,12 +200,11 @@ namespace DroidDeck.Integrations
                 else if (type == "result" && _pending.TryRemove(id, out var tcs))
                 {
                     if (msg["success"]?.GetValue<bool>() == true) tcs.TrySetResult(msg["result"]);
-                    else tcs.TrySetException(new InvalidOperationException(msg["error"]?["message"]?.GetValue<string>() ?? "O Home Assistant recusou."));
+                    else tcs.TrySetException(new InvalidOperationException(msg["error"]?["message"]?.GetValue<string>() ?? "Home Assistant refused."));
                 }
             }
         }
 
-        /// <summary>Junta varias mudancas seguidas (uma cena mexe em dez luzes) num envio so.</summary>
         private void QueueBroadcast()
         {
             if (Interlocked.Exchange(ref _broadcastQueued, 1) == 1) return;
@@ -246,11 +237,10 @@ namespace DroidDeck.Integrations
 
         public Entity? Find(string entityId) => _entities.TryGetValue(entityId, out var e) ? e : null;
 
-        /// <summary>Chama um servico (ex.: light.turn_on) e espera a resposta.</summary>
         public async Task CallServiceAsync(string domain, string service, string? entityId, JsonObject? data = null)
         {
             var socket = _socket;
-            if (!_connected || socket == null) throw new InvalidOperationException("Home Assistant desconectado.");
+            if (!_connected || socket == null) throw new InvalidOperationException("Home Assistant disconnected.");
             var id = Interlocked.Increment(ref _nextId);
             var msg = new JsonObject { ["id"] = id, ["type"] = "call_service", ["domain"] = domain, ["service"] = service };
             if (data != null) msg["service_data"] = data;
@@ -260,7 +250,7 @@ namespace DroidDeck.Integrations
             await SendRawAsync(socket, msg, CancellationToken.None);
             var done = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(8)));
             _pending.TryRemove(id, out _);
-            if (done != tcs.Task) throw new TimeoutException("O Home Assistant não respondeu.");
+            if (done != tcs.Task) throw new TimeoutException("Home Assistant didn't respond.");
             await tcs.Task;
         }
 
@@ -286,9 +276,6 @@ namespace DroidDeck.Integrations
             return JsonNode.Parse(ms.ToArray());
         }
 
-        // ---- Listas do editor ----
-
-        /// <summary>Dominios de cada operacao do botao.</summary>
         public static string[] DomainsFor(string? operation) => (operation ?? "").ToLowerInvariant() switch
         {
             "scene" => new[] { "scene" },
@@ -302,7 +289,7 @@ namespace DroidDeck.Integrations
         public override Task<List<FieldOption>> OptionsAsync(string list, IQueryCollection query)
         {
             if (list != "entities") return base.OptionsAsync(list, query);
-            if (!_connected) throw new InvalidOperationException("Home Assistant desconectado.");
+            if (!_connected) throw new InvalidOperationException("Home Assistant disconnected.");
             var domains = DomainsFor(query["operation"]);
             var options = _entities.Values
                 .Where(e => domains.Length == 0 || domains.Contains(e.Domain))

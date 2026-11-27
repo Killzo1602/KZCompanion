@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DroidDeck.Controllers
 {
-    /// <summary>Catalogo dos tipos de acao, usado pelo editor do app para montar o formulario.</summary>
     [Route("api/[controller]")]
     [ApiController]
     public class ActionsController : ControllerBase
@@ -24,10 +23,6 @@ namespace DroidDeck.Controllers
             return Ok(L.Translating ? schemas.Select(Translated).ToList() : schemas);
         }
 
-        /// <summary>
-        /// Copia do schema com os textos traduzidos (ingles ou espanhol). Copia (pelo JSON, para
-        /// nao esquecer campo novo) porque os provedores podem devolver objetos guardados.
-        /// </summary>
         private static ActionSchema Translated(ActionSchema source)
         {
             var s = JsonSerializer.Deserialize<ActionSchema>(JsonSerializer.Serialize(source))!;
@@ -46,17 +41,14 @@ namespace DroidDeck.Controllers
             return s;
         }
 
-        /// <summary>Estado atual de um provedor (o mesmo que vai pelo SignalR).</summary>
         [HttpGet("state/{type}")]
         public IActionResult State(string type) =>
             _executor.Find(type) is IStatefulActionProvider p ? Ok(p.GetState()) : NotFound();
 
-        /// <summary>Timers que um botao pode controlar (campo "target" da acao timer).</summary>
         [HttpGet("timer/targets")]
         public IActionResult TimerTargets() =>
             _executor.Find("timer") is Actions.Providers.TimerProvider t ? Ok(t.Targets()) : NotFound();
 
-        /// <summary>Dispositivos de audio ativos (acao windows/setDefaultAudio).</summary>
         [HttpGet("windows/audio-devices")]
         public IActionResult AudioDevices([FromQuery] string? kind, [FromQuery] bool optional = false) =>
             Ok(Actions.Providers.WindowsProvider.AudioDevices(kind == "input", optional));

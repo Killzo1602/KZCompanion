@@ -9,11 +9,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DroidDeck.Controllers
 {
-    /// <summary>
-    /// Configuracao das integracoes com conta (homeassistant, spotify, twitch, youtube).
-    /// O login OAuth acontece no navegador do PC; o retorno (callback) nao tem a chave da API
-    /// e e validado pelo "state" que a propria integracao gerou.
-    /// </summary>
     [Route("api/integrations")]
     [ApiController]
     public class IntegrationsController : ControllerBase
@@ -27,7 +22,6 @@ namespace DroidDeck.Controllers
             _all = all;
         }
 
-        /// <summary>Todas as integracoes, com o estado da conexao (lista do app).</summary>
         [HttpGet]
         public ActionResult List() => Ok(_all.Select(i => new
         {
@@ -45,7 +39,6 @@ namespace DroidDeck.Controllers
         public async Task<ActionResult<IntegrationStatus>> Configure(string name, [FromBody] Dictionary<string, string>? fields)
         {
             if (!_integrations.TryGetValue(name, out var i)) return NotFound();
-            // Tokens, senhas e enderecos que o PC vai chamar so se digitam no proprio PC.
             if (!DroidDeck.Services.ActionPolicy.IsLocal(HttpContext.Connection))
                 return StatusCode(403, new { error = "Credentials are entered on the PC only." });
             try
@@ -84,14 +77,10 @@ namespace DroidDeck.Controllers
         {
             var html = _integrations.TryGetValue(name, out var i)
                 ? await i.CallbackAsync(Request.Query)
-                : L.T("Integração desconhecida.");
+                : L.T("Unknown integration.");
             return Content(html, "text/html; charset=utf-8");
         }
 
-        /// <summary>
-        /// As mensagens nascem dentro das integracoes (as vezes em segundo plano, sem idioma),
-        /// entao a traducao e aqui, na saida. Texto com parte variavel fica em portugues.
-        /// </summary>
         private static IntegrationStatus Translated(IntegrationStatus status)
         {
             if (status.Message != null) status.Message = L.T(status.Message);

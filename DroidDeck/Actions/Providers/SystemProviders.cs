@@ -7,7 +7,6 @@ using DroidDeck.Services;
 
 namespace DroidDeck.Actions.Providers
 {
-    /// <summary>Abre um programa, arquivo ou URL. Privilegiada: so nasce no configurador.</summary>
     public class LaunchAppProvider : IActionProvider
     {
         private readonly IAppActivator _activator;
@@ -20,15 +19,15 @@ namespace DroidDeck.Actions.Providers
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Abrir programa",
+            Title = "Open program",
             Icon = "launch",
-            Category = "Sistema",
-            Description = "Abre um programa, arquivo ou endereço no PC.",
+            Category = "System",
+            Description = "Opens a program, file or address on the PC.",
             Fields =
             {
-                ActionField.Text("path", "Caminho", @"C:\Windows\System32\notepad.exe",
-                    "Também aceita um arquivo ou uma URL.", required: true),
-                ActionField.Text("arguments", "Argumentos (opcional)"),
+                ActionField.Text("path", "Path", @"C:\Windows\System32\notepad.exe",
+                    "Also accepts a file or a URL.", required: true),
+                ActionField.Text("arguments", "Arguments (optional)"),
             },
         };
 
@@ -40,7 +39,6 @@ namespace DroidDeck.Actions.Providers
         }
     }
 
-    /// <summary>Traz uma janela para a frente pelo titulo. Privilegiada.</summary>
     public class ActivateWindowProvider : IActionProvider
     {
         private readonly IAppActivator _activator;
@@ -52,10 +50,10 @@ namespace DroidDeck.Actions.Providers
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Ativar janela",
+            Title = "Activate window",
             Icon = "web_asset",
-            Category = "Sistema",
-            Fields = { ActionField.Text("windowName", "Título exato da janela", required: true) },
+            Category = "System",
+            Fields = { ActionField.Text("windowName", "Exact window title", required: true) },
         };
 
         public Task ExecuteAsync(ActionContext c)
@@ -65,15 +63,6 @@ namespace DroidDeck.Actions.Providers
         }
     }
 
-    /// <summary>
-    /// Uma tecla do teclado. Privilegiada (ActionPolicy): com teclas soltas da para chegar
-    /// a Win+R e digitar um comando, entao so nasce no configurador, como o atalho.
-    ///
-    /// Modos: "hold" segura enquanto o dedo estiver no botao -- o app manda o aperta e o
-    /// solta pelo hub (DeckHub.HoldKey/ReleaseKey); por aqui (gatilho, /press sem hub) vira
-    /// toque rapido. "toggle" trava a tecla apertada ate o proximo toque (Shift, Ctrl...);
-    /// "oneshot" trava so ate a proxima tecla do deck, como as teclas de aderencia.
-    /// </summary>
     public class KeyProvider : IActionProvider, IDisposable
     {
         public const string LatchOwner = "latch";
@@ -93,38 +82,38 @@ namespace DroidDeck.Actions.Providers
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Tecla do teclado",
+            Title = "Keyboard key",
             Icon = "keyboard",
-            Category = "Sistema",
-            Description = "Aperta uma tecla no PC: segura enquanto o dedo estiver no botão, dá um toque rápido ou fica travada até o próximo toque.",
+            Category = "System",
+            Description = "Presses a key on the PC: holds it while your finger is on the button, taps it, or keeps it latched until the next tap.",
             Fields =
             {
                 new ActionField
                 {
                     Key = "key",
-                    Label = "Tecla",
+                    Label = "Key",
                     Kind = FieldKind.Select,
                     AllowCustom = true,
                     Required = true,
                     Default = "UP",
-                    Help = "Escolha na lista ou digite outra: A-Z, 0-9, F13-F24, NUMPAD0 ou o código (0x41).",
+                    Help = "Pick from the list or type another: A-Z, 0-9, F13-F24, NUMPAD0 or the code (0x41).",
                     Options = KeyOptions.Select(o => new FieldOption(o.value, o.label)).ToList(),
                 },
-                ActionField.Select("mode", "Modo de envio",
-                    ("hold", "Segurar enquanto o dedo estiver no botão"),
-                    ("tap", "Toque rápido"),
-                    ("toggle", "Travar: um toque aperta, outro solta"),
-                    ("oneshot", "Travar até a próxima tecla"))
+                ActionField.Select("mode", "Send mode",
+                    ("hold", "Hold while your finger is on the button"),
+                    ("tap", "Quick tap"),
+                    ("toggle", "Latch: one tap presses, the next releases"),
+                    ("oneshot", "Latch until the next key"))
                     .WithDefault("hold"),
             },
         };
 
         private static readonly (string value, string label)[] KeyOptions =
         {
-            ("UP", "Seta para cima"), ("DOWN", "Seta para baixo"),
-            ("LEFT", "Seta para a esquerda"), ("RIGHT", "Seta para a direita"),
+            ("UP", "Up arrow"), ("DOWN", "Down arrow"),
+            ("LEFT", "Left arrow"), ("RIGHT", "Right arrow"),
             ("SHIFT", "Shift"), ("CTRL", "Ctrl"), ("ALT", "Alt"), ("WIN", "Windows"),
-            ("ENTER", "Enter"), ("ESC", "Esc"), ("TAB", "Tab"), ("SPACE", "Espaço"), ("BACKSPACE", "Backspace"),
+            ("ENTER", "Enter"), ("ESC", "Esc"), ("TAB", "Tab"), ("SPACE", "Space"), ("BACKSPACE", "Backspace"),
             ("INSERT", "Insert"), ("DELETE", "Delete"), ("HOME", "Home"), ("END", "End"),
             ("PGUP", "Page Up"), ("PGDN", "Page Down"),
             ("F1", "F1"), ("F2", "F2"), ("F3", "F3"), ("F4", "F4"), ("F5", "F5"), ("F6", "F6"),
@@ -139,8 +128,6 @@ namespace DroidDeck.Actions.Providers
             var oneShot = string.Equals(mode, "oneshot", StringComparison.OrdinalIgnoreCase);
             if (oneShot || string.Equals(mode, "toggle", StringComparison.OrdinalIgnoreCase))
             {
-                // A trava vale por botao (ou pela tecla, numa execucao avulsa). O estado aceso
-                // segue o da tecla, nao o liga/desliga do botao: os dois nunca se desencontram.
                 var owner = (oneShot ? HeldKeys.OneShotPrefix : LatchOwner + ":") + (c.ButtonId ?? vk.ToString());
                 var on = !HeldKeys.Shared.IsHeld(owner, vk);
                 if (on) HeldKeys.Shared.Down(owner, vk);
@@ -163,7 +150,6 @@ namespace DroidDeck.Actions.Providers
             HeldKeys.Shared.KeyTapped(vk);
         }
 
-        // Trava "ate a proxima tecla" que soltou sozinha: apaga o botao nos celulares.
         private void OnOneShotReleased(string owner)
         {
             var buttonId = owner[HeldKeys.OneShotPrefix.Length..];
@@ -172,10 +158,6 @@ namespace DroidDeck.Actions.Providers
             _toggles.Set(buttonId, false);
         }
 
-        /// <summary>
-        /// PC encerrando: solta as travas e apaga o aceso delas (o toggles.json sobrevive ao
-        /// reinicio, a tecla apertada nao).
-        /// </summary>
         public void Dispose()
         {
             HeldKeys.Shared.OneShotReleased -= OnOneShotReleased;
@@ -186,7 +168,6 @@ namespace DroidDeck.Actions.Providers
         }
     }
 
-    /// <summary>Atalho de teclado via SendInput. Privilegiada.</summary>
     public class HotkeyProvider : IActionProvider
     {
         private readonly IAppActivator _activator;
@@ -198,12 +179,12 @@ namespace DroidDeck.Actions.Providers
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Atalho de teclado",
+            Title = "Keyboard shortcut",
             Icon = "keyboard",
-            Category = "Sistema",
+            Category = "System",
             Fields =
             {
-                ActionField.Text("keys", "Teclas", "^C", "^ = Ctrl, + = Shift, % = Alt, # = Win, {ENTER}, {F5}…", required: true),
+                ActionField.Text("keys", "Keys", "^C", "^ = Ctrl, + = Shift, % = Alt, # = Win, {ENTER}, {F5}…", required: true),
             },
         };
 
@@ -212,16 +193,11 @@ namespace DroidDeck.Actions.Providers
             var keys = c.Get("keys");
             if (keys.Length == 0) return Task.CompletedTask;
             _activator.SendKeys(keys);
-            // Shift "ate a proxima tecla" vale para o atalho e solta depois dele.
             HeldKeys.Shared.KeyTapped();
             return Task.CompletedTask;
         }
     }
 
-    /// <summary>
-    /// Acoes que so o app executa (navegar entre perfis). Ficam no schema para aparecerem no
-    /// seletor de tipo; se chegarem ao servidor, nao ha o que fazer.
-    /// </summary>
     public class ClientOnlyProvider : IActionProvider
     {
         private readonly ActionSchema _schema;
@@ -236,13 +212,13 @@ namespace DroidDeck.Actions.Providers
         {
             new ClientOnlyProvider(new ActionSchema
             {
-                Type = "open_profile", Title = "Abrir perfil", Icon = "folder", Category = "Navegação",
-                Description = "Abre outro perfil como uma pasta.", Editor = "open_profile",
+                Type = "open_profile", Title = "Open profile", Icon = "folder", Category = "Navigation",
+                Description = "Opens another profile like a folder.", Editor = "open_profile",
             }),
             new ClientOnlyProvider(new ActionSchema
             {
-                Type = "back", Title = "Voltar", Icon = "arrow_back", Category = "Navegação",
-                Description = "Volta ao perfil anterior.",
+                Type = "back", Title = "Back", Icon = "arrow_back", Category = "Navigation",
+                Description = "Goes back to the previous profile.",
             }),
         };
     }

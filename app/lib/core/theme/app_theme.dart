@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-/// Tema nomeado do KZ Companion: define o visual escuro (fundo e superfícies). O claro
-/// deriva da cor de destaque.
 @immutable
 class ThemePreset {
   const ThemePreset({
@@ -23,7 +21,6 @@ class ThemePreset {
   final Color outline;
 }
 
-/// Ciano do KZ Companion: o destaque padrão.
 const kKzCyan = Color(0xFF2DD4FF);
 
 const kThemePresets = <ThemePreset>[
@@ -47,27 +44,24 @@ const kThemePresets = <ThemePreset>[
   ),
 ];
 
-/// Cores oferecidas para trocar o destaque do tema.
 const kAccentChoices = <Color>[
-  kKzCyan, // ciano KZ
-  Color(0xFF42A5F5), // azul
-  Color(0xFF26A69A), // verde-água
-  Color(0xFF66BB6A), // verde
-  Color(0xFFFFB300), // âmbar
-  Color(0xFFFF7043), // laranja
-  Color(0xFFEF5350), // vermelho
-  Color(0xFFEC407A), // rosa
-  Color(0xFFAB47BC), // roxo
-  Color(0xFF7E57C2), // violeta
+  kKzCyan,
+  Color(0xFF42A5F5),
+  Color(0xFF26A69A),
+  Color(0xFF66BB6A),
+  Color(0xFFFFB300),
+  Color(0xFFFF7043),
+  Color(0xFFEF5350),
+  Color(0xFFEC407A),
+  Color(0xFFAB47BC),
+  Color(0xFF7E57C2),
 ];
 
-/// Temas antigos (Clássico, Neon, Âmbar, Synthwave...) caem no padrão do KZ.
 ThemePreset presetById(String? id) => kThemePresets.firstWhere(
   (p) => p.id == id,
   orElse: () => kThemePresets.first,
 );
 
-/// Escolhas do usuário. O destaque nulo segue o tema escolhido.
 @immutable
 class ThemeSettings {
   const ThemeSettings({
@@ -104,8 +98,6 @@ ThemeData buildAppTheme(ThemeSettings s, Brightness brightness) {
   final accent = s.effectiveAccent;
   final dark = brightness == Brightness.dark;
 
-  // No tema claro, um destaque muito claro vira texto ilegível sobre branco:
-  // escurece até ter contraste, mantendo o tom.
   final primary = !dark && accent.computeLuminance() > 0.4
       ? HSLColor.fromColor(accent).withLightness(0.30).toColor()
       : accent;
@@ -116,7 +108,6 @@ ThemeData buildAppTheme(ThemeSettings s, Brightness brightness) {
 
   Color scaffold;
   if (dark) {
-    // Superfícies do tema, em degraus a partir do fundo.
     Color step(double t) => Color.lerp(preset.background, preset.outline, t)!;
     scheme = scheme.copyWith(
       surface: preset.surface,
@@ -132,7 +123,6 @@ ThemeData buildAppTheme(ThemeSettings s, Brightness brightness) {
     scaffold = scheme.surface;
   }
 
-  // Controles com cantos de 12 px (DESIGN.md: "control"), não pílulas.
   final controlShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(12));
   final controlStyle = ButtonStyle(shape: WidgetStatePropertyAll(controlShape));
 
@@ -146,7 +136,6 @@ ThemeData buildAppTheme(ThemeSettings s, Brightness brightness) {
     filledButtonTheme: FilledButtonThemeData(style: controlStyle),
     elevatedButtonTheme: ElevatedButtonThemeData(style: controlStyle),
     outlinedButtonTheme: OutlinedButtonThemeData(style: controlStyle),
-    // Aviso de baixo: superfície do painel com borda fina, ação no destaque, flutuando.
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
       backgroundColor: dark ? preset.surface : scheme.inverseSurface,
@@ -158,13 +147,10 @@ ThemeData buildAppTheme(ThemeSettings s, Brightness brightness) {
       ),
       insetPadding: const EdgeInsets.fromLTRB(16, 0, 88, 16),
     ),
-    // Foco do teclado visível no configurador (o padrão some no quase-preto).
     focusColor: accent.withValues(alpha: dark ? 0.28 : 0.20),
   );
 }
 
-/// builder do MaterialApp: em tela larga (configurador no navegador), o aviso de baixo
-/// tem largura de aviso, centralizado, em vez de uma faixa de ponta a ponta.
 Widget narrowSnackBars(BuildContext context, Widget? child) {
   if (MediaQuery.sizeOf(context).width < 640) return child!;
   final t = Theme.of(context);

@@ -5,11 +5,6 @@ using System.Security.Cryptography;
 
 namespace DroidDeck.Auth
 {
-    /// <summary>
-    /// Carrega (ou gera na primeira vez) a chave de API forte usada para autenticar o app.
-    /// Persistida em %LocalAppData%\DroidDeck\apikey — fora do código e do repositório.
-    /// Substitui a antiga chave fixa "changeme". Cifrada com DPAPI (ver <see cref="SecretFile"/>).
-    /// </summary>
     public static class ApiKeyProvider
     {
         private static readonly object _lock = new();
@@ -23,7 +18,6 @@ namespace DroidDeck.Auth
             }
         }
 
-        /// <summary>Chave atual (gera e persiste na primeira chamada).</summary>
         public static string GetKey()
         {
             if (_cached != null) return _cached;
@@ -45,7 +39,6 @@ namespace DroidDeck.Auth
                 }
                 catch
                 {
-                    // Se não der pra persistir, mantém uma chave só em memória (sessão atual).
                     return _cached ??= Generate();
                 }
             }
@@ -53,7 +46,6 @@ namespace DroidDeck.Auth
 
         private static string Generate()
         {
-            // 192 bits, base64url (sem +/=) para caber tranquilo em URL/QR.
             return Convert.ToBase64String(RandomNumberGenerator.GetBytes(24))
                 .Replace("+", "-").Replace("/", "_").Replace("=", "");
         }

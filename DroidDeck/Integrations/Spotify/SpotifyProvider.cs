@@ -15,7 +15,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>Acao "spotify": controles do player, curtir, aleatorio, repetir, volume e tocar uma playlist.</summary>
     public class SpotifyProvider : IStatefulActionProvider
     {
         public const string TypeName = "spotify";
@@ -33,26 +32,26 @@ namespace DroidDeck.Integrations
             Type = TypeName,
             Title = "Spotify",
             Icon = "music_note",
-            Category = "Mídia",
-            Description = "Controla o Spotify da sua conta (Premium), com capa, curtida e aleatório no botão.",
+            Category = "Media",
+            Description = "Controls Spotify on your (Premium) account, with cover art, like and shuffle on the button.",
             Stateful = true,
             Settings = "spotify",
             StateEvent = StateEvent,
             Fields =
             {
-                ActionField.Select("operation", "O que fazer",
-                    ("playPause", "Tocar/pausar"),
-                    ("next", "Próxima"),
-                    ("previous", "Anterior"),
-                    ("like", "Curtir/descurtir a faixa"),
-                    ("shuffle", "Aleatório liga/desliga"),
-                    ("repeat", "Repetir (desligado → playlist → faixa)"),
+                ActionField.Select("operation", "What to do",
+                    ("playPause", "Play/pause"),
+                    ("next", "Next"),
+                    ("previous", "Previous"),
+                    ("like", "Like/unlike the track"),
+                    ("shuffle", "Shuffle on/off"),
+                    ("repeat", "Repeat (off → playlist → track)"),
                     ("volume", "Volume (+/-)"),
-                    ("playlist", "Tocar uma playlist"),
-                    ("nowPlaying", "Mostrar o que está tocando")),
-                ActionField.Number("step", "Passo do volume", 10, -100, 100, "%").When("operation", "volume"),
+                    ("playlist", "Play a playlist"),
+                    ("nowPlaying", "Show what's playing")),
+                ActionField.Number("step", "Volume step", 10, -100, 100, "%").When("operation", "volume"),
                 ActionField.Dynamic("uri", "Playlist", "/api/integrations/spotify/options/playlists", allowCustom: true).When("operation", "playlist"),
-                ActionField.Toggle("shuffleOn", "Começar no aleatório").When("operation", "playlist"),
+                ActionField.Toggle("shuffleOn", "Start shuffled").When("operation", "playlist"),
             },
         };
 
@@ -87,13 +86,12 @@ namespace DroidDeck.Integrations
                     break;
                 case "playlist":
                     var uri = ctx.Get("uri").Trim();
-                    if (uri.Length == 0) throw new InvalidOperationException("Escolha a playlist.");
+                    if (uri.Length == 0) throw new InvalidOperationException("Choose the playlist.");
                     if (ctx.Get("shuffleOn") == "true")
                         await _spotify.CallAsync(HttpMethod.Put, "/me/player/shuffle?state=true");
                     await _spotify.CallAsync(HttpMethod.Put, "/me/player/play", new { context_uri = uri });
                     break;
             }
-            // Mostra o efeito sem esperar o proximo ciclo de 3 s.
             await Task.Delay(300);
             try { await _spotify.RefreshAsync(); } catch { }
         }

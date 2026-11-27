@@ -13,7 +13,7 @@ namespace DroidDeck.Auth
     public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
     {
         private const string ApiKeyHeaderName = "X-API-KEY";
-        private const string ApiKeyQueryName = "access_token"; // usado pelo WebSocket do SignalR
+        private const string ApiKeyQueryName = "access_token";
 
         public ApiKeyAuthenticationHandler(
             IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -32,7 +32,6 @@ namespace DroidDeck.Auth
             }
             else if (Request.Query.TryGetValue(ApiKeyQueryName, out var query) && query.Count > 0)
             {
-                // SignalR via WebSocket não envia headers customizados; usa ?access_token=
                 provided = query.ToString();
             }
             else if (Request.Headers.TryGetValue("Authorization", out var auth) &&
@@ -57,7 +56,6 @@ namespace DroidDeck.Auth
 
         private static bool FixedTimeEquals(string a, string b)
         {
-            // Comparação em tempo constante (evita timing attacks). Tamanhos diferentes -> false.
             return CryptographicOperations.FixedTimeEquals(
                 Encoding.UTF8.GetBytes(a), Encoding.UTF8.GetBytes(b));
         }

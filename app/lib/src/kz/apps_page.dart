@@ -5,7 +5,6 @@ import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:droiddeck/src/kz/running_apps_section.dart';
 import 'package:flutter/material.dart';
 
-/// Lançador: "Running now" (apps abertos no PC) e os aplicativos salvos, agrupados, com o ícone original.
 class AppsPage extends StatefulWidget {
   const AppsPage({super.key, required this.c});
   final KzController c;
@@ -31,7 +30,6 @@ class _AppsPageState extends State<AppsPage> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// App em segundo plano: o PC para de observar janelas; ao voltar, retoma e atualiza.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -49,7 +47,6 @@ class _AppsPageState extends State<AppsPage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Watch((context) {
       final showRunning = KzPrefs.showRunningApps.value;
-      // O ajuste em Appearance liga e desliga a observacao na hora.
       if (showRunning && !c.runningApps.active) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && KzPrefs.showRunningApps.value) c.runningApps.start();
@@ -85,7 +82,6 @@ class _AppsPageState extends State<AppsPage> with WidgetsBindingObserver {
         child: ListView(
           padding: const EdgeInsets.all(12),
           children: [
-            if (showRunning) RunningAppsSection(store: c.runningApps, audio: c.audio),
             if (apps.isEmpty) _emptyLibrary(context, muted),
             for (final g in names) ...[
               Padding(
@@ -106,6 +102,7 @@ class _AppsPageState extends State<AppsPage> with WidgetsBindingObserver {
               ]),
               const SizedBox(height: 10),
             ],
+            if (showRunning) RunningAppsSection(store: c.runningApps, audio: c.audio),
           ],
         ),
       );

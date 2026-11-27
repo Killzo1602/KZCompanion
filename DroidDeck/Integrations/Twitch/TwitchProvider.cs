@@ -13,7 +13,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>Acao "twitch": marcador, clipe, anuncio, mensagem no chat, enquete e titulo.</summary>
     public class TwitchProvider : IStatefulActionProvider
     {
         public const string TypeName = "twitch";
@@ -32,33 +31,33 @@ namespace DroidDeck.Integrations
             Title = "Twitch",
             Icon = "sensors",
             Category = "Streaming",
-            Description = "Marcador, clipe, anúncio, chat, enquete e título do seu canal; mostra se está ao vivo.",
+            Description = "Marker, clip, ad, chat, poll and title for your channel; shows whether you're live.",
             Stateful = true,
             Settings = "twitch",
             StateEvent = StateEvent,
             Fields =
             {
-                ActionField.Select("operation", "O que fazer",
-                    ("marker", "Criar marcador"),
-                    ("clip", "Criar clipe"),
-                    ("ad", "Rodar anúncio"),
-                    ("chat", "Mandar mensagem no chat"),
-                    ("poll", "Abrir enquete"),
-                    ("title", "Trocar o título"),
-                    ("status", "Só mostrar ao vivo/espectadores")),
-                ActionField.Text("description", "Descrição (opcional)", "Momento épico").When("operation", "marker"),
-                ActionField.Select("length", "Duração", ("30", "30 s"), ("60", "1 min"), ("90", "1 min 30"), ("120", "2 min"), ("180", "3 min")).When("operation", "ad"),
-                ActionField.Multiline("message", "Mensagem", "Sigam o canal!").When("operation", "chat"),
-                ActionField.Text("question", "Pergunta", "Qual jogo agora?", required: true).When("operation", "poll"),
-                ActionField.Multiline("choices", "Opções (uma por linha, 2 a 5)", "Sim\nNão").When("operation", "poll"),
-                ActionField.Number("duration", "Duração", 60, 15, 1800, "s").When("operation", "poll"),
-                ActionField.Text("title", "Novo título", required: true).When("operation", "title"),
+                ActionField.Select("operation", "What to do",
+                    ("marker", "Create marker"),
+                    ("clip", "Create clip"),
+                    ("ad", "Run ad"),
+                    ("chat", "Send chat message"),
+                    ("poll", "Start poll"),
+                    ("title", "Change the title"),
+                    ("status", "Only show live/viewers")),
+                ActionField.Text("description", "Description (optional)", "Epic moment").When("operation", "marker"),
+                ActionField.Select("length", "Duration", ("30", "30 s"), ("60", "1 min"), ("90", "1 min 30"), ("120", "2 min"), ("180", "3 min")).When("operation", "ad"),
+                ActionField.Multiline("message", "Message", "Follow the channel!").When("operation", "chat"),
+                ActionField.Text("question", "Question", "Which game next?", required: true).When("operation", "poll"),
+                ActionField.Multiline("choices", "Options (one per line, 2 to 5)", "Yes\nNo").When("operation", "poll"),
+                ActionField.Number("duration", "Duration", 60, 15, 1800, "s").When("operation", "poll"),
+                ActionField.Text("title", "New title", required: true).When("operation", "title"),
             },
         };
 
         public async Task ExecuteAsync(ActionContext ctx)
         {
-            var id = _twitch.UserId ?? throw new InvalidOperationException("Twitch desconectada.");
+            var id = _twitch.UserId ?? throw new InvalidOperationException("Twitch disconnected.");
             switch (ctx.Operation("marker"))
             {
                 case "marker":
@@ -81,7 +80,7 @@ namespace DroidDeck.Integrations
                 case "poll":
                     var choices = ctx.Get("choices").Split('\n').Select(c => c.Trim()).Where(c => c.Length > 0).Take(5)
                         .Select(c => new { title = c }).ToArray();
-                    if (choices.Length < 2) throw new InvalidOperationException("A enquete precisa de 2 opções.");
+                    if (choices.Length < 2) throw new InvalidOperationException("The poll needs 2 options.");
                     await _twitch.CallAsync(HttpMethod.Post, "/polls", new
                     {
                         broadcaster_id = id,

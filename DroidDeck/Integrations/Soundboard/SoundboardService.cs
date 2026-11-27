@@ -17,29 +17,17 @@ using NAudio.Wave.SampleProviders;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Configuração da soundboard, persistida em %LocalAppData%\DroidDeck\soundboard.json
-    /// (mesma convenção do Discord/OBS).
-    /// </summary>
     public class SoundboardConfig
     {
-        /// <summary>Id (MMDevice.ID) do dispositivo de saída "cabo" — o que vai pro Discord/OBS
-        /// (ex.: VB-Cable). Vazio = usa o dispositivo de saída padrão do Windows.</summary>
         public string? CableDeviceId { get; set; }
 
-        /// <summary>Id do dispositivo de "monitor" — pra você ouvir (fone/alto-falante).</summary>
         public string? MonitorDeviceId { get; set; }
 
-        /// <summary>Se true, o som toca também no MonitorDeviceId além do cabo.</summary>
         public bool MonitorEnabled { get; set; } = false;
 
-        /// <summary>Volume 0..100.</summary>
         public int Volume { get; set; } = 100;
     }
 
-    /// <summary>
-    /// Resultado de busca no MyInstants (proxiado pelo backend).
-    /// </summary>
     public class SoundResult
     {
         public string Id { get; set; } = "";
@@ -47,21 +35,11 @@ namespace DroidDeck.Services
         public string Mp3 { get; set; } = "";
     }
 
-    /// <summary>
-    /// Soundboard: busca sons no MyInstants (via wrapper JSON não-oficial), baixa/cacheia o MP3
-    /// e reproduz no PC num dispositivo de saída escolhido (cabo virtual pro Discord/OBS + monitor
-    /// opcional). Toca um som por vez — apertar outro corta o anterior. O roteamento do dispositivo
-    /// de saída pro Discord/OBS é responsabilidade do usuário (VB-Cable / Voicemeeter).
-    ///
-    /// O Discord RPC deste projeto NÃO injeta áudio; por isso a soundboard sai por um dispositivo
-    /// de áudio, não pelo Discord.
-    /// </summary>
     public class SoundboardService : Integrations.IIntegration
     {
         public string Name => "soundboard";
         public string Title => "Soundboard";
 
-        /// <summary>O soundboard nao depende de conta: esta sempre pronto.</summary>
         public bool IsConnected => true;
 
         private const string ApiBase = "https://myinstants-api.vercel.app";
@@ -70,7 +48,6 @@ namespace DroidDeck.Services
         private readonly IHttpClientFactory _httpFactory;
         private readonly IHubContext<DeckHub> _hub;
 
-        // Playbacks ativos (cabo + monitor). Protegido por _lock.
         private readonly object _lock = new();
         private readonly List<ActivePlayback> _active = new();
 
@@ -81,11 +58,6 @@ namespace DroidDeck.Services
             public required IWavePlayer Output { get; init; }
             public required WaveStream Reader { get; init; }
 
-            /// <summary>
-            /// Device de saída explícito (null = dispositivo padrão do Windows). O WasapiOut
-            /// NÃO descarta o MMDevice que recebe no construtor, então a posse fica aqui e
-            /// ele é liberado junto com o Output — senão vaza um proxy COM por som tocado.
-            /// </summary>
             public MMDevice? Device { get; init; }
         }
 
@@ -99,7 +71,6 @@ namespace DroidDeck.Services
             _hub = hub;
         }
 
-        // ---- Config em %LocalAppData%\DroidDeck\soundboard.json ----
         private static string BaseDir
         {
             get
@@ -133,7 +104,6 @@ namespace DroidDeck.Services
             try { File.WriteAllText(ConfigPath, JsonSerializer.Serialize(c)); } catch { }
         }
 
-        // ---- Busca (proxy do MyInstants) ----
         public async Task<List<SoundResult>> SearchAsync(string query)
         {
             return await FetchAsync($"{ApiBase}/search?q={Uri.EscapeDataString(query ?? "")}");
@@ -178,9 +148,6 @@ namespace DroidDeck.Services
         private static string GetStr(JsonElement el, string prop)
             => el.TryGetProperty(prop, out var v) && v.ValueKind == JsonValueKind.String ? (v.GetString() ?? "") : "";
 
-        // ---- Cache do MP3 ----
-        // SEGURANÇA: o id/url compõe um caminho de arquivo. Deriva-se um nome seguro (só
-        // alfanumérico) do id quando válido; senão, um hash da url. Nunca usa a string crua.
         private static bool IsSafeId(string? id)
         {
             if (string.IsNullOrEmpty(id) || id.Length > 128) return false;
@@ -189,16 +156,11 @@ namespace DroidDeck.Services
             return true;
         }
 
-        // Um efeito sonoro tem dezenas de KB; o teto barra uma url que aponte para um arquivo
-        // enorme. O cache inteiro tambem tem teto: antes crescia sem limite.
         internal const long MaxSoundBytes = 5L * 1024 * 1024;
         internal const long MaxCacheBytes = 200L * 1024 * 1024;
 
         internal static string CacheFileFor(string id, string url)
         {
-            // Hash estavel entre execucoes. O GetHashCode() de string e randomizado por
-            // processo no .NET Core: o mesmo som virava outro arquivo a cada boot, era
-            // baixado de novo e a pasta so crescia.
             var name = IsSafeId(id)
                 ? id
                 : "u-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(url)))[..32].ToLowerInvariant();
@@ -210,21 +172,20 @@ namespace DroidDeck.Services
             var path = CacheFileFor(id, url);
             if (File.Exists(path) && new FileInfo(path).Length > 0)
             {
-                // Marca o uso para a limpeza por LRU (o Windows nao atualiza o LastAccessTime).
                 try { File.SetLastWriteTimeUtc(path, DateTime.UtcNow); } catch { }
                 return path;
             }
 
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-                throw new InvalidOperationException("URL de som invalida (so http/https).");
+                throw new InvalidOperationException("Invalid sound URL (http/https only).");
 
             var http = _httpFactory.CreateClient();
             http.Timeout = TimeSpan.FromSeconds(20);
             using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead);
             response.EnsureSuccessStatusCode();
             if (response.Content.Headers.ContentLength > MaxSoundBytes)
-                throw new InvalidOperationException("Arquivo de som grande demais.");
+                throw new InvalidOperationException("Sound file is too large.");
 
             var tmp = path + ".tmp";
             try
@@ -232,7 +193,6 @@ namespace DroidDeck.Services
                 await using (var source = await response.Content.ReadAsStreamAsync())
                 await using (var target = File.Create(tmp))
                 {
-                    // Content-Length pode faltar ou mentir: conta o que chega de fato.
                     var buffer = new byte[81920];
                     long total = 0;
                     int read;
@@ -240,7 +200,7 @@ namespace DroidDeck.Services
                     {
                         total += read;
                         if (total > MaxSoundBytes)
-                            throw new InvalidOperationException("Arquivo de som grande demais.");
+                            throw new InvalidOperationException("Sound file is too large.");
                         await target.WriteAsync(buffer.AsMemory(0, read));
                     }
                 }
@@ -256,7 +216,6 @@ namespace DroidDeck.Services
             return path;
         }
 
-        /// <summary>Apaga os sons usados ha mais tempo ate o cache caber em <paramref name="maxBytes"/>.</summary>
         internal static void PruneCache(string dir, long maxBytes, string? keep = null)
         {
             try
@@ -270,18 +229,15 @@ namespace DroidDeck.Services
                     if (total <= maxBytes) break;
                     if (keep != null && string.Equals(f.FullName, Path.GetFullPath(keep), StringComparison.OrdinalIgnoreCase))
                         continue;
-                    // O tamanho antes: depois do Delete o FileInfo relê o disco e lança.
                     var length = f.Length;
                     try { f.Delete(); total -= length; } catch { }
                 }
             }
             catch
             {
-                // limpeza e best-effort: nunca impede o som de tocar
             }
         }
 
-        // ---- Playback ----
         public async Task PlayAsync(string id, string url, string? title)
         {
             if (string.IsNullOrWhiteSpace(url))
@@ -298,14 +254,13 @@ namespace DroidDeck.Services
                 return;
             }
 
-            // Para o que estiver tocando (1 som por vez).
             StopAll(broadcast: false);
 
             var cfg = LoadConfig();
             float vol = Math.Clamp(cfg.Volume, 0, 100) / 100f;
 
             var targets = new List<MMDevice?>();
-            targets.Add(ResolveDevice(cfg.CableDeviceId)); // null => dispositivo padrão
+            targets.Add(ResolveDevice(cfg.CableDeviceId));
             if (cfg.MonitorEnabled && !string.IsNullOrWhiteSpace(cfg.MonitorDeviceId))
             {
                 var monitor = ResolveDevice(cfg.MonitorDeviceId);
@@ -321,12 +276,10 @@ namespace DroidDeck.Services
                     {
                         var reader = new MediaFoundationReader(path);
                         var sample = new VolumeSampleProvider(reader.ToSampleProvider()) { Volume = vol };
-                        // WasapiOut em shared mode reamostra automaticamente pro mix format do device.
                         IWavePlayer output = device != null
                             ? new WasapiOut(device, AudioClientShareMode.Shared, false, 200)
                             : new WasapiOut(AudioClientShareMode.Shared, 200);
                         output.Init(sample);
-                        // A posse do device passa pro ActivePlayback a partir daqui.
                         playback = new ActivePlayback { Output = output, Reader = reader, Device = device };
                         output.PlaybackStopped += (_, __) => OnPlaybackStopped(playback);
                         output.Play();
@@ -335,7 +288,6 @@ namespace DroidDeck.Services
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Falha ao iniciar playback no device {Device}", device?.FriendlyName ?? "(padrão)");
-                        // Falhou antes de virar ActivePlayback: ninguém mais liberaria o device.
                         if (playback == null) { try { device?.Dispose(); } catch { } }
                     }
                 }
@@ -391,7 +343,6 @@ namespace DroidDeck.Services
             }
             foreach (var pb in toStop)
             {
-                // PlaybackStopped ainda dispara, mas o item já saiu de _active — o handler vira no-op.
                 try { pb.Output.Stop(); } catch { }
                 try { pb.Output.Dispose(); } catch { }
                 try { pb.Reader.Dispose(); } catch { }
@@ -400,7 +351,6 @@ namespace DroidDeck.Services
             if (broadcast) _ = BroadcastAsync();
         }
 
-        // ---- Dispositivos de saída (pro app escolher cabo/monitor) ----
         public List<object> GetOutputDevices()
         {
             var list = new List<object>();
@@ -409,7 +359,6 @@ namespace DroidDeck.Services
                 using var en = new MMDeviceEnumerator();
                 foreach (var d in en.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active))
                 {
-                    // Só precisamos de duas strings; o MMDevice é COM e morre aqui.
                     using (d)
                     {
                         list.Add(new { id = d.ID, name = d.FriendlyName });

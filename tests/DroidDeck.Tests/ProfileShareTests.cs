@@ -21,9 +21,9 @@ namespace DroidDeck.Tests
             IsDefault = true,
             Buttons =
             {
-                new DeckButton { Id = "b1", Row = 0, Column = 0, Label = "Cena", IconName = "videocam", IconBase64 = new string('A', 5000),
-                    ColumnSpan = 2, Action = new DeckAction { Type = "obs", Parameters = { ["operation"] = "setScene", ["scene"] = "Jogo" } } },
-                new DeckButton { Id = "b2", Row = 1, Column = 0, Label = "Copiar",
+                new DeckButton { Id = "b1", Row = 0, Column = 0, Label = "Scene", IconName = "videocam", IconBase64 = new string('A', 5000),
+                    ColumnSpan = 2, Action = new DeckAction { Type = "obs", Parameters = { ["operation"] = "setScene", ["scene"] = "Game" } } },
+                new DeckButton { Id = "b2", Row = 1, Column = 0, Label = "Copy",
                     Action = new DeckAction { Type = "hotkey", Parameters = { ["keys"] = "^c" } } },
             },
         };
@@ -44,7 +44,7 @@ namespace DroidDeck.Tests
             Assert.Null(p.Buttons[0].IconBase64);
             Assert.Equal("videocam", p.Buttons[0].IconName);
             Assert.Equal(2, p.Buttons[0].ColumnSpan);
-            Assert.Equal("Jogo", p.Buttons[0].Action!.Parameters["scene"]);
+            Assert.Equal("Game", p.Buttons[0].Action!.Parameters["scene"]);
             Assert.NotEqual("b1", p.Buttons[0].Id);
         }
 

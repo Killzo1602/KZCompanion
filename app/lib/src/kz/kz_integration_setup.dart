@@ -5,8 +5,6 @@ import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Spotify: login pelo navegador do PC. So o Client ID (sem segredo) passa por aqui; o token
-/// fica no PC. Estas telas so aparecem no configurador (PC).
 class KzSpotifySetup extends StatefulWidget {
   const KzSpotifySetup({super.key, required this.client});
   final DroidDeckClient client;
@@ -155,7 +153,6 @@ class _KzSpotifySetupState extends State<KzSpotifySetup> {
   }
 }
 
-/// OBS: endereco, porta e senha do WebSocket. A senha so vai ao PC e nunca volta.
 class KzObsSetup extends StatefulWidget {
   const KzObsSetup({super.key, required this.client});
   final DroidDeckClient client;

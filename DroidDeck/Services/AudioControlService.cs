@@ -19,9 +19,6 @@ namespace DroidDeck.Services
             if (string.IsNullOrEmpty(processName)) return 0;
             int affected = 0;
 
-            // try to find sessions by enumerating audio endpoints and their sessions
-            // O device e cada sessão são COM: descartar sempre, senão só saem na finalização
-            // do GC e empilham esperas de RPC entre apartamentos.
             foreach (var device in _enumerator.EnumerateAudioEndPoints(NAudio.CoreAudioApi.DataFlow.Render, NAudio.CoreAudioApi.DeviceState.Active))
             {
                 using (device)

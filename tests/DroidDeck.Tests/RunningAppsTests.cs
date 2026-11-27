@@ -13,7 +13,6 @@ using Xunit;
 
 namespace DroidDeck.Tests
 {
-    /// <summary>Agrupamento e filtros: logica pura, sem janela nenhuma.</summary>
     public class RunningAppsGroupingTests
     {
         private static RawWindow W(long hwnd, uint pid, string title, string? path, string process = "app",
@@ -25,7 +24,6 @@ namespace DroidDeck.Tests
         [Fact]
         public void VariosProcessosDoMesmoExe_ViramUmAppSo()
         {
-            // Firefox: um processo de janela e filhos, todos do mesmo firefox.exe.
             var apps = RunningAppsGrouper.Group(new[]
             {
                 W(1, 100, "Mozilla Firefox", @"C:\Program Files\Mozilla Firefox\firefox.exe", "firefox"),
@@ -106,7 +104,6 @@ namespace DroidDeck.Tests
         [Fact]
         public void AppDaLoja_AgrupaPeloProcessoReal_EGuardaOPidDoFrame()
         {
-            // Janela no ApplicationFrameHost (pid 50); o app de verdade e o 60.
             var app = Assert.Single(RunningAppsGrouper.Group(new[]
             {
                 W(9, 60, "Calculadora", @"C:\Program Files\WindowsApps\Calc\Calculator.exe", "CalculatorApp", frame: 50),
@@ -149,18 +146,13 @@ namespace DroidDeck.Tests
         private const string Win = @"C:\Windows";
 
         [Theory]
-        // Steam: a janela e do steamwebhelper, que mora dentro da pasta do steam.exe.
         [InlineData(@"C:\Program Files (x86)\Steam\steam.exe", @"C:\Program Files (x86)\Steam\bin\cef\cef.win7x64\steamwebhelper.exe", true)]
         [InlineData(@"c:\program files (x86)\steam\STEAM.EXE", @"C:\Program Files (x86)\Steam\bin\cef\cef.win7x64\steamwebhelper.exe", true)]
-        // Programa iniciado pelo Explorer nunca vira "Windows Explorer".
         [InlineData(@"C:\Windows\explorer.exe", @"C:\Windows\System32\notepad.exe", false)]
         [InlineData(@"C:\Windows\explorer.exe", @"C:\Program Files\Some App\app.exe", false)]
-        // Pastas irmas e nomes parecidos nao contam como "dentro".
         [InlineData(@"C:\Apps\Steam\steam.exe", @"C:\Apps\SteamHelper\helper.exe", false)]
         [InlineData(@"C:\Apps\One\one.exe", @"C:\Apps\Two\two.exe", false)]
-        // Mesmo executavel: o agrupamento por caminho ja resolve.
         [InlineData(@"C:\Apps\One\one.exe", @"C:\Apps\One\one.exe", false)]
-        // Pai na raiz do drive seria dono de tudo.
         [InlineData(@"C:\launcher.exe", @"C:\Games\Foo\foo.exe", false)]
         [InlineData(null, @"C:\Apps\One\one.exe", false)]
         [InlineData(@"C:\Apps\One\one.exe", null, false)]
@@ -190,7 +182,6 @@ namespace DroidDeck.Tests
             Assert.False(RunningAppsGrouper.TryParseWindowId(id, out _, out _));
     }
 
-    /// <summary>Janelas de verdade (WinForms no proprio processo de teste): foco, minimizar, fechar.</summary>
     [Trait("Category", "RequiresDesktop")]
     public class RunningAppsLiveTests : IDisposable
     {
@@ -252,7 +243,6 @@ namespace DroidDeck.Tests
             Open(t1);
             Open(t2);
             var app = Assert.Single(_service.List().Where(a => a.Windows.Any(w => w.Title == t1)));
-            // As duas janelas do mesmo processo de teste caem no mesmo app.
             Assert.Contains(app.Windows, w => w.Title == t2);
             Assert.Equal(Environment.ProcessId, (int)app.Pids.Single());
             Assert.NotNull(app.ExePath);
@@ -291,12 +281,12 @@ namespace DroidDeck.Tests
         {
             var t = NewTitle();
             var w = Open(t);
-            w.CancelClose = true; // simula o "salvar alteracoes?"
+            w.CancelClose = true;
             var app = Mine(t)!;
             var result = await _service.CloseAsync(app.Id, app.Windows.First(x => x.Title == t).Id);
             Assert.Equal(AppActionOutcome.StillOpen, result.Outcome);
             Assert.False(w.Closed);
-            Assert.NotNull(Mine(t)); // a janela segue viva: nada foi forcado
+            Assert.NotNull(Mine(t));
         }
 
         [Fact]
@@ -335,7 +325,6 @@ namespace DroidDeck.Tests
             var t = NewTitle();
             Open(t);
             var app = Mine(t)!;
-            // HWND que nao e janela deste app, mas com o PID certo: recusado.
             var forged = RunningAppsGrouper.WindowId(0x10010, (uint)Environment.ProcessId);
             Assert.Equal(AppActionOutcome.WindowGone, (await _service.FocusAsync(app.Id, forged)).Outcome);
             Assert.Equal(AppActionOutcome.AppGone, (await _service.FocusAsync("0123456789ab")).Outcome);
@@ -351,7 +340,7 @@ namespace DroidDeck.Tests
             Assert.True(_service.IsPumping);
             _service.Watch("c2");
             _service.Unwatch("c1");
-            Assert.True(_service.IsPumping); // ainda ha quem observe
+            Assert.True(_service.IsPumping);
             _service.Unwatch("c2");
             Assert.False(_service.IsPumping);
             Assert.Equal(0, _service.WatcherCount);
@@ -364,11 +353,10 @@ namespace DroidDeck.Tests
             Open(t);
             var png = _service.IconFor(Mine(t)!.Id);
             Assert.NotNull(png);
-            Assert.Equal(0x89, png![0]); // assinatura PNG
+            Assert.Equal(0x89, png![0]);
         }
     }
 
-    /// <summary>API HTTP: autenticacao, validacao de entrada e confirmacao do Close.</summary>
     public class RunningAppsEndpointsTests : IClassFixture<WebApplicationFactory<DroidDeck.Program>>
     {
         private readonly WebApplicationFactory<DroidDeck.Program> _factory;
@@ -402,8 +390,6 @@ namespace DroidDeck.Tests
             var body = await response.Content.ReadAsStringAsync();
             Assert.Contains("\"apps\"", body);
             Assert.DoesNotContain("exePath", body, StringComparison.OrdinalIgnoreCase);
-            // Nenhum caminho de arquivo no JSON. O titulo da janela e texto do usuario (um Explorer
-            // aberto em "D:\" tem esse caminho no titulo), entao ele fica fora da checagem.
             var semTitulos = System.Text.RegularExpressions.Regex.Replace(body, "\"title\":\"(?:[^\"\\\\]|\\\\.)*\"", "\"title\":\"\"");
             Assert.DoesNotContain(":\\\\", semTitulos);
         }

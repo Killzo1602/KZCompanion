@@ -23,17 +23,11 @@ namespace DroidDeck.Services
         private volatile SystemStats? _lastSensors;
         private PerformanceCounter? _cpuCounter;
 
-        // Estado para throughput de rede (deltas por segundo).
         private DateTime _lastNetTime = DateTime.UtcNow;
 
-        // Counters de GPU (uso) por instância de engine 3D; cacheados entre ticks.
         private readonly Dictionary<string, PerformanceCounter> _gpuCounters = new();
-        // A enumeração de instâncias ("GetInstanceNames") é cara e aloca uma string por
-        // engine de GPU a cada chamada. Só rescaneia a cada N ticks; entre eles, só lê os
-        // counters já cacheados (evita pressão de GC constante no loop de 1s).
         private int _gpuTick = 0;
 
-        // Espaço em disco muda devagar: lê a cada 30 s e repete o último nos outros ticks.
         private const int DiskEveryTicks = 30;
         private List<DiskStat>? _disks;
         private const int GpuRescanEveryTicks = 30;
@@ -62,7 +56,6 @@ namespace DroidDeck.Services
                 }
                 catch
                 {
-                    // Fallback for PT-BR
                     try { _cpuCounter = new PerformanceCounter("Processador", "% tempo de processador", "_Total"); }
                     catch (Exception ex) { _logger.LogError(ex, "Failed to init CPU Counter"); }
                 }
@@ -83,8 +76,6 @@ namespace DroidDeck.Services
             {
                 try
                 {
-                    // Sem clientes ouvindo, não computa nem transmite nada — evita o poll
-                    // de mídia WinRT (caro) e as alocações de rede/GPU 24/7 com o app ocioso.
                     if (DeckHub.ConnectedCount <= 0)
                     {
                         try { await Task.Delay(1000, stoppingToken); } catch (OperationCanceledException) { break; }
@@ -94,14 +85,13 @@ namespace DroidDeck.Services
                     var tickStart = Stopwatch.GetTimestamp();
                     var cpu = _cpuCounter?.NextValue() ?? 0;
 
-                    // RAM via GlobalMemoryStatusEx: total, disponível e % de uso de uma vez.
                     var mem = new MEMORYSTATUSEX();
                     float ramTotal = 0, ramAvailable = 0, ramLoad = 0;
                     if (GlobalMemoryStatusEx(mem))
                     {
-                        ramTotal = mem.ullTotalPhys / (1024f * 1024f); // MB
-                        ramAvailable = mem.ullAvailPhys / (1024f * 1024f); // MB
-                        ramLoad = mem.dwMemoryLoad; // % usada (0-100)
+                        ramTotal = mem.ullTotalPhys / (1024f * 1024f);
+                        ramAvailable = mem.ullAvailPhys / (1024f * 1024f);
+                        ramLoad = mem.dwMemoryLoad;
                     }
 
                     var (netUp, netDown) = SampleNetwork();
@@ -118,13 +108,14 @@ namespace DroidDeck.Services
                         Disks = tick % DiskEveryTicks == 0 || _disks == null ? (_disks = SampleDisks()) : _disks,
                     };
 
-                    // Sensores vêm do cache da thread própria (SensorLoop): nunca bloqueiam o envio.
                     var ls = _lastSensors;
                     if (ls != null)
                     {
                         stats.CpuTemp = ls.CpuTemp; stats.CpuPower = ls.CpuPower; stats.GpuTemp = ls.GpuTemp;
                         stats.GpuHotspot = ls.GpuHotspot; stats.GpuPower = ls.GpuPower; stats.SsdTemp = ls.SsdTemp;
                         stats.Drives = ls.Drives; stats.Fans = ls.Fans;
+                        stats.CpuClock = ls.CpuClock; stats.GpuClock = ls.GpuClock;
+                        stats.GpuMemUsed = ls.GpuMemUsed; stats.GpuMemTotal = ls.GpuMemTotal;
                         stats.CpuSensorCount = ls.CpuSensorCount;
                         stats.CpuDriverMissing = ls.CpuDriverMissing;
                         stats.SensorSource = ls.SensorSource;
@@ -132,13 +123,10 @@ namespace DroidDeck.Services
                     stats.SensorsElevated = HardwareSensors.IsElevated;
                     stats.NetAdapter = _netAdapter;
 
-                    // Broadcast to clients listening on "ReceiveSystemStats"
                     await _hubContext.Clients.All.SendAsync("ReceiveSystemStats", stats, cancellationToken: stoppingToken);
                     var tickMs = Stopwatch.GetElapsedTime(tickStart).TotalMilliseconds;
                     if (tickMs > 1500) _logger.LogWarning("Ciclo de estatisticas lento: {ms} ms (CPU/GPU sob carga?)", (int)tickMs);
 
-                    // Estado de reprodução de mídia (pra botões play/pause refletirem).
-                    // A cada 3s: o acesso WinRT (RequestAsync) é caro; 1s era exagero.
                     if (tick % 3 == 0)
                     {
                         try
@@ -160,13 +148,11 @@ namespace DroidDeck.Services
                 try { await Task.Delay(1000, stoppingToken); } catch (OperationCanceledException) { break; }
             }
 
-            // Libera os PerformanceCounter ao encerrar o serviço.
             try { _cpuCounter?.Dispose(); } catch { }
             foreach (var c in _gpuCounters.Values) { try { c.Dispose(); } catch { } }
             _gpuCounters.Clear();
         }
 
-        /// <summary>Unidades fixas prontas (HD/SSD; pendrive e rede ficam de fora), em ordem de letra.</summary>
         public static List<DiskStat> SampleDisks()
         {
             var list = new List<DiskStat>();
@@ -185,17 +171,13 @@ namespace DroidDeck.Services
                             FreeBytes = d.TotalFreeSpace,
                         });
                     }
-                    catch { } // unidade que some no meio da leitura
+                    catch { }
                 }
             }
             catch { }
             return list.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        // Vazao real por adaptador fisico: delta de bytes (IPv4+IPv6) / tempo, so de placas
-        // ativas. Virtuais (Hyper-V, WSL, VPN, Bluetooth) ficam de fora: contariam o mesmo
-        // trafego duas vezes ou trafego interno. Contador que recua (adaptador reiniciou)
-        // so descarta aquela amostra.
         private readonly Dictionary<string, (long Sent, long Recv)> _netLast = new();
         private string _netAdapter = "";
 
@@ -247,7 +229,6 @@ namespace DroidDeck.Services
             return ((float)up, (float)down);
         }
 
-        /// <summary>Le os sensores numa thread propria, a cada 2 s, so com cliente conectado.</summary>
         private void SensorLoop(CancellationToken token)
         {
             while (!token.IsCancellationRequested)
@@ -273,7 +254,6 @@ namespace DroidDeck.Services
         {
             try
             {
-                // Rescan das instâncias só de tempos em tempos (caro). No 1º tick e a cada N.
                 if (_gpuTick++ % GpuRescanEveryTicks == 0)
                 {
                     var cat = new PerformanceCounterCategory("GPU Engine");
@@ -286,7 +266,7 @@ namespace DroidDeck.Services
                         if (!_gpuCounters.ContainsKey(n))
                         {
                             var c = new PerformanceCounter("GPU Engine", "Utilization Percentage", n, true);
-                            try { c.NextValue(); } catch { } // prime: 1ª leitura é 0
+                            try { c.NextValue(); } catch { }
                             _gpuCounters[n] = c;
                         }
                     }
@@ -306,7 +286,7 @@ namespace DroidDeck.Services
             }
             catch
             {
-                return 0; // GPU Engine indisponível neste sistema
+                return 0;
             }
         }
 

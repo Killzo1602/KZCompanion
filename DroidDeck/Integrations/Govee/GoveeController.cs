@@ -8,7 +8,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DroidDeck.Controllers
 {
-    /// <summary>Busca dos aparelhos Govee na rede (lista do campo "Aparelho" do editor).</summary>
     [Route("api/govee")]
     [ApiController]
     public class GoveeController : ControllerBase

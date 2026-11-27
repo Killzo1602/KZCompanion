@@ -4,17 +4,6 @@ using System.Linq;
 
 namespace DroidDeck
 {
-    /// <summary>
-    /// Snapshot (DTO) de um dispositivo de áudio e suas sessões.
-    ///
-    /// Regra de ouro deste tipo: ele NUNCA guarda referência COM viva. Todo
-    /// <see cref="MMDevice"/>/<see cref="AudioSessionControl"/> usado para montar o snapshot é
-    /// descartado antes de o objeto ser devolvido. Sem isso, cada poll de
-    /// /api/v1/Mixer/{in,out} (a cada 60s) deixava para trás um proxy COM por dispositivo e
-    /// vários por sessão; a liberação só acontecia na finalização do GC, que precisa
-    /// marshalar de volta para o apartamento de origem — o que empilhava threads bloqueadas
-    /// em espera de RPC (LpcReply) até o processo passar de 14 mil threads / 1 GB de RAM.
-    /// </summary>
     public class MixerMaster
     {
         private Dictionary<int, MixerChannel>? channels;
@@ -30,7 +19,6 @@ namespace DroidDeck
 
         public MixerMaster(DroidDeck.Audio.IAudioDevice device)
         {
-            // construct from abstraction
             Id = device.Id;
             Title = device.FriendlyName.Contains("(") ? device.FriendlyName.Substring(0, device.FriendlyName.IndexOf("(")).Trim() : device.FriendlyName;
             Description = device.DeviceFriendlyName;
@@ -42,15 +30,10 @@ namespace DroidDeck
                 channels = new Dictionary<int, MixerChannel>();
                 foreach (var session in device.Sessions)
                 {
-                    // A sessão é COM por baixo do adapter; descartar após copiar os valores.
                     using (session)
                     {
                         if (session.IsSystemSoundsSession) continue;
                         var channel = new MixerChannel();
-                        // O comentário anterior dizia que a abstração não expunha info de
-                        // processo para extrair ícone — mas expõe GetProcessID(), que é tudo
-                        // de que o DescribeFromProcess precisa. Sem esta chamada os canais
-                        // vinham sem nome e sem ícone por este caminho.
                         var pid = (int)session.GetProcessID();
                         channel.Id = pid;
                         channel.DescribeFromProcess(pid);
@@ -103,10 +86,6 @@ namespace DroidDeck
                 channels = new Dictionary<int, MixerChannel>();
                 for (int i = 0; i < sessions.Count; i++)
                 {
-                    // sessions[i] materializa um AudioSessionControl NOVO a cada acesso
-                    // (SessionCollection não cacheia). Ler o indexer uma única vez por
-                    // iteração e descartar: antes eram três leituras por sessão, ou seja,
-                    // três proxies COM vazados por sessão por chamada.
                     using var session = sessions[i];
                     if (session.IsSystemSoundsSession) continue;
                     channels[(int)session.GetProcessID] = new MixerChannel(session, masterVolume);
@@ -119,8 +98,6 @@ namespace DroidDeck
             using var en = new MMDeviceEnumerator();
             foreach (MMDevice d in en.EnumerateAudioEndPoints(dataFlow, deviceState))
             {
-                // O MixerMaster copia tudo que precisa no construtor, então o MMDevice pode
-                // (e deve) morrer aqui — ele não sobrevive até a serialização da resposta.
                 using (d)
                 {
                     devices.Add(new MixerMaster(d));
@@ -165,9 +142,6 @@ namespace DroidDeck
 
                 if (data.Session >= 0 && device.DataFlow.CompareTo(DataFlow.Render) == 0)
                 {
-                    // Resolve a sessão AO VIVO pelo PID, no device recém-aberto. Antes usava
-                    // o AudioSessionControl que este MixerMaster tinha guardado desde a
-                    // construção — um proxy COM potencialmente obsoleto (e vazado).
                     var sessions = device.AudioSessionManager.Sessions;
                     for (int i = 0; i < sessions.Count; i++)
                     {

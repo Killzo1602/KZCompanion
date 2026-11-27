@@ -19,11 +19,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Botoes de informacao: clima, saida de um comando, valor de uma URL e "tocando agora".
-    /// O relogio e calculado no celular; o resto e buscado aqui, so para os botoes que existem
-    /// nos perfis, e vai para os clientes quando muda.
-    /// </summary>
     public class InfoService : BackgroundService
     {
         public const string Event = "ReceiveInfoState";
@@ -70,26 +65,19 @@ namespace DroidDeck.Services
             public string Text { get; set; } = "";
             public string? Sub { get; set; }
 
-            /// <summary>
-            /// Sub traduzivel (mensagens de erro): vira texto por idioma em Localized(), na hora de
-            /// enviar. Nao vai no JSON.
-            /// </summary>
             [System.Text.Json.Serialization.JsonIgnore]
             public L.Text? SubText { get; set; }
 
-            /// <summary>Clima: codigo WMO do tempo (o app escolhe o icone).</summary>
             public int? Code { get; set; }
             public bool? IsDay { get; set; }
             public bool Error { get; set; }
 
-            /// <summary>Uso de IA: uma linha por medida (o app escolhe o nome e formata o número).</summary>
             public List<InfoRow>? Rows { get; set; }
 
             public bool SameAs(InfoValue? o) =>
                 o != null && o.Text == Text && o.Sub == Sub && o.SubText?.Plain == SubText?.Plain && o.Code == Code && o.IsDay == IsDay && o.Error == Error
                 && RowsKey(o.Rows) == RowsKey(Rows);
 
-            /// <summary>Copia com o SubText ja no idioma atual (L.Language).</summary>
             public InfoValue Localized() => SubText == null ? this : new InfoValue
             {
                 Text = Text, Sub = Short(SubText.ToString(), 60), Code = Code, IsDay = IsDay, Error = Error, Rows = Rows,
@@ -99,10 +87,6 @@ namespace DroidDeck.Services
                 rows == null ? "" : string.Join(";", rows.Select(r => $"{r.Key}:{r.Percent}:{r.Count}:{r.ResetsAt}"));
         }
 
-        /// <summary>
-        /// Key: "session" e "week" (limite do plano, com Percent e ResetsAt) ou "today" e "week_tokens"
-        /// (tokens, em Count).
-        /// </summary>
         public class InfoRow
         {
             public string Key { get; set; } = "";
@@ -121,8 +105,6 @@ namespace DroidDeck.Services
 
         public NowPlayingInfo? NowPlaying { get; private set; }
 
-        /// <summary>Valor de cada botao de informacao, por id do botao.</summary>
-        /// <summary>Valores no idioma atual (da requisicao ou do grupo do SignalR).</summary>
         public object GetState() => _values.ToDictionary(kv => kv.Key, kv => kv.Value.Localized());
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -137,7 +119,6 @@ namespace DroidDeck.Services
                         .Where(b => !string.IsNullOrEmpty(b.DynamicType))
                         .ToList();
 
-                    // Botoes apagados ou que mudaram de tipo saem do estado.
                     var ids = buttons.Where(b => b.DynamicType is TypeWeather or TypeCommand or TypeUrl or TypeNotifications or TypeAiUsage)
                         .Select(b => b.Id).ToHashSet();
                     var removed = false;
@@ -224,7 +205,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Aplica o modelo "format" (ex.: "{value} °C") ao texto obtido.</summary>
         public static InfoValue Format(DeckButton b, string raw)
         {
             var template = Param(b, "format", "{value}");
@@ -233,8 +213,6 @@ namespace DroidDeck.Services
         }
 
         private static string Short(string s, int max) => s.Length <= max ? s : s[..max];
-
-        // ---- Uso de IA ----
 
         private async Task<InfoValue> AiUsageAsync(string provider, string show)
         {
@@ -259,19 +237,12 @@ namespace DroidDeck.Services
             return new InfoValue { Rows = rows };
         }
 
-        // ---- Notificacoes do Windows ----
-
-        /// <summary>
-        /// Quantas notificacoes estao na central do Windows (de um app, se "app" vier: parte do
-        /// nome como aparece no Windows, ex.: "Discord", "WhatsApp"). O Windows pede permissao
-        /// uma vez (Configuracoes > Privacidade > Notificacoes).
-        /// </summary>
         private static async Task<InfoValue> NotificationsAsync(string app)
         {
             var listener = Windows.UI.Notifications.Management.UserNotificationListener.Current;
             var access = await listener.RequestAccessAsync();
             if (access != Windows.UI.Notifications.Management.UserNotificationListenerAccessStatus.Allowed)
-                return new InfoValue { Text = "—", SubText = new L.Text("Sem permissão"), Error = true };
+                return new InfoValue { Text = "—", SubText = new L.Text("No permission"), Error = true };
             var list = await listener.GetNotificationsAsync(Windows.UI.Notifications.NotificationKinds.Toast);
             var count = 0;
             foreach (var n in list)
@@ -283,8 +254,6 @@ namespace DroidDeck.Services
             }
             return new InfoValue { Text = count.ToString(CultureInfo.InvariantCulture), Sub = app.Length > 0 ? app : null };
         }
-
-        // ---- Comando ----
 
         private static async Task<string> RunCommandAsync(string command)
         {
@@ -316,15 +285,12 @@ namespace DroidDeck.Services
             return output;
         }
 
-        // ---- URL ----
-
         private async Task<string> FetchUrlAsync(string url, string path)
         {
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
                 throw new InvalidOperationException("URL inválida");
             var client = _http.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(10);
-            // Varias APIs (GitHub, p.ex.) recusam pedidos sem User-Agent.
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.UserAgent.ParseAdd("DroidDeck");
             using var response = await client.SendAsync(request);
@@ -334,7 +300,6 @@ namespace DroidDeck.Services
             return string.IsNullOrWhiteSpace(path) ? body.Trim() : JsonPath(body, path);
         }
 
-        /// <summary>Le um valor de um JSON por um caminho simples: "current.temp", "items[0].name".</summary>
         public static string JsonPath(string json, string path)
         {
             using var doc = JsonDocument.Parse(json);
@@ -368,8 +333,6 @@ namespace DroidDeck.Services
             };
         }
 
-        // ---- Clima (Open-Meteo, sem chave) ----
-
         private async Task<InfoValue> WeatherAsync(string city, string units)
         {
             if (string.IsNullOrWhiteSpace(city)) throw new InvalidOperationException("Sem cidade");
@@ -381,8 +344,6 @@ namespace DroidDeck.Services
             var client = _http.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(10);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("DroidDeck");
-            // O valor vai para todos os celulares de uma vez, então não há idioma do pedido:
-            // o nome da cidade sai no idioma do Windows (antes era sempre português).
             var lang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
             using var geo = JsonDocument.Parse(await client.GetStringAsync(
                 $"https://geocoding-api.open-meteo.com/v1/search?count=1&language={lang}&name=" + Uri.EscapeDataString(city)));
@@ -408,16 +369,12 @@ namespace DroidDeck.Services
             return value;
         }
 
-        // ---- Tocando agora ----
-
         private async Task RefreshNowPlayingAsync()
         {
             var info = await _media.GetNowPlayingAsync(includeThumbnail: false);
             var key = info == null ? "" : info.Title + "|" + info.Artist;
             var playing = info?.PlaybackStatus == "Playing";
 
-            // A leitura da capa as vezes falha (broker de midia ocupado): tenta de novo
-            // algumas vezes antes de desistir dela para esta faixa.
             var retryThumb = key == _nowPlayingKey && info != null && NowPlaying?.ThumbnailBase64 == null && _thumbRetries < 3;
             if (key == _nowPlayingKey && NowPlaying != null && NowPlaying.Playing == playing && !retryThumb) return;
 
@@ -440,11 +397,9 @@ namespace DroidDeck.Services
             catch { }
         }
 
-        /// <summary>Reduz a capa para ~200 px em JPEG: a original passa de 250 KB e vai para todos os celulares.</summary>
         public static string? Shrink(string? base64, int size = 200)
         {
             if (string.IsNullOrEmpty(base64)) return base64;
-            // A midia do Windows entrega "data:image/...;base64,<dados>".
             var comma = base64.StartsWith("data:", StringComparison.Ordinal) ? base64.IndexOf(',') : -1;
             if (comma >= 0) base64 = base64[(comma + 1)..];
             try

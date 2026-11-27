@@ -14,11 +14,6 @@ namespace DroidDeck.Lib.Input
         Win = 8,
     }
 
-    /// <summary>
-    /// Um toque: modificadores segurados + uma tecla. A tecla e uma virtual-key (teclas
-    /// nomeadas, como {ENTER}) ou um caractere (resolvido no layout do app em foco na hora
-    /// de enviar).
-    /// </summary>
     public readonly record struct KeyStroke(KeyModifiers Modifiers, ushort VirtualKey, char Char)
     {
         public bool IsChar => VirtualKey == 0;
@@ -27,18 +22,8 @@ namespace DroidDeck.Lib.Input
         public static KeyStroke ForChar(KeyModifiers mods, char c) => new(mods, 0, c);
     }
 
-    /// <summary>
-    /// Le a sintaxe do SendKeys do WinForms, que os botoes ja salvos usam, mais "#" = tecla
-    /// Windows (como no AutoHotkey; o SendKeys nao tinha como mandar a tecla Windows).
-    ///
-    ///   ^ Ctrl   + Shift   % Alt   # Win   -- valem para a proxima tecla ou grupo "( )"
-    ///   ~ ENTER   {ENTER} {F5} {TAB 3}     -- tecla nomeada, opcionalmente repetida
-    ///   {+} {^} {%} {#} {~} {(} {{} ...    -- o caractere literal
-    ///   qualquer outro caractere e digitado.
-    /// </summary>
     public static class KeySequence
     {
-        // Virtual-key codes (WinUser.h).
         private static readonly Dictionary<string, ushort> NamedKeys = new(StringComparer.OrdinalIgnoreCase)
         {
             ["BACKSPACE"] = 0x08, ["BS"] = 0x08, ["BKSP"] = 0x08,
@@ -136,11 +121,9 @@ namespace DroidDeck.Lib.Input
             if (pending != KeyModifiers.None) throw new FormatException("Modificador no fim sem tecla (ex.: \"^\" sozinho).");
         }
 
-        // {NOME}, {NOME n}, {x} literal (inclusive "{}}" e "{{}").
         private static void ParseBraced(string s, ref int i, KeyModifiers mods, List<KeyStroke> output)
         {
             int start = i + 1;
-            // "{}}" e o literal '}': o primeiro '}' faz parte do nome.
             int close = s.IndexOf('}', start + (start < s.Length && s[start] == '}' ? 1 : 0));
             if (close < 0) throw new FormatException($"'{{' sem '}}' correspondente (posicao {i}).");
 
@@ -168,7 +151,6 @@ namespace DroidDeck.Lib.Input
             for (int k = 0; k < count; k++) output.Add(stroke);
         }
 
-        /// <summary>Texto legivel de uma sequencia, para log.</summary>
         public static string Describe(IEnumerable<KeyStroke> strokes)
         {
             var sb = new StringBuilder();

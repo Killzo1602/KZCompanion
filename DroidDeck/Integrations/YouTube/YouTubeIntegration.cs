@@ -15,11 +15,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// YouTube Data API v3 com um cliente OAuth "App para computador" do proprio usuario
-    /// (Client ID + Client Secret, que nesse tipo de app nao sao secretos de verdade).
-    /// Le a transmissao ao vivo a cada minuto (a cota diaria e pequena) e manda mensagens no chat.
-    /// </summary>
     public class YouTubeIntegration : AccountIntegration
     {
         public const string Event = "ReceiveYouTubeState";
@@ -79,9 +74,9 @@ namespace DroidDeck.Integrations
             var clientId = (fields.GetValueOrDefault("clientId") ?? Get("clientId") ?? "").Trim();
             var secret = (fields.GetValueOrDefault("clientSecret") ?? "").Trim();
             if (!clientId.EndsWith(".apps.googleusercontent.com"))
-                throw new InvalidOperationException("O Client ID termina em .apps.googleusercontent.com.");
+                throw new InvalidOperationException("The Client ID ends in .apps.googleusercontent.com.");
             if (secret.Length == 0) secret = Get("clientSecret") ?? "";
-            if (secret.Length == 0) throw new InvalidOperationException("Falta o Client Secret.");
+            if (secret.Length == 0) throw new InvalidOperationException("The Client Secret is missing.");
             if (clientId != Get("clientId")) Clear();
             Set(("clientId", clientId), ("clientSecret", secret));
 
@@ -101,14 +96,14 @@ namespace DroidDeck.Integrations
         public override async Task<string> CallbackAsync(IQueryCollection query)
         {
             if (_pendingState == null || query["state"] != _pendingState)
-                return Html("YouTube", L.T("Este link de login expirou. Comece de novo pelo DroidDeck."));
+                return Html("YouTube", L.T("This login link has expired. Start again from KZ Companion."));
             _pendingState = null;
             if (!string.IsNullOrEmpty(query["error"]))
             {
-                _error = query["error"] == "access_denied" ? "Login cancelado." : $"O Google recusou: {query["error"]}";
+                _error = query["error"] == "access_denied" ? "Login cancelled." : $"O Google recusou: {query["error"]}";
                 return Html("YouTube", query["error"] == "access_denied"
-                    ? L.T("Login cancelado.")
-                    : L.T("O Google recusou: {error}", ("error", query["error"].ToString())));
+                    ? L.T("Login cancelled.")
+                    : L.T("Google refused: {error}", ("error", query["error"].ToString())));
             }
             try
             {
@@ -124,16 +119,16 @@ namespace DroidDeck.Integrations
                 using var me = await CallAsync(HttpMethod.Get, "/channels?part=snippet&mine=true");
                 var items = me?.RootElement.GetProperty("items");
                 if (items == null || items.Value.GetArrayLength() == 0)
-                    throw new InvalidOperationException("Esta conta Google não tem canal no YouTube.");
+                    throw new InvalidOperationException("This Google account has no YouTube channel.");
                 Set(("channel", items.Value[0].GetProperty("snippet").GetProperty("title").GetString()));
                 _nextRefresh = DateTime.MinValue;
                 await BroadcastAsync();
-                return Html(L.T("YouTube conectado"), L.T("Canal {channel}. Pode fechar esta aba.", ("channel", Channel)));
+                return Html(L.T("YouTube connected"), L.T("Channel {channel}. You can close this tab.", ("channel", Channel)));
             }
             catch (Exception ex)
             {
                 _error = ex.Message;
-                return Html("YouTube", L.T("Não deu certo: {error}", ("error", L.Message(ex))));
+                return Html("YouTube", L.T("That didn't work: {error}", ("error", L.Message(ex))));
             }
         }
 
@@ -191,7 +186,7 @@ namespace DroidDeck.Integrations
         public async Task SendChatAsync(string message)
         {
             if (_chatId == null) await RefreshAsync();
-            if (_chatId == null) throw new InvalidOperationException("Nenhuma transmissão ao vivo no canal.");
+            if (_chatId == null) throw new InvalidOperationException("No live stream on the channel.");
             await CallAsync(HttpMethod.Post, "/liveChat/messages?part=snippet", new
             {
                 snippet = new

@@ -6,21 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Condicoes dos passos da multi-acao (e dos gatilhos): "so se a live estiver no ar", "so
-    /// se o Spotify estiver aberto", "so entre 08:00 e 18:00"...
-    ///
-    ///   obs_streaming, obs_recording   -- estado do OBS
-    ///   discord_mute, discord_deaf     -- estado do Discord
-    ///   toggle_on      Value = id do botao de dois estados
-    ///   app_running    Value = processo (sem .exe)
-    ///   app_focused    Value = processo em foco
-    ///   time_between   Value = "08:00-18:00" (atravessa a meia-noite: "22:00-06:00")
-    ///   weekday        Value = dias, 0 = domingo: "1-5", "0,6"
-    ///   tally_program, tally_preview  Value = alvo do tally ("obs/scene:Cam 1"). Alvo indisponivel
-    ///                  (programa fechado) nao esta em nenhum dos dois: vale como falso
-    /// Condicao desconhecida vale como verdadeira: um passo nao some por um nome errado.
-    /// </summary>
     public class Conditions
     {
         public static readonly string[] Checks =
@@ -32,7 +17,6 @@ namespace DroidDeck.Services
 
         private readonly IServiceProvider _services;
 
-        /// <summary>Relogio (os testes trocam).</summary>
         public Func<DateTime> Now { get; set; } = () => DateTime.Now;
 
         public Conditions(IServiceProvider services) => _services = services;

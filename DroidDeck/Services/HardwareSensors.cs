@@ -7,15 +7,8 @@ using LibreHardwareMonitor.Hardware;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Temperaturas, ventoinhas e potencia pelo LibreHardwareMonitorLib (embutido: nao precisa
-    /// do programa separado). Sensor que o hardware/driver nao expoe fica null e o app mostra
-    /// "Indisponivel" -- nunca inventamos valor. Varios sensores (CPU, placa-mae) so aparecem
-    /// com o KZ Companion aberto como administrador.
-    /// </summary>
     public sealed class HardwareSensors : IDisposable
     {
-        /// <summary>Roda como administrador? Sem isso o LibreHardwareMonitor nao carrega o driver e a CPU nao expoe temperatura/potencia.</summary>
         public static bool IsElevated
         {
             get
@@ -30,11 +23,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>
-        /// O LibreHardwareMonitorLib 0.9.x le MSR/SMN (temperatura e potencia das CPUs AMD Zen e
-        /// Intel) pelo driver PawnIO, assinado e separado. Sem ele esses sensores ficam em 0 mesmo
-        /// como administrador; SSD e GPU nao dependem dele.
-        /// </summary>
         public static bool PawnIoInstalled
         {
             get
@@ -48,7 +36,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Despeja todos os sensores vistos (diagnostico: --sensors-dump).</summary>
         public string Dump()
         {
             EnsureOpen();
@@ -94,15 +81,14 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Le os sensores e preenche os campos de <paramref name="stats"/>.</summary>
         public void Fill(SystemStats stats)
         {
-            // App sem elevacao + auxiliar elevado conectado: as leituras completas (CPU, SSD, ventoinhas)
-            // vem dele; sem auxiliar, le localmente (GPU funciona sem administrador).
             if (!IsElevated && SensorHelper.TryGet(out var h))
             {
                 stats.CpuTemp = h.CpuTemp; stats.CpuPower = h.CpuPower; stats.GpuTemp = h.GpuTemp;
                 stats.GpuHotspot = h.GpuHotspot; stats.GpuPower = h.GpuPower; stats.SsdTemp = h.SsdTemp;
+                stats.CpuClock = h.CpuClock; stats.GpuClock = h.GpuClock;
+                stats.GpuMemUsed = h.GpuMemUsed; stats.GpuMemTotal = h.GpuMemTotal;
                 stats.Drives = h.Drives; stats.Fans = h.Fans; stats.CpuSensorCount = h.CpuSensorCount;
                 stats.SensorsElevated = h.SensorsElevated; stats.CpuDriverMissing = h.CpuDriverMissing;
                 stats.SensorSource = "helper";
@@ -121,7 +107,7 @@ namespace DroidDeck.Services
                     foreach (var n in names)
                     {
                         var hit = set.FirstOrDefault(x => x.Sensor.Name.Contains(n, StringComparison.OrdinalIgnoreCase));
-                        if (hit.Sensor != null) return Valid(hit.Sensor.Value);
+                        if (hit.Sensor != null) return Valid(hit.Sensor.Value, type);
                     }
                     return null;
                 }
@@ -135,8 +121,6 @@ namespace DroidDeck.Services
                                 .Select(x => x.Sensor.Value).Where(v => v.HasValue).DefaultIfEmpty(null).Max());
                 stats.CpuPower = Pick(IsCpu, SensorType.Power, "Package");
 
-                // A GPU "de verdade": a que tem temperatura de nucleo (a integrada do Ryzen so expoe
-                // SoC) e, entre as que tem, a NVIDIA/AMD com ventoinha. Evita misturar iGPU e dGPU.
                 var gpuHw = all.Where(x => IsAnyGpu(x.Hw)).Select(x => x.Hw).Distinct()
                     .OrderByDescending(h => all.Any(x => x.Hw == h && x.Sensor.SensorType == SensorType.Temperature && x.Sensor.Name.Contains("GPU Core", StringComparison.OrdinalIgnoreCase) && Valid(x.Sensor.Value) != null))
                     .ThenByDescending(h => all.Any(x => x.Hw == h && x.Sensor.SensorType == SensorType.Fan))
@@ -147,9 +131,13 @@ namespace DroidDeck.Services
                 stats.GpuHotspot = Pick(gpuFilter, SensorType.Temperature, "Hot Spot", "Hotspot", "Junction");
                 stats.GpuPower = Pick(gpuFilter, SensorType.Power, "GPU Package", "GPU Power", "Package");
 
-                // Um valor por unidade (o "Temperature" principal ou o composto do NVMe): ignora
-                // limites ("Warning/Critical") e sensores secundarios, que duplicavam e
-                // inflavam a leitura. Nao tentamos casar unidade com letra de particao.
+                stats.CpuClock = Valid(all.Where(x => IsCpu(x.Hw) && x.Sensor.SensorType == SensorType.Clock
+                        && x.Sensor.Name.StartsWith("Core", StringComparison.OrdinalIgnoreCase))
+                    .Select(x => x.Sensor.Value).Where(v => v.HasValue).DefaultIfEmpty(null).Max());
+                stats.GpuClock = Pick(gpuFilter, SensorType.Clock, "GPU Core");
+                stats.GpuMemUsed = Pick(gpuFilter, SensorType.SmallData, "GPU Memory Used", "D3D Dedicated Memory Used");
+                stats.GpuMemTotal = Pick(gpuFilter, SensorType.SmallData, "GPU Memory Total", "D3D Dedicated Memory Total");
+
                 stats.Drives = all
                     .Where(x => x.Hw.HardwareType == HardwareType.Storage && x.Sensor.SensorType == SensorType.Temperature && Valid(x.Sensor.Value) != null)
                     .GroupBy(x => x.Hw.Identifier.ToString())
@@ -180,7 +168,13 @@ namespace DroidDeck.Services
             }
         }
 
-        private static float? Valid(float? v) => v is { } f && !float.IsNaN(f) && f > 0 && f < 5000 ? f : null;
+        private static float? Valid(float? v) => Valid(v, SensorType.Temperature);
+
+        public static float? Valid(float? v, SensorType type)
+        {
+            var max = type switch { SensorType.SmallData => 4_000_000f, SensorType.Clock => 20_000f, _ => 5000f };
+            return v is { } f && !float.IsNaN(f) && f > 0 && f < max ? f : null;
+        }
 
         private static void Collect(IHardware hw, List<(IHardware, ISensor)> into)
         {

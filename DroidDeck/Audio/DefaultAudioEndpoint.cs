@@ -5,14 +5,6 @@ using NAudio.CoreAudioApi;
 
 namespace DroidDeck.Audio
 {
-    /// <summary>
-    /// Troca o dispositivo de audio padrao do Windows.
-    ///
-    /// Nao existe API publica para isso: o proprio painel de Som usa a interface COM nao
-    /// documentada IPolicyConfig, estavel desde o Windows 7 (EarTrumpet, SoundSwitch e
-    /// AudioDeviceCmdlets usam a mesma). Define o padrao nos tres papeis (console, multimidia
-    /// e comunicacao), que e o que o usuario espera ao "trocar de fone".
-    /// </summary>
     public static class DefaultAudioEndpoint
     {
         public static void Set(string deviceId)
@@ -29,7 +21,6 @@ namespace DroidDeck.Audio
             }
         }
 
-        /// <summary>Id do padrao atual de saida (render) ou entrada (capture).</summary>
         public static string? GetDefault(bool input)
         {
             try
@@ -44,7 +35,6 @@ namespace DroidDeck.Audio
             }
         }
 
-        /// <summary>Dispositivos ativos: (id, nome).</summary>
         public static List<(string Id, string Name)> List(bool input)
         {
             var result = new List<(string, string)>();
@@ -52,7 +42,6 @@ namespace DroidDeck.Audio
             var devices = en.EnumerateAudioEndPoints(input ? DataFlow.Capture : DataFlow.Render, DeviceState.Active);
             foreach (var d in devices)
             {
-                // Proxy COM: liberar sempre (ver MixerMaster).
                 using (d) result.Add((d.ID, d.FriendlyName));
             }
             return result;
@@ -68,8 +57,6 @@ namespace DroidDeck.Audio
         [ComImport, Guid("870af99c-171d-4f9e-af0d-e63df40c2bc9")]
         private class PolicyConfigClient { }
 
-        // So SetDefaultEndpoint e usado; os metodos anteriores precisam estar declarados para a
-        // vtable ficar na ordem certa.
         [ComImport, Guid("f8679f50-850a-41cf-9c72-430f290290c8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
         private interface IPolicyConfig
         {

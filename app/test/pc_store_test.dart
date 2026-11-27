@@ -30,7 +30,6 @@ void main() {
     final list = await PcStore.load();
     expect(list, hasLength(2));
     expect(list.firstWhere((p) => p.id == a.id).apiKey, 'k3');
-    // O PC em uso vai para as chaves de conexão que o app lê ao abrir.
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getString(Constants.ipAddrKey), '10.0.0.1');
     expect(prefs.getString(Constants.apiKeyKey), 'k3');

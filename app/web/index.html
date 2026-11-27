@@ -7,7 +7,6 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="KZ Companion — o seu companheiro para o PC.">
 
-  <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="mobile-web-app-capable" content="yes">
@@ -15,17 +14,13 @@
   <meta name="apple-mobile-web-app-title" content="KZ Companion">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>KZ Companion</title>
   <link rel="manifest" href="manifest.json">
-  <!-- Fundo escuro antes do Flutter carregar: sem clarão branco. -->
   <style>html, body { background: #0D0D0F; margin: 0; }</style>
 
   <script>
-    // Configurador é servido localmente pelo backend: sem service worker.
-    // Desregistra qualquer SW antigo (e apaga o cache dele) pra nunca servir versão velha.
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations().then(function (rs) {
         rs.forEach(function (r) { r.unregister(); });
@@ -34,18 +29,13 @@
         caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
       }
     }
-    // The value below is injected by flutter build, do not touch.
     var serviceWorkerVersion = null;
   </script>
-  <!-- This script adds the flutter initialization JS code -->
   <script src="flutter.js" defer></script>
 </head>
 <body>
   <script>
     window.addEventListener('load', function(ev) {
-      // Sem service worker (não passamos a opção serviceWorker de propósito).
-      // O PC troca o carimbo abaixo a cada build e serve /v/<carimbo>/ como a raiz: o
-      // navegador baixa JS e fonte de ícones novos juntos, sem misturar com o cache velho.
       var build = '__WEB_BUILD__';
       var base = build.charAt(0) === '_' ? '' : 'v/' + build + '/';
       _flutter.loader.loadEntrypoint({

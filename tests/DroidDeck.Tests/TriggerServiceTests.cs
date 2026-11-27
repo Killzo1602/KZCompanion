@@ -12,7 +12,6 @@ namespace DroidDeck.Tests
 {
     public class TriggerServiceTests
     {
-        /// <summary>Provedor falso: anota o que foi executado.</summary>
         private class Recorder : IActionProvider
         {
             public readonly List<string> Ran = new();
@@ -49,7 +48,7 @@ namespace DroidDeck.Tests
                 executor, conditions, NullLogger<TriggerService>.Instance);
             service.SaveAll(new List<TriggerService.Trigger>(triggers));
 
-            var clock = new[] { new DateTime(2026, 10, 19, 8, 59, 50) }; // segunda-feira
+            var clock = new[] { new DateTime(2026, 10, 19, 8, 59, 50) };
             var procs = new HashSet<string> { "explorer" };
             service.Now = () => clock[0];
             conditions.Now = () => clock[0];
@@ -67,12 +66,12 @@ namespace DroidDeck.Tests
             await service.TickAsync();
             Assert.Empty(rec.Ran);
 
-            clock[0] = clock[0].AddSeconds(12); // 09:00:02
+            clock[0] = clock[0].AddSeconds(12);
             await service.TickAsync();
             clock[0] = clock[0].AddSeconds(2);
             await service.TickAsync();
 
-            Assert.Equal(new[] { "b1" }, rec.Ran); // b2 so no fim de semana
+            Assert.Equal(new[] { "b1" }, rec.Ran);
         }
 
         [Fact]
@@ -105,7 +104,7 @@ namespace DroidDeck.Tests
                 });
 
             await service.TickAsync();
-            clock[0] = clock[0].AddHours(2); // dormiu
+            clock[0] = clock[0].AddHours(2);
             await service.TickAsync();
 
             Assert.Equal(new[] { "b1" }, rec.Ran);

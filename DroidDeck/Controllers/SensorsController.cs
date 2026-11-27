@@ -5,7 +5,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DroidDeck.Controllers
 {
-    /// <summary>Leitura pontual dos sensores (o app recebe o fluxo pelo SignalR; isto serve a diagnóstico).</summary>
     [Route("api/sensors")]
     [ApiController]
     [Authorize]

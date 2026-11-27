@@ -25,8 +25,6 @@ class SplashPageState extends State<SplashPage> {
 
   Future<void> _checkConfig() async {
     if (kIsWeb) {
-      // O web é servido pelo próprio PC: no PC a chave vem pelo loopback (sem QR); de
-      // outro aparelho, do QR "Abrir no navegador" (?pair=) ou do que ficou salvo.
       final client = Injector.get<DroidDeckClient>();
       final signalR = Injector.get<SignalRService>();
       final origin = Uri.base.origin;
@@ -65,7 +63,6 @@ class SplashPageState extends State<SplashPage> {
       if (mounted) Navigator.of(context).pushReplacementNamed('/home');
       return;
     }
-    // Lista de PCs pareados (migra o PC único das versões antigas).
     await PcStore.load();
     final sp = await SharedPreferences.getInstance();
     final ip = sp.getString(Constants.ipAddrKey);
@@ -73,7 +70,6 @@ class SplashPageState extends State<SplashPage> {
     final apiKey = sp.getString(Constants.apiKeyKey);
 
     if (ip != null && ip.isNotEmpty && mounted) {
-      // Pelo cabo USB quando o PC responde nele; senão pela rede.
       final baseUrl = await UsbRoute.pick('http://$ip:$port', apiKey: apiKey);
       if (!mounted) return;
 
@@ -81,14 +77,12 @@ class SplashPageState extends State<SplashPage> {
       client.setBaseUrl(baseUrl);
       client.setApiKey(apiKey);
 
-      // Initialize SignalR with the configured URL (use local variable, not client.baseUrl)
       final signalR = Injector.get<SignalRService>();
       await signalR.init(baseUrl, apiKey: apiKey);
 
-      if (!mounted) return; // o widget pode ter sido descartado durante o await
+      if (!mounted) return;
       Navigator.of(context).pushReplacementNamed('/home');
     } else if (mounted) {
-      // Ainda não pareou: explica que precisa do DroidDeck no PC antes de pedir o IP.
       Navigator.of(context).pushReplacementNamed('/welcome');
     }
   }
@@ -107,7 +101,7 @@ class SplashPageState extends State<SplashPage> {
             ),
             const SizedBox(height: 16),
             const Text(
-              'DroidDeck',
+              'KZ Companion',
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.w800,

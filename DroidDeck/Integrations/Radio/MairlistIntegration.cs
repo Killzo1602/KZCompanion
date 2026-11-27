@@ -14,11 +14,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// mAirList pela interface REST (Config → Remote Control → REST, porta padrao 9300, HTTP Basic).
-    /// Comandos em POST /execute; o estado "no ar" em GET /status/onair. Cada um depende de um
-    /// plugin da propria interface (ExecuteCommand e GeneralRead).
-    /// </summary>
     public class MairlistIntegration : PolledHttpIntegration
     {
         public const string Event = "ReceiveMairlistState";
@@ -39,9 +34,8 @@ namespace DroidDeck.Integrations
         protected override bool HasConfig => Url != null;
 
         protected override string UnreachableMessage =>
-            "Não foi possível falar com o mAirList. Confira se ele está aberto e a interface REST ligada.";
+            "Couldn't reach mAirList. Check that it's open and the REST interface is on.";
 
-        /// <summary>No ar? Null se a leitura de estado estiver desligada no mAirList.</summary>
         public bool? OnAir => Connected && _onAir != null ? _onAir == "1" : null;
 
         public override IntegrationStatus GetStatus() => new()
@@ -83,7 +77,6 @@ namespace DroidDeck.Integrations
             using var request = NewRequest(HttpMethod.Get, "/status/onair");
             using var response = await NewClient().SendAsync(request, ct);
             CheckAuth(response);
-            // Sem o plugin GeneralRead a conexao vale, so nao ha estado para ler.
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 _onAir = null;
@@ -94,7 +87,6 @@ namespace DroidDeck.Integrations
             _onAir = (await response.Content.ReadAsStringAsync(ct)).Trim();
         }
 
-        /// <summary>Executa um comando do mAirList (POST /execute).</summary>
         public async Task ExecuteCommandAsync(string command)
         {
             if (!HasConfig) throw new InvalidOperationException("Configure o mAirList primeiro.");
@@ -103,7 +95,7 @@ namespace DroidDeck.Integrations
             using var response = await NewClient().SendAsync(request);
             CheckAuth(response);
             if (response.StatusCode == HttpStatusCode.NotFound)
-                throw new InvalidOperationException("Ligue o plugin ExecuteCommand na interface REST do mAirList.");
+                throw new InvalidOperationException("Turn on the ExecuteCommand plugin in the mAirList REST interface.");
             response.EnsureSuccessStatusCode();
             PollNow();
         }
@@ -111,7 +103,7 @@ namespace DroidDeck.Integrations
         private static void CheckAuth(HttpResponseMessage response)
         {
             if (response.StatusCode == HttpStatusCode.Unauthorized)
-                throw new InvalidOperationException("Usuário ou senha recusados pelo mAirList.");
+                throw new InvalidOperationException("mAirList refused the username or password.");
         }
 
         private HttpRequestMessage NewRequest(HttpMethod method, string path)
@@ -126,7 +118,6 @@ namespace DroidDeck.Integrations
         }
     }
 
-    /// <summary>Acao "mairlist": no ar, automacao, players e cartwall.</summary>
     public class MairlistProvider : IStatefulActionProvider
     {
         public const string TypeName = "mairlist";
@@ -149,33 +140,33 @@ namespace DroidDeck.Integrations
             Type = TypeName,
             Title = "mAirList",
             Icon = "radio",
-            Category = "Estúdio",
+            Category = "Studio",
             Stateful = true,
             Settings = "mairlist",
             StateEvent = StateEvent,
-            Description = "No ar, automação, players e cartwall do mAirList, pela interface REST dele.",
+            Description = "On air, automation, players and cartwall in mAirList, through its REST interface.",
             Fields =
             {
-                ActionField.Select("operation", "O que fazer",
-                    ("on_air_toggle", "No ar (alternar)"),
-                    ("on_air", "Entrar no ar"),
-                    ("off_air", "Sair do ar"),
-                    ("automation_toggle", "Automação (alternar)"),
-                    ("automation_on", "Ligar a automação"),
-                    ("automation_off", "Desligar a automação"),
-                    ("next", "Próximo da playlist"),
-                    ("player_toggle", "Player: tocar ou parar"),
-                    ("player_start", "Player: tocar"),
-                    ("player_stop", "Player: parar"),
+                ActionField.Select("operation", "What to do",
+                    ("on_air_toggle", "On air (toggle)"),
+                    ("on_air", "Go on air"),
+                    ("off_air", "Go off air"),
+                    ("automation_toggle", "Automation (toggle)"),
+                    ("automation_on", "Turn automation on"),
+                    ("automation_off", "Turn automation off"),
+                    ("next", "Next in playlist"),
+                    ("player_toggle", "Player: play or stop"),
+                    ("player_start", "Player: play"),
+                    ("player_stop", "Player: stop"),
                     ("player_fadeout", "Player: fade out"),
-                    ("cart", "Tocar um cart"),
-                    ("cart_stop_all", "Parar todos os carts"),
-                    ("custom", "Outro comando")),
+                    ("cart", "Play a cart"),
+                    ("cart_stop_all", "Stop all carts"),
+                    ("custom", "Other command")),
                 ActionField.Number("playlist", "Playlist", 1, 1, 16).When("operation", PlaylistOps),
                 ActionField.Number("player", "Player", 1, 1, 16).When("operation", PlayerOps),
-                ActionField.Number("cart", "Número do cart", 1, 1, 999).When("operation", "cart"),
-                ActionField.Text("command", "Comando", "PLAYLIST 1 NEXT",
-                    "Um comando da lista de comandos remotos do mAirList.", required: true)
+                ActionField.Number("cart", "Cart number", 1, 1, 999).When("operation", "cart"),
+                ActionField.Text("command", "Command", "PLAYLIST 1 NEXT",
+                    "A command from the mAirList remote command list.", required: true)
                     .When("operation", "custom"),
             },
         };
@@ -202,7 +193,7 @@ namespace DroidDeck.Integrations
                 "cart" => $"CARTWALL {Math.Clamp(c.Int("cart", 1), 1, 999)} CLICK",
                 "cart_stop_all" => "CARTWALL ALL STOP",
                 "custom" => CheckCommand(c.Get("command")),
-                _ => throw new InvalidOperationException("Operação desconhecida."),
+                _ => throw new InvalidOperationException("Unknown operation."),
             };
         }
 

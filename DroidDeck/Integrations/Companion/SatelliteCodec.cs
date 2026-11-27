@@ -6,20 +6,14 @@ using System.Text.RegularExpressions;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Formato das linhas da Satellite API do Companion, igual ao pacote
-    /// @companion-app/satellite-protocol: NOME STATUS? CHAVE=valor CHAVE="com espaco" FLAG.
-    /// </summary>
     public static class SatelliteCodec
     {
-        /// <summary>Parte a linha no primeiro espaco: comando e parametros.</summary>
         public static (string command, string body) Split(string line)
         {
             var i = line.IndexOf(' ');
             return i < 0 ? (line, "") : (line[..i], line[(i + 1)..]);
         }
 
-        /// <summary>Parametros da linha. Flag sem valor vira null.</summary>
         public static Dictionary<string, string?> Parse(string body)
         {
             var fragments = new List<StringBuilder> { new() };
@@ -54,7 +48,6 @@ namespace DroidDeck.Integrations
             return result;
         }
 
-        /// <summary>Monta a linha, com o fim de linha. bool vira 1/0, numero vai puro e texto entre aspas.</summary>
         public static string Format(string name, string? deviceId, params (string key, object value)[] args)
         {
             var line = new StringBuilder(name);

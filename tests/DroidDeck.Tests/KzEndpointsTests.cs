@@ -7,10 +7,6 @@ using Xunit;
 
 namespace DroidDeck.Tests
 {
-    /// <summary>
-    /// O app Android confere a chave em /api/system/info e nao depende mais de nenhuma rota do
-    /// antigo deck de botoes.
-    /// </summary>
     public class KzEndpointsTests : IClassFixture<WebApplicationFactory<DroidDeck.Program>>
     {
         private readonly WebApplicationFactory<DroidDeck.Program> _factory;
@@ -22,6 +18,23 @@ namespace DroidDeck.Tests
             var client = _factory.CreateClient();
             client.DefaultRequestHeaders.Add("X-API-KEY", ApiKeyProvider.GetKey());
             return client;
+        }
+
+        [Theory]
+        [InlineData(LibreHardwareMonitor.Hardware.SensorType.SmallData, 16376f, true)]
+        [InlineData(LibreHardwareMonitor.Hardware.SensorType.Clock, 10501f, true)]
+        [InlineData(LibreHardwareMonitor.Hardware.SensorType.Temperature, 65261f, false)]
+        [InlineData(LibreHardwareMonitor.Hardware.SensorType.SmallData, 0f, false)]
+        public void Sensores_TetoDependeDaUnidade(LibreHardwareMonitor.Hardware.SensorType type, float value, bool kept) =>
+            Assert.Equal(kept ? value : (float?)null, DroidDeck.Services.HardwareSensors.Valid(value, type));
+
+        [Fact]
+        public async Task SaidaDeAudio_DesconhecidaNaoMudaNada()
+        {
+            var body = new StringContent("{\"id\":\"nao-existe\"}", System.Text.Encoding.UTF8, "application/json");
+            Assert.Equal(HttpStatusCode.Unauthorized, (await _factory.CreateClient().GetAsync("/api/audio/outputs")).StatusCode);
+            var status = (await Authed().PutAsync("/api/audio/output", body)).StatusCode;
+            Assert.Contains(status, new[] { HttpStatusCode.NotFound, HttpStatusCode.BadRequest });
         }
 
         [Fact]
@@ -53,6 +66,10 @@ namespace DroidDeck.Tests
         [InlineData("/api/apps")]
         [InlineData("/api/audio")]
         [InlineData("/api/sensors")]
+        [InlineData("/api/ai-usage")]
+        [InlineData("/api/ai-sessions")]
+        [InlineData("/api/dev/docker")]
+        [InlineData("/api/dev/github")]
         [InlineData("/api/discord/state")]
         [InlineData("/api/steam/games")]
         public async Task RotasDoKz_ContinuamExigindoAChave(string path)

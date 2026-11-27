@@ -21,41 +21,26 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// O que a tela de configuracao de uma integracao mostra (GET /api/integrations/{nome}).
-    /// </summary>
     public class IntegrationStatus
     {
         public bool Connected { get; set; }
 
-        /// <summary>Ja tem o que precisa (Client ID, URL...) para tentar conectar.</summary>
         public bool Configured { get; set; }
 
-        /// <summary>Conta ou servidor conectado ("@canal", "Casa").</summary>
         public string? Account { get; set; }
 
-        /// <summary>Erro ou orientacao para o usuario.</summary>
         public string? Message { get; set; }
 
-        /// <summary>Login em andamento pelo navegador do PC.</summary>
         public bool LoginPending { get; set; }
 
-        /// <summary>Login por codigo (Twitch): o codigo a digitar e onde.</summary>
         public string? UserCode { get; set; }
         public string? VerificationUri { get; set; }
 
-        /// <summary>Valores atuais dos campos que nao sao segredo, para preencher a tela.</summary>
         public Dictionary<string, string> Fields { get; set; } = new();
 
-        /// <summary>Endereco de retorno (redirect URI) para cadastrar no app do servico.</summary>
         public string? RedirectUri { get; set; }
     }
 
-    /// <summary>
-    /// Base das integracoes com conta (Home Assistant, Spotify, Twitch, YouTube): guarda a
-    /// configuracao cifrada em %LocalAppData%\DroidDeck\{nome}.json, publica o estado ao vivo
-    /// e expoe o mesmo fluxo para a tela do app (configurar, entrar, sair).
-    /// </summary>
     public abstract class AccountIntegration : BackgroundService, IIntegration
     {
         protected readonly ILogger Logger;
@@ -71,12 +56,10 @@ namespace DroidDeck.Integrations
             Config = config;
         }
 
-        /// <summary>Nome na URL e no arquivo: "spotify".</summary>
         public abstract string Name { get; }
 
         public abstract string Title { get; }
 
-        /// <summary>Evento SignalR do estado (ex.: "ReceiveSpotifyState").</summary>
         public abstract string StateEvent { get; }
 
         public abstract IntegrationStatus GetStatus();
@@ -87,10 +70,8 @@ namespace DroidDeck.Integrations
 
         public abstract object GetState();
 
-        /// <summary>Grava os campos da tela e tenta conectar (ou inicia o login).</summary>
         public abstract Task<IntegrationStatus> ConfigureAsync(Dictionary<string, string> fields);
 
-        /// <summary>Esquece a conta (e o token).</summary>
         public virtual Task LogoutAsync()
         {
             Clear();
@@ -98,15 +79,11 @@ namespace DroidDeck.Integrations
             return Task.CompletedTask;
         }
 
-        /// <summary>Retorno do login OAuth no navegador. Devolve o texto da pagina mostrada.</summary>
         public virtual Task<string> CallbackAsync(IQueryCollection query) =>
-            Task.FromResult(L.T("Esta integração não usa login pelo navegador."));
+            Task.FromResult(L.T("This integration doesn't use browser login."));
 
-        /// <summary>Listas para os selects do editor (entidades, playlists...).</summary>
         public virtual Task<List<Actions.FieldOption>> OptionsAsync(string list, IQueryCollection query) =>
             Task.FromResult(new List<Actions.FieldOption>());
-
-        // ---- Configuracao persistida ----
 
         private string StorePath => Path.Combine(AppPaths.LocalDir, Name + ".json");
 
@@ -165,22 +142,18 @@ namespace DroidDeck.Integrations
             }
         }
 
-        // ---- Utilitarios ----
-
         protected async Task BroadcastAsync()
         {
             try { await Hub.Clients.All.SendAsync(StateEvent, GetState()); }
             catch { }
         }
 
-        /// <summary>Botoes de todos os perfis com uma acao deste tipo (em qualquer gesto).</summary>
         protected IEnumerable<DeckAction> ActionsOfType(string type) =>
             Config.GetProfiles()
                 .SelectMany(p => p.Buttons ?? new List<DeckButton>())
                 .SelectMany(b => DeckButton.ActionSlots.Select(b.ActionFor))
                 .Where(a => a != null && string.Equals(a.Type, type, StringComparison.OrdinalIgnoreCase))!;
 
-        /// <summary>Abre uma pagina no navegador padrao do PC.</summary>
         public static void OpenBrowser(string url)
         {
             try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
@@ -189,7 +162,6 @@ namespace DroidDeck.Integrations
 
         public static string RedirectUriFor(string name) => $"http://127.0.0.1:4787/api/integrations/{name}/callback";
 
-        /// <summary>Pagina simples de retorno do login. Titulo e texto sao escapados: o erro vem da URL.</summary>
         protected static string Html(string title, string body)
         {
             title = System.Net.WebUtility.HtmlEncode(title);
@@ -199,7 +171,6 @@ namespace DroidDeck.Integrations
                 $"<div style=\"text-align:center\"><h2>{title}</h2><p>{body}</p></div>";
         }
 
-        /// <summary>Espera, sem estourar se o servico estiver parando.</summary>
         protected static async Task Wait(TimeSpan delay, CancellationToken ct)
         {
             try { await Task.Delay(delay, ct); }
@@ -207,10 +178,6 @@ namespace DroidDeck.Integrations
         }
     }
 
-    /// <summary>
-    /// OAuth 2 com PKCE (Spotify, YouTube) e device code (Twitch): troca e renova tokens e
-    /// guarda tudo pelo AccountIntegration.
-    /// </summary>
     public class OAuthTokens
     {
         private readonly Func<string, string?> _get;
@@ -227,12 +194,10 @@ namespace DroidDeck.Integrations
 
         public string TokenEndpoint { get; init; } = "";
 
-        /// <summary>Campos extras na renovacao (client_id, client_secret).</summary>
         public Func<Dictionary<string, string>> ClientFields { get; init; } = () => new();
 
         public bool HasToken => _get("refresh_token") != null || _get("access_token") != null;
 
-        // PKCE: verificador aleatorio e o desafio (SHA-256, base64url).
         public static (string verifier, string challenge) NewPkce()
         {
             var verifier = Base64Url(RandomNumberGenerator.GetBytes(48));
@@ -245,7 +210,6 @@ namespace DroidDeck.Integrations
         private static string Base64Url(byte[] bytes) =>
             Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
-        /// <summary>POST no endpoint de token; grava access/refresh/validade. Lanca com a mensagem do servico.</summary>
         public async Task RequestAsync(Dictionary<string, string> form)
         {
             var client = _http.CreateClient();
@@ -272,7 +236,6 @@ namespace DroidDeck.Integrations
             });
         }
 
-        /// <summary>Token valido, renovado se preciso. Null = precisa entrar de novo.</summary>
         public async Task<string?> GetAccessTokenAsync()
         {
             var access = _get("access_token");
@@ -285,7 +248,6 @@ namespace DroidDeck.Integrations
             await _refreshLock.WaitAsync();
             try
             {
-                // Outra chamada pode ter renovado enquanto esperava.
                 if (_get("access_token") is { } again && again != access) return again;
                 var form = ClientFields();
                 form["grant_type"] = "refresh_token";
@@ -295,7 +257,6 @@ namespace DroidDeck.Integrations
             }
             catch (OAuthException ex) when (ex.Error is "invalid_grant" or "invalid_client" || ex.Error.StartsWith("HTTP 4"))
             {
-                // Token revogado: o usuario precisa entrar de novo.
                 _set(new (string, string?)[] { ("access_token", null), ("refresh_token", null), ("expires_at", null) });
                 return null;
             }
@@ -305,7 +266,6 @@ namespace DroidDeck.Integrations
             }
         }
 
-        /// <summary>Marca o token atual como vencido (o servico respondeu 401).</summary>
         public void Expire() => _set(new (string, string?)[] { ("expires_at", "0") });
     }
 
@@ -320,7 +280,6 @@ namespace DroidDeck.Integrations
         public string Error { get; }
     }
 
-    /// <summary>Chamadas JSON autenticadas, com uma nova tentativa depois de renovar o token.</summary>
     public static class ApiCall
     {
         public static async Task<JsonDocument?> SendAsync(IHttpClientFactory http, OAuthTokens tokens, HttpMethod method,
@@ -328,7 +287,7 @@ namespace DroidDeck.Integrations
         {
             for (var attempt = 0; attempt < 2; attempt++)
             {
-                var token = await tokens.GetAccessTokenAsync() ?? throw new InvalidOperationException("Entre na conta de novo.");
+                var token = await tokens.GetAccessTokenAsync() ?? throw new InvalidOperationException("Sign in again.");
                 var client = http.CreateClient();
                 client.Timeout = TimeSpan.FromSeconds(10);
                 using var request = new HttpRequestMessage(method, url);
@@ -348,10 +307,9 @@ namespace DroidDeck.Integrations
                     throw new HttpRequestException(ErrorText(text, (int)response.StatusCode), null, response.StatusCode);
                 return string.IsNullOrWhiteSpace(text) ? null : JsonDocument.Parse(text);
             }
-            throw new InvalidOperationException("Entre na conta de novo.");
+            throw new InvalidOperationException("Sign in again.");
         }
 
-        /// <summary>Mensagem de erro das APIs (Spotify, Twitch e Google mandam formatos diferentes).</summary>
         public static string ErrorText(string body, int status)
         {
             try

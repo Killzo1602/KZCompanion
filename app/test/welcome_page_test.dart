@@ -15,15 +15,15 @@ void main() {
     await tester.pumpWidget(app());
 
     expect(find.text(Constants.siteDisplay), findsOneWidget);
-    expect(find.text('Enviar link'), findsOneWidget);
+    expect(find.text('Send link'), findsOneWidget);
   });
 
   testWidgets('no primeiro uso, "parear" segue para a configuração',
       (tester) async {
     await tester.pumpWidget(app());
 
-    await tester.ensureVisible(find.text('Já instalei no PC: parear'));
-    await tester.tap(find.text('Já instalei no PC: parear'));
+    await tester.ensureVisible(find.text('Already installed on the PC: pair'));
+    await tester.tap(find.text('Already installed on the PC: pair'));
     await tester.pumpAndSettle();
 
     expect(find.text('tela de pareamento'), findsOneWidget);
@@ -46,8 +46,8 @@ void main() {
 
     await tester.tap(find.text('configuração'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Já instalei no PC: parear'));
-    await tester.tap(find.text('Já instalei no PC: parear'));
+    await tester.ensureVisible(find.text('Already installed on the PC: pair'));
+    await tester.tap(find.text('Already installed on the PC: pair'));
     await tester.pumpAndSettle();
 
     expect(find.text('configuração'), findsOneWidget);

@@ -3,10 +3,6 @@ using DroidDeck.Actions;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Acao "streamerbot": dispara uma acao do Streamer.bot. Nao e privilegiada: so roda o que o
-    /// usuario ja montou no Streamer.bot, como uma cena do OBS ou um script do Home Assistant.
-    /// </summary>
     public class StreamerBotProvider : IStatefulActionProvider
     {
         public const string TypeName = "streamerbot";
@@ -25,15 +21,15 @@ namespace DroidDeck.Integrations
             Title = "Streamer.bot",
             Icon = "smart_toy",
             Category = "Streaming",
-            Description = "Dispara uma ação do Streamer.bot (com argumentos), pelo WebSocket Server dele.",
+            Description = "Runs a Streamer.bot action (with arguments) through its WebSocket Server.",
             Settings = "streamerbot",
             StateEvent = StateEvent,
             Fields =
             {
-                ActionField.Dynamic("action", "Ação", "/api/integrations/streamerbot/options/actions",
-                    "Também aceita o nome da ação digitado.", allowCustom: true),
-                ActionField.Multiline("args", "Argumentos (opcional)", "chave=valor",
-                    "Um por linha (chave=valor) ou um objeto JSON. Viram %chave% no Streamer.bot."),
+                ActionField.Dynamic("action", "Action", "/api/integrations/streamerbot/options/actions",
+                    "Also accepts a typed action name.", allowCustom: true),
+                ActionField.Multiline("args", "Arguments (optional)", "key=value",
+                    "One per line (key=value) or a JSON object. They become %key% in Streamer.bot."),
             },
         };
 

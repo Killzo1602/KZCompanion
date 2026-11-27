@@ -4,16 +4,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Actions.Providers
 {
-    /// <summary>
-    /// Casa inteligente Tuya/Smart Life (cobre os rebrands: Nova Digital, Positivo, RSmart...).
-    ///
-    /// "toggle" e o caso comum de um deck e depende do estado que o push MQTT mantem em
-    /// memoria -- por isso ele nao faz leitura na nuvem antes (o que gastaria cota a cada
-    /// clique). Cada comando aceito tambem grava o valor enviado, entao com o push fora do ar
-    /// o estado pode estar velho so no primeiro clique: o botao inverte "para o lado errado"
-    /// uma vez e acerta no seguinte.
-    /// Para um comando deterministico use "set" com o valor explicito.
-    /// </summary>
     public class TuyaProvider : IStatefulActionProvider
     {
         private readonly TuyaService _tuya;
@@ -27,17 +17,15 @@ namespace DroidDeck.Actions.Providers
 
         public string Type => "tuya";
 
-        // Sem isto, quem conecta depois do backend só receberia algo quando algum aparelho
-        // mudasse — os botões abririam sem cor.
         public string StateEvent => "ReceiveTuyaState";
         public object GetState() => _tuya.GetStatePayload();
 
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Casa inteligente (Tuya)",
+            Title = "Smart home (Tuya)",
             Icon = "lightbulb",
-            Category = "Casa",
+            Category = "Home",
             Stateful = true,
             Editor = "tuya",
             Settings = "tuya",
@@ -67,11 +55,6 @@ namespace DroidDeck.Actions.Providers
             }
         }
 
-        /// <summary>
-        /// Os parametros de acao sao string (Dictionary&lt;string,string&gt;), mas a Tuya exige o
-        /// tipo certo: mandar "true" onde ela espera booleano faz a API recusar. O valueType vem
-        /// do specifications do proprio aparelho, gravado no botao pelo editor.
-        /// </summary>
         private static object? ParseValue(string raw, string valueType)
         {
             switch ((valueType ?? "").Trim().ToLowerInvariant())
@@ -81,7 +64,6 @@ namespace DroidDeck.Actions.Providers
                 case "integer":
                     return long.TryParse(raw, out var l) ? l : 0L;
                 default:
-                    // Enum, String e Json seguem como texto -- e o que a Tuya espera nesses casos.
                     return raw;
             }
         }

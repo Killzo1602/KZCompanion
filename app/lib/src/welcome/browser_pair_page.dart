@@ -3,10 +3,7 @@ import 'package:droiddeck/src/connection/constants.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Deck no navegador sem chave: explica como parear pelo QR "Abrir no navegador" do PC.
-/// Também aceita a chave digitada, para quem não tem câmera à mão.
 class BrowserPairPage extends StatefulWidget {
-  /// A chave guardada foi recusada pelo PC (trocada ou de outro PC).
   final bool rejected;
 
   const BrowserPairPage({super.key, this.rejected = false});
@@ -24,7 +21,7 @@ class _BrowserPairPageState extends State<BrowserPairPage> {
   void initState() {
     super.initState();
     if (widget.rejected) {
-      _error = tr('O PC recusou a chave salva neste navegador. Pareie de novo.');
+      _error = tr('The PC rejected the key saved in this browser. Pair again.');
     }
   }
 
@@ -47,14 +44,13 @@ class _BrowserPairPageState extends State<BrowserPairPage> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _error = tr('O PC não aceitou essa chave. Confira se copiou ela inteira, sem espaços.');
+          _error = tr('The PC didn\'t accept that key. Check that you copied all of it, without spaces.');
         });
       }
       return;
     }
     await (await SharedPreferences.getInstance()).setString(Constants.apiKeyKey, key);
     if (!mounted) return;
-    // O splash refaz a conexão (SignalR) com a chave nova.
     Navigator.of(context).pushReplacementNamed('/');
   }
 
@@ -77,16 +73,14 @@ class _BrowserPairPageState extends State<BrowserPairPage> {
                   Image.asset('assets/images/logo.png', height: 72),
                   const SizedBox(height: 20),
                   Text(
-                    tr('Usar este aparelho como deck'),
+                    tr('Use this device as a deck'),
                     textAlign: TextAlign.center,
                     style: theme.textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    tr('No PC, clique com o botão direito no ícone do DroidDeck → '
-                        '"Parear dispositivo (QR)" → "Abrir no navegador" e aponte a '
-                        'câmera deste aparelho para o código.'),
+                    tr('On the PC, right-click the KZ Companion icon → "Pair device (QR)" → "Open in browser" and point this device\'s camera at the code.'),
                     textAlign: TextAlign.center,
                     style: muted,
                   ),
@@ -97,7 +91,7 @@ class _BrowserPairPageState extends State<BrowserPairPage> {
                         style: TextStyle(color: theme.colorScheme.error)),
                   ],
                   const SizedBox(height: 28),
-                  Text(tr('Ou digite a chave mostrada na janela de pareamento:'),
+                  Text(tr('Or type the key shown in the pairing window:'),
                       style: muted),
                   const SizedBox(height: 8),
                   TextField(
@@ -106,8 +100,8 @@ class _BrowserPairPageState extends State<BrowserPairPage> {
                     enableSuggestions: false,
                     decoration: InputDecoration(
                       border: const OutlineInputBorder(),
-                      labelText: tr('Chave'),
-                      helperText: tr('O texto depois de "Chave:" na janela de pareamento do PC.'),
+                      labelText: tr('Key'),
+                      helperText: tr('The text after "Key:" in the PC\'s pairing window.'),
                       helperMaxLines: 2,
                     ),
                     onSubmitted: (_) => _useKey(),
@@ -115,7 +109,7 @@ class _BrowserPairPageState extends State<BrowserPairPage> {
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: _busy ? null : _useKey,
-                    child: Text(tr('Conectar')),
+                    child: Text(tr('Connect')),
                   ),
                 ],
               ),

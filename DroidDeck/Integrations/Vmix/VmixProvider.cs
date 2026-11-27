@@ -6,10 +6,6 @@ using DroidDeck.Actions;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Acao "vmix": corte, transicao, entradas, overlays, audio, gravacao e transmissao. Os nomes
-    /// das funcoes sao os da referencia de atalhos do vMix.
-    /// </summary>
     public class VmixProvider : IStatefulActionProvider
     {
         public const string TypeName = "vmix";
@@ -29,43 +25,43 @@ namespace DroidDeck.Integrations
             Type = TypeName,
             Title = "vMix",
             Icon = "live_tv",
-            Category = "Estúdio",
+            Category = "Studio",
             Stateful = true,
             Settings = "vmix",
             StateEvent = StateEvent,
-            Description = "Corte, transição, entradas, overlays, áudio, gravação e transmissão, com o estado do vMix no botão.",
+            Description = "Cut, transition, inputs, overlays, audio, recording and streaming, with vMix state on the button.",
             Fields =
             {
-                ActionField.Select("operation", "O que fazer",
-                    ("cut", "Cortar (preview para o programa)"),
-                    ("fade", "Transição Fade"),
-                    ("preview", "Mandar entrada para o preview"),
-                    ("program", "Mandar entrada para o programa"),
-                    ("quickplay", "Quick Play da entrada"),
-                    ("overlay", "Overlay (alternar)"),
-                    ("overlay_off", "Tirar todos os overlays"),
-                    ("toggle_audio", "Áudio da entrada (alternar)"),
-                    ("set_volume", "Volume da entrada"),
-                    ("master_audio", "Áudio master (alternar)"),
-                    ("master_volume", "Volume master"),
-                    ("toggle_record", "Gravar (alternar)"),
-                    ("toggle_stream", "Transmitir (alternar)"),
-                    ("toggle_external", "Saída External (alternar)"),
-                    ("toggle_multicorder", "MultiCorder (alternar)"),
-                    ("fade_to_black", "Fade to Black (alternar)"),
-                    ("snapshot", "Captura de tela"),
-                    ("custom", "Outra função")),
-                ActionField.Dynamic("input", "Entrada", "/api/integrations/vmix/options/inputs",
-                    "Também aceita o número ou o nome da entrada.", allowCustom: true)
+                ActionField.Select("operation", "What to do",
+                    ("cut", "Cut (preview to program)"),
+                    ("fade", "Fade transition"),
+                    ("preview", "Send input to preview"),
+                    ("program", "Send input to program"),
+                    ("quickplay", "Input Quick Play"),
+                    ("overlay", "Overlay (toggle)"),
+                    ("overlay_off", "Remove all overlays"),
+                    ("toggle_audio", "Input audio (toggle)"),
+                    ("set_volume", "Input volume"),
+                    ("master_audio", "Master audio (toggle)"),
+                    ("master_volume", "Master volume"),
+                    ("toggle_record", "Record (toggle)"),
+                    ("toggle_stream", "Stream (toggle)"),
+                    ("toggle_external", "External output (toggle)"),
+                    ("toggle_multicorder", "MultiCorder (toggle)"),
+                    ("fade_to_black", "Fade to Black (toggle)"),
+                    ("snapshot", "Screenshot"),
+                    ("custom", "Other function")),
+                ActionField.Dynamic("input", "Input", "/api/integrations/vmix/options/inputs",
+                    "Also accepts the number or name of the input.", allowCustom: true)
                     .When("operation", InputOps),
-                ActionField.Number("duration", "Duração", 1000, 0, 60000, "ms").When("operation", "fade"),
+                ActionField.Number("duration", "Duration", 1000, 0, 60000, "ms").When("operation", "fade"),
                 ActionField.Number("overlay", "Overlay", 1, 1, 8).When("operation", "overlay"),
                 ActionField.Number("volume", "Volume", 100, 0, 100, "%").When("operation", "set_volume", "master_volume"),
-                ActionField.Text("function", "Função", "SetText",
-                    "Nome da função na referência de atalhos do vMix.", required: true)
+                ActionField.Text("function", "Function", "SetText",
+                    "Function name in the vMix shortcut reference.", required: true)
                     .When("operation", "custom"),
-                ActionField.Text("query", "Parâmetros (opcional)", "Input=1&SelectedName=Titulo&Value=Oi",
-                    "Como na Web API do vMix, com os valores em formato de URL.")
+                ActionField.Text("query", "Parameters (optional)", "Input=1&SelectedName=Titulo&Value=Oi",
+                    "As in the vMix Web API, with values in URL format.")
                     .When("operation", "custom"),
             },
         };
@@ -76,7 +72,6 @@ namespace DroidDeck.Integrations
             return _vmix.FunctionAsync(function, query);
         }
 
-        /// <summary>Nome da funcao e parametros de uma acao.</summary>
         public static (string function, string query) Build(ActionContext c)
         {
             switch (c.Operation("cut"))
@@ -100,7 +95,7 @@ namespace DroidDeck.Integrations
                 case "fade_to_black": return ("FadeToBlack", "");
                 case "snapshot": return ("Snapshot", "");
                 case "custom": return (CheckFunction(c.Get("function")), CheckQuery(c.Get("query")));
-                default: throw new InvalidOperationException("Operação desconhecida.");
+                default: throw new InvalidOperationException("Unknown operation.");
             }
         }
 
@@ -122,7 +117,6 @@ namespace DroidDeck.Integrations
             return string.Join("&", parts);
         }
 
-        /// <summary>So letras e numeros: o nome vai direto numa linha do protocolo.</summary>
         public static string CheckFunction(string function)
         {
             var f = function.Trim();
@@ -131,7 +125,6 @@ namespace DroidDeck.Integrations
             return f;
         }
 
-        /// <summary>Sem quebra de linha: ela comecaria outro comando na conexao.</summary>
         public static string CheckQuery(string query)
         {
             var q = query.Trim();

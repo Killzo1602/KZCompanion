@@ -11,18 +11,9 @@ using DroidDeck.Models;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Separa o que exige administrador (sensores de hardware: CPU, SSD, ventoinhas) do resto do
-    /// app. O Windows barra arrastar arquivos do Explorer/Menu Iniciar (integridade media) para uma
-    /// janela elevada, entao o app principal roda SEM elevacao e, so se o usuario quiser, sobe este
-    /// auxiliar elevado (pedido de permissao do Windows na hora). Ele so le sensores e os devolve por
-    /// um pipe nomeado com ACL restrita ao usuario: nao recebe comando algum nem executa nada.
-    /// </summary>
     public static class SensorHelper
     {
         private static string PipeName(string sid) => "KZCompanion.Sensors." + sid;
-
-        // ---- lado elevado (--sensor-helper) ----
 
         public static void RunServer(int parentPid, string userSid)
         {
@@ -53,7 +44,7 @@ namespace DroidDeck.Services
                         Thread.Sleep(1000);
                     }
                 }
-                catch (IOException) { /* cliente saiu: espera o proximo */ }
+                catch (IOException) {  }
                 catch (Exception ex) { Log.Warning($"Auxiliar de sensores: {ex.Message}"); Thread.Sleep(1000); }
             }
         }
@@ -64,14 +55,11 @@ namespace DroidDeck.Services
             catch { return false; }
         }
 
-        // ---- lado do app principal ----
-
         private static readonly object Gate = new();
         private static SystemStats? _latest;
         private static DateTime _at = DateTime.MinValue;
         private static Thread? _thread;
 
-        /// <summary>Ha um auxiliar mandando leituras recentes?</summary>
         public static bool Connected
         {
             get { lock (Gate) return _latest != null && DateTime.UtcNow - _at < TimeSpan.FromSeconds(5); }
@@ -86,7 +74,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Fica tentando conectar no auxiliar (barato: uma tentativa a cada 3 s) e guarda a ultima leitura.</summary>
         public static void StartClient()
         {
             if (_thread != null || HardwareSensors.IsElevated) return;
@@ -108,14 +95,13 @@ namespace DroidDeck.Services
                             lock (Gate) { _latest = s; _at = DateTime.UtcNow; }
                         }
                     }
-                    catch { /* sem auxiliar: tenta de novo */ }
+                    catch {  }
                     Thread.Sleep(3000);
                 }
             }) { IsBackground = true, Name = "SensorHelperClient" };
             _thread.Start();
         }
 
-        /// <summary>Sobe o auxiliar elevado (o Windows pede a permissao). False se o usuario recusou.</summary>
         public static bool LaunchElevated()
         {
             try

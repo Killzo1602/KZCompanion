@@ -6,15 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Watchdog de conexão do Discord. Enquanto o backend roda, verifica a cada poucos
-    /// segundos: se há credenciais + token salvos (discord.json) e não estamos conectados,
-    /// tenta reconectar sem popup (interactive:false). Cobre o Discord que abre DEPOIS do
-    /// backend, que reinicia no meio da sessão, ou a conexão que caiu (ex.: PING/CLOSE) —
-    /// sem precisar abrir a config e tocar "Conectar" toda vez. Espelha o ObsAutoConnect.
-    /// Se o token expirou, a tentativa falha em silêncio (Debug) e o usuário reconecta
-    /// manualmente uma vez (aí reautoriza).
-    /// </summary>
     public class DiscordAutoConnect : IHostedService
     {
         private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
@@ -40,7 +31,6 @@ namespace DroidDeck.Services
 
         private async Task WatchdogAsync(CancellationToken ct)
         {
-            // Pequeno atraso pra não competir com o resto do startup.
             try { await Task.Delay(2000, ct); } catch { return; }
 
             while (!ct.IsCancellationRequested)
@@ -61,15 +51,10 @@ namespace DroidDeck.Services
                 }
                 catch (IOException ex)
                 {
-                    // Pipe inexistente = Discord fechado: estado normal, nao e problema.
                     _logger.LogDebug("Discord auto-connect: {Msg}", ex.Message);
                 }
                 catch (Exception ex)
                 {
-                    // Discord aberto mas a conexao falha (RPC travado, token revogado...): da
-                    // segunda falha seguida em diante precisa aparecer no log -- antes ficava
-                    // em Debug e o deck so dizia "Discord nao esta conectado", sem pista do porque.
-                    // Avisa uma vez por mensagem, para nao repetir a cada 10 s.
                     _consecutiveFailures++;
                     if (_consecutiveFailures > 1 && ex.Message != _lastWarning)
                     {

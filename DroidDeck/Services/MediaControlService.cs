@@ -11,42 +11,12 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Acesso ao WinRT de mídia (GlobalSystemMediaTransportControls). Regras deste arquivo:
-    ///
-    /// 1. O session manager é criado UMA vez e reusado. Pedir um novo a cada chamada — que era
-    ///    o jeito de fugir do RPC_E_WRONG_THREAD (0x8001010E) ao cachear e usar de threads
-    ///    diferentes — faz uma ativação COM entre processos por chamada, a cada 3s enquanto
-    ///    houver cliente conectado, e nenhuma delas é liberada de forma determinística.
-    ///
-    /// 2. Todo acesso é serializado por um portão e tem teto de tempo. Quando o serviço de
-    ///    mídia do Windows engasga, a chamada RPC fica pendurada (o log de produção mostrou
-    ///    /api/v1/Media/sessions levando 6-10s e estourando COMException 0x80010002). Sem
-    ///    serialização, cada tick empilhava mais uma thread bloqueada esperando resposta de
-    ///    LPC. Com o portão fica no máximo UMA operação em voo.
-    ///
-    /// 3. Chamada de USUÁRIO nunca é descartada em silêncio. O portão e o disjuntor existem
-    ///    para o poller de 3s não martelar um broker travado — mas por muito tempo eles
-    ///    também engoliam o toque no botão: se o poll estivesse em voo, o comando esperava
-    ///    500ms, desistia e devolvia "falhou" sem nada acima de Debug no log. Era esse o
-    ///    "os controles de mídia param de funcionar sem motivo aparente": bastava a leitura
-    ///    de sessões (que baixa a thumbnail de cada sessão, fácil passar de 500ms) coincidir
-    ///    com o toque. Agora Origin.Interactive espera o portão de verdade e ignora o
-    ///    disjuntor; só o poller desiste rápido.
-    ///
-    /// Como todo acesso passa pelo portão, o manager é sempre usado de forma serializada — é
-    /// isso que torna seguro cacheá-lo, sem reintroduzir o RPC_E_WRONG_THREAD.
-    /// </summary>
     public class MediaControlService
     {
-        /// <summary>De onde veio a chamada — define se ela pode ser descartada.</summary>
         private enum Origin
         {
-            /// <summary>Poller de status: ninguém está esperando, desiste na hora.</summary>
             Background,
 
-            /// <summary>Toque do usuário (botão do deck ou REST): espera o portão e tenta
-            /// mesmo com o disjuntor aberto.</summary>
             Interactive
         }
 
@@ -54,24 +24,12 @@ namespace DroidDeck.Services
         private readonly SemaphoreSlim _gate = new(1, 1);
         private GlobalSystemMediaTransportControlsSessionManager? _manager;
 
-        /// <summary>Chamada de fundo: se já há operação em voo, desiste em vez de enfileirar.</summary>
         private static readonly TimeSpan BackgroundGateWait = TimeSpan.FromMilliseconds(500);
 
-        /// <summary>Chamada do usuário: maior que a operação de fundo mais lenta
-        /// (GetAllSessions, 8s), pra o comando ficar na fila em vez de ser descartado.</summary>
         private static readonly TimeSpan InteractiveGateWait = TimeSpan.FromSeconds(10);
 
         private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
 
-        // Disjuntor. O broker de mídia do Windows (GSMTC) pode simplesmente parar de
-        // responder para a máquina inteira — verificado em 2026-08-04 com um console de 20
-        // linhas fora deste projeto: RequestAsync devolveu RPC_E_CALL_CANCELED (0x80010002)
-        // após ~10s em MTA e nem retornou em STA. Sem disjuntor, cada request de mídia paga
-        // o timeout inteiro e o poller de 3s fica martelando um serviço quebrado.
-        //
-        // O disjuntor cala o POLLER, não o usuário: um toque no botão sempre tenta. Fechar o
-        // circuito para todo mundo deixava o deck morto por um minuto inteiro sem explicação,
-        // e é o comando do usuário que costuma descobrir que o broker voltou.
         private int _consecutiveFailures;
         private long _circuitOpenUntilTicks;
         private const int FailuresToOpen = 3;
@@ -82,8 +40,6 @@ namespace DroidDeck.Services
             _logger = logger;
         }
 
-        /// <summary>True se a tarefa terminou dentro do prazo. Cancela o timer quando a
-        /// tarefa ganha, pra não acumular um Task.Delay pendente por chamada.</summary>
         private static async Task<bool> CompletesWithinAsync(Task task, TimeSpan timeout)
         {
             using var cts = new CancellationTokenSource();
@@ -93,11 +49,6 @@ namespace DroidDeck.Services
             return true;
         }
 
-        /// <summary>
-        /// Executa uma operação sobre o session manager de forma serializada e com timeout,
-        /// devolvendo o fallback em vez de propagar falha — os chamadores tratam ausência de
-        /// mídia como estado normal.
-        /// </summary>
         private async Task<T> RunAsync<T>(
             Func<GlobalSystemMediaTransportControlsSessionManager, Task<T>> op,
             T fallback,
@@ -108,8 +59,6 @@ namespace DroidDeck.Services
             var limit = timeout ?? DefaultTimeout;
             var interactive = origin == Origin.Interactive;
 
-            // Disjuntor aberto: o poller responde na hora, sem tocar no WinRT. Comando do
-            // usuário passa assim mesmo — se o broker voltou, é ele quem vai perceber.
             if (Volatile.Read(ref _circuitOpenUntilTicks) > DateTime.UtcNow.Ticks)
             {
                 if (!interactive)
@@ -123,8 +72,6 @@ namespace DroidDeck.Services
             var gateWait = interactive ? InteractiveGateWait : BackgroundGateWait;
             if (!await _gate.WaitAsync(gateWait).ConfigureAwait(false))
             {
-                // Em Warning quando é o usuário: um botão que não faz nada precisa deixar
-                // rastro no log, senão vira "parou de funcionar sem motivo".
                 if (interactive)
                     _logger.LogWarning(
                         "Mídia: '{What}' descartado — o portão ficou ocupado por {Secs}s. " +
@@ -153,13 +100,6 @@ namespace DroidDeck.Services
                 var task = op(manager);
                 if (!await CompletesWithinAsync(task, limit).ConfigureAwait(false))
                 {
-                    // O manager é PRESERVADO aqui de propósito. CompletesWithinAsync só
-                    // desiste de esperar — a chamada WinRT continua viva (não dá pra cancelar
-                    // RPC em voo). Zerar o campo fazia a próxima chamada ativar um segundo
-                    // manager por COM e usá-lo EM PARALELO com a órfã, que é exatamente a
-                    // concorrência que o portão existe pra impedir — e o jeito de trazer o
-                    // RPC_E_WRONG_THREAD de volta. Timeout é sintoma de broker lento; proxy
-                    // podre chega como exceção, e aí sim o manager é recriado.
                     _logger.LogWarning("Mídia: timeout ({Secs}s) em '{What}'; a chamada WinRT ficou pendurada.",
                         limit.TotalSeconds, what);
                     NoteFailure($"timeout em {what}");
@@ -172,8 +112,6 @@ namespace DroidDeck.Services
             }
             catch (Exception ex)
             {
-                // Proxy possivelmente obsoleto (serviço de mídia reiniciado, sessão sumiu):
-                // força recriação na próxima chamada em vez de repetir o erro para sempre.
                 _manager = null;
                 _logger.LogError(ex, "Mídia: falha em '{What}'", what);
                 NoteFailure($"{ex.GetType().Name} 0x{ex.HResult:X8}");
@@ -185,8 +123,6 @@ namespace DroidDeck.Services
             }
         }
 
-        // NoteSuccess/NoteFailure só são chamados de dentro do portão, então _consecutiveFailures
-        // não precisa de sincronização; o tique de reabertura é lido fora e usa Volatile.
         private void NoteSuccess()
         {
             if (_consecutiveFailures != 0 || Volatile.Read(ref _circuitOpenUntilTicks) != 0)
@@ -209,13 +145,9 @@ namespace DroidDeck.Services
             _consecutiveFailures = 0;
         }
 
-        /// <param name="includeThumbnails">Ler a capa custa uma abertura de stream por sessão
-        /// e é o que mais engorda a operação. Quem só quer id/estado passa false.</param>
         public Task<List<MediaSessionInfo>> GetAllSessionsAsync(bool includeThumbnails = true) =>
             RunAsync(async manager =>
             {
-                // Timings por passo ficam em Debug: o NLog roda em minlevel=Info, então não
-                // aparecem na operação normal, mas bastam pra achar qual chamada WinRT trava.
                 var sw = Stopwatch.StartNew();
                 var sessions = manager.GetSessions();
                 _logger.LogDebug("[diag] GetSessions() -> {N} sessoes em {Ms}ms", sessions.Count, sw.ElapsedMilliseconds);
@@ -233,15 +165,11 @@ namespace DroidDeck.Services
             new List<MediaSessionInfo>(),
             nameof(GetAllSessionsAsync),
             Origin.Interactive,
-            // Mais folgado quando lê a thumbnail de cada sessão.
             includeThumbnails ? TimeSpan.FromSeconds(8) : TimeSpan.FromSeconds(4));
 
         public Task<MediaSessionInfo?> GetSessionByIdAsync(string sessionId) =>
             RunAsync<MediaSessionInfo?>(async manager =>
             {
-                // Consulta por id é estrita de propósito: 404 quando o id não existe mais é a
-                // resposta certa para um GET. O fallback "usa a sessão que está tocando" vale
-                // só para COMANDO, onde não fazer nada é pior que agir na sessão ativa.
                 var matches = manager.GetSessions()
                     .Where(x => x.SourceAppUserModelId == sessionId)
                     .ToList();
@@ -252,19 +180,6 @@ namespace DroidDeck.Services
             nameof(GetSessionByIdAsync),
             Origin.Interactive);
 
-        /// <summary>
-        /// Escolhe a sessão alvo. Na ordem:
-        ///
-        /// 1. Sessões cujo SourceAppUserModelId bate com o id pedido — e, entre elas, a que
-        ///    está TOCANDO. O id não é único: duas janelas do Chrome, ou dois players do
-        ///    mesmo app, compartilham o mesmo AUMID, e o FirstOrDefault antigo mandava o
-        ///    comando pra qualquer uma — às vezes uma aba parada, enquanto a que tocava
-        ///    ignorava o botão.
-        /// 2. Se o id não existe mais (app fechado e reaberto, AUMID do navegador mudou) ou
-        ///    veio vazio: a sessão corrente do sistema, depois qualquer uma tocando, depois a
-        ///    primeira. É o comportamento das teclas de mídia do teclado — antes disso o botão
-        ///    morria com "Session not found" até alguém reconfigurar.
-        /// </summary>
         private GlobalSystemMediaTransportControlsSession? ResolveSession(
             GlobalSystemMediaTransportControlsSessionManager manager, string? sessionId)
         {
@@ -285,10 +200,6 @@ namespace DroidDeck.Services
                 ?? sessions.FirstOrDefault();
         }
 
-        /// <summary>
-        /// Posicao de agora. O Windows so atualiza a posicao de vez em quando (o Spotify, a cada
-        /// pausa ou pulo): tocando, soma o tempo desde a ultima atualizacao.
-        /// </summary>
         private static double LivePosition(
             GlobalSystemMediaTransportControlsSessionTimelineProperties timeline,
             GlobalSystemMediaTransportControlsSessionPlaybackInfo playback)
@@ -320,7 +231,6 @@ namespace DroidDeck.Services
             }
             catch
             {
-                // A sessão pode morrer entre o GetSessions() e a leitura.
                 return false;
             }
         }
@@ -373,9 +283,6 @@ namespace DroidDeck.Services
             }
             catch (COMException ex) when (ex.HResult == RPC_E_WRONG_THREAD)
             {
-                // Proxy do manager preso a outra thread: pular a sessão e seguir repetia o erro a
-                // cada consulta para sempre (o log mostrou um por minuto durante 40 minutos).
-                // Subir faz o RunAsync descartar o manager e criar outro na próxima chamada.
                 throw;
             }
             catch (Exception ex)
@@ -386,10 +293,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>
-        /// O que está tocando agora (a sessão que as teclas de mídia controlariam), para o botão
-        /// "tocando agora". Sem capa por padrão: quem chama pede a capa só quando a faixa muda.
-        /// </summary>
         public Task<MediaSessionInfo?> GetNowPlayingAsync(bool includeThumbnail) =>
             RunAsync<MediaSessionInfo?>(async manager =>
             {
@@ -398,11 +301,9 @@ namespace DroidDeck.Services
             },
             null,
             nameof(GetNowPlayingAsync),
-            // A capa so e lida quando a faixa muda: vale esperar a vez no portao.
             includeThumbnail ? Origin.Interactive : Origin.Background,
             includeThumbnail ? TimeSpan.FromSeconds(6) : TimeSpan.FromSeconds(3));
 
-        /// <summary>Pula para um ponto (em segundos) da faixa que está tocando.</summary>
         public Task<bool> SeekAsync(double seconds) =>
             RunAsync(async manager =>
             {
@@ -415,7 +316,6 @@ namespace DroidDeck.Services
             nameof(SeekAsync),
             Origin.Interactive);
 
-        /// <summary>True se há mídia TOCANDO (sessão atual ou qualquer uma). Leve — sem thumbnail/props.</summary>
         public Task<bool> IsAnythingPlayingAsync() =>
             RunAsync(manager =>
             {
@@ -432,18 +332,8 @@ namespace DroidDeck.Services
             false,
             nameof(IsAnythingPlayingAsync),
             Origin.Background,
-            // Chamado a cada 3s pelo SystemMonitorService: não pode segurar o loop.
             TimeSpan.FromSeconds(3));
 
-        /// <summary>
-        /// Manda um comando de transporte. sessionId vazio = "a sessão que está tocando",
-        /// igual às teclas de mídia do teclado.
-        ///
-        /// Resolver a sessão acontece DENTRO da mesma operação do portão. Antes, um botão sem
-        /// sessionId fazia GetAllSessionsAsync (portão + até 8s + thumbnails) e só então
-        /// SendCommandAsync (portão de novo): duas disputas pelo mesmo semáforo por toque, e
-        /// perder qualquer uma delas fazia o botão não fazer nada, em silêncio.
-        /// </summary>
         public Task<MediaCommandResult> SendCommandAsync(string? sessionId, string command) =>
             RunAsync(async manager =>
             {
@@ -487,8 +377,6 @@ namespace DroidDeck.Services
                 {
                     Success = true,
                     SessionId = resolvedId,
-                    // Estado logo depois do comando, pra o cliente corrigir o palpite otimista
-                    // sem esperar o próximo tique de 3s do poller.
                     Playing = IsPlaying(session)
                 };
             },
@@ -497,16 +385,12 @@ namespace DroidDeck.Services
             Origin.Interactive);
     }
 
-    /// <summary>Resultado de um comando de transporte: qual sessão recebeu e como ela ficou.</summary>
     public class MediaCommandResult
     {
         public bool Success { get; set; }
 
-        /// <summary>Sessão que de fato recebeu o comando — pode não ser a pedida, quando o id
-        /// configurado no botão já não existe.</summary>
         public string? SessionId { get; set; }
 
-        /// <summary>Estado de reprodução logo após o comando; null quando não deu pra ler.</summary>
         public bool? Playing { get; set; }
     }
 

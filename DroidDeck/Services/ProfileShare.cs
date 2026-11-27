@@ -9,14 +9,6 @@ using DroidDeck.Models;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Perfil num texto curto para link e QR: JSON comprimido (deflate) em base64url.
-    /// O link do site (me.gf2.in/DroidDeck/share/#...) mostra o perfil e leva ao configurador
-    /// do PC com ?import=..., que chama o POST /api/share/import.
-    ///
-    /// Imagens proprias ficam de fora (o texto ficaria grande demais para um QR); o icone
-    /// embutido, o rotulo, as cores e as acoes vao. Para levar tudo, o backup .droiddeck.
-    /// </summary>
     public static class ProfileShare
     {
         public const string SiteUrl = "https://me.gf2.in/DroidDeck/share/";
@@ -52,11 +44,10 @@ namespace DroidDeck.Services
             return Convert.ToBase64String(ms.ToArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         }
 
-        /// <summary>Perfil do texto, com ids novos (importar duas vezes nao sobrescreve).</summary>
         public static DeckProfile Decode(string data)
         {
             if (string.IsNullOrWhiteSpace(data) || data.Length > MaxLength)
-                throw new InvalidDataException("Link de perfil inválido.");
+                throw new InvalidDataException("Invalid profile link.");
             try
             {
                 var b64 = data.Trim().Replace('-', '+').Replace('_', '/');
@@ -69,10 +60,10 @@ namespace DroidDeck.Services
                 while ((read = deflate.Read(buffer, 0, buffer.Length)) > 0)
                 {
                     limited.Write(buffer, 0, read);
-                    if (limited.Length > 4 * 1024 * 1024) throw new InvalidDataException("Link de perfil inválido.");
+                    if (limited.Length > 4 * 1024 * 1024) throw new InvalidDataException("Invalid profile link.");
                 }
                 var shared = JsonSerializer.Deserialize<Shared>(limited.ToArray(), Json);
-                if (shared?.Profile == null) throw new InvalidDataException("Link de perfil inválido.");
+                if (shared?.Profile == null) throw new InvalidDataException("Invalid profile link.");
                 var p = shared.Profile;
                 p.Id = Guid.NewGuid().ToString();
                 p.IsDefault = false;
@@ -84,7 +75,7 @@ namespace DroidDeck.Services
             }
             catch (Exception ex) when (ex is FormatException or JsonException or InvalidDataException or IOException)
             {
-                throw new InvalidDataException("Link de perfil inválido.", ex);
+                throw new InvalidDataException("Invalid profile link.", ex);
             }
         }
     }

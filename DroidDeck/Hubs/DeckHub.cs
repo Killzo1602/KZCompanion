@@ -12,8 +12,6 @@ namespace DroidDeck.Hubs
     {
         private readonly IServiceProvider _services;
 
-        // Nº de clientes conectados. O SystemMonitorService usa isto pra NÃO ficar
-        // fazendo broadcast e poll de mídia (WinRT caro) quando ninguém está ouvindo.
         private static int _connectedCount = 0;
         public static int ConnectedCount => Volatile.Read(ref _connectedCount);
 
@@ -22,14 +20,11 @@ namespace DroidDeck.Hubs
             _services = services;
         }
 
-        // Ao conectar (ou reconectar), envia o estado atual de cada integração só para este
-        // cliente, pra UI não ficar desatualizada após reconexão / reinício do backend.
         public override async Task OnConnectedAsync()
         {
             Interlocked.Increment(ref _connectedCount);
             Context.Items["since"] = DateTime.UtcNow;
             Lib.Log.Info($"Hub: cliente conectado {Context.ConnectionId[..6]} ({Context.GetHttpContext()?.Connection.RemoteIpAddress}); total {ConnectedCount}");
-            // Idioma da conexao: ?lang= (o app manda) ou o Accept-Language (navegador).
             var http = Context.GetHttpContext();
             var language = http?.Request.Query["lang"].ToString() is { Length: > 0 } q
                 ? L.LanguageOf(q)
@@ -37,7 +32,6 @@ namespace DroidDeck.Hubs
             Context.Items[LanguageKey] = language;
             L.Language = language;
             await Groups.AddToGroupAsync(Context.ConnectionId, LanguageGroup(language));
-            // Manda a grade física atual (o configurador web a usa no lugar de um seletor manual).
             if (_services.GetService(typeof(Services.StreamDeckConfigService)) is Services.StreamDeckConfigService cfg)
             {
                 try
@@ -48,7 +42,6 @@ namespace DroidDeck.Hubs
                 }
                 catch { }
             }
-            // Estado de cada provedor com estado ao vivo (Discord, OBS, Tuya, timers...).
             if (_services.GetService(typeof(Services.ActionExecutorService)) is Services.ActionExecutorService executor)
             {
                 foreach (var provider in executor.StatefulProviders)
@@ -57,7 +50,6 @@ namespace DroidDeck.Hubs
                     catch { }
                 }
             }
-            // Botoes de dois estados ligados e valores dos botoes de informacao.
             if (_services.GetService(typeof(Services.ButtonToggleService)) is Services.ButtonToggleService toggles)
             {
                 try { await Clients.Caller.SendAsync(Services.ButtonToggleService.Event, toggles.GetState()); }
@@ -73,7 +65,6 @@ namespace DroidDeck.Hubs
                 }
                 catch { }
             }
-            // Perfil do app em foco, para o celular abrir ja no perfil certo.
             if (_services.GetService(typeof(Services.ForegroundWatcher)) is Services.ForegroundWatcher fg)
             {
                 try { await Clients.Caller.SendAsync(Services.ForegroundWatcher.Event, fg.GetState()); }
@@ -82,14 +73,12 @@ namespace DroidDeck.Hubs
             await base.OnConnectedAsync();
         }
 
-        /// <summary>A tela Apps do celular esta aberta: passa a receber ReceiveRunningApps (e liga os WinEvents).</summary>
         public void WatchRunningApps() =>
             (_services.GetService(typeof(Services.RunningAppsService)) as Services.RunningAppsService)?.Watch(Context.ConnectionId);
 
         public void UnwatchRunningApps() =>
             (_services.GetService(typeof(Services.RunningAppsService)) as Services.RunningAppsService)?.Unwatch(Context.ConnectionId);
 
-        /// <summary>O app trocou de idioma: passa a receber no novo e ja recebe os textos traduzidos.</summary>
         public async Task SetLanguage(string language)
         {
             language = L.LanguageOf(language);
@@ -110,16 +99,10 @@ namespace DroidDeck.Hubs
 
         private const string LanguageKey = "lang";
 
-        /// <summary>Um grupo por arquivo de idioma.</summary>
         public static IReadOnlyList<string> Languages => L.Languages;
 
         public static string LanguageGroup(string language) => "lang:" + language;
 
-        /// <summary>
-        /// Tecla em modo "segurar": o app chama ao encostar o dedo e o <see cref="ReleaseKey"/>
-        /// ao tirar. Vem o id do botao, nao a tecla: o servidor le a acao do perfil salvo,
-        /// como no /press, entao o celular nao escolhe o que e digitado (ActionPolicy).
-        /// </summary>
         public void HoldKey(string buttonId)
         {
             if (FindHoldKey(buttonId) is ushort vk)
@@ -142,11 +125,9 @@ namespace DroidDeck.Hubs
         private Integrations.CompanionIntegration? Companion =>
             _services.GetService(typeof(Integrations.CompanionIntegration)) as Integrations.CompanionIntegration;
 
-        /// <summary>Tecla da superficie do Companion: o app manda ao encostar e ao soltar o dedo.</summary>
         public Task CompanionKey(int key, bool pressed) =>
             Companion?.SetKeyAsync(Context.ConnectionId, key, pressed) ?? Task.CompletedTask;
 
-        /// <summary>Parametro de mudo de um botao "cortar enquanto segura" do Voicemeeter.</summary>
         private string? FindHoldMute(string buttonId)
         {
             if (string.IsNullOrEmpty(buttonId)) return null;
@@ -181,7 +162,6 @@ namespace DroidDeck.Hubs
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            // Celular que caiu com o dedo numa tecla: solta so as dele.
             Lib.Input.HeldKeys.Shared.ReleaseOwner(Context.ConnectionId);
             (_services.GetService(typeof(Services.RunningAppsService)) as Services.RunningAppsService)?.Unwatch(Context.ConnectionId);
             MicHold?.ReleaseOwner(Context.ConnectionId);
@@ -195,10 +175,6 @@ namespace DroidDeck.Hubs
 
     public static class LocalizedHubExtensions
     {
-        /// <summary>
-        /// Envia para cada grupo de idioma a sua versao: payload() roda com L.Language daquele
-        /// idioma, entao L.T e L.Text dentro dele saem traduzidos.
-        /// </summary>
         public static async Task SendLocalizedAsync(this IHubContext<DeckHub> hub, string method, Func<object?> payload)
         {
             var previous = L.Language;

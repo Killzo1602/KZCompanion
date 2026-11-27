@@ -7,11 +7,6 @@ using DroidDeck.Lib;
 
 namespace DroidDeck
 {
-    /// <summary>
-    /// Janela de pareamento: exibe um QR com ip+porta+chave para o app escanear, ou o
-    /// endereco do deck no navegador (iPhone, tablet) para a camera abrir.
-    /// A chave de API só fica visível quando o usuário abre esta janela (pelo menu da bandeja).
-    /// </summary>
     public class frmPairing : Form
     {
         private readonly Label _info;
@@ -21,27 +16,30 @@ namespace DroidDeck
 
         public frmPairing()
         {
-            Text = L.Ui("DroidDeck — Parear dispositivo");
+            Text = L.Ui("KZ Companion — Pair device");
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
             Icon = AppIcon.Small;
             ClientSize = new Size(360, 528);
+            BackColor = Color.FromArgb(17, 18, 23);
+            ForeColor = Color.FromArgb(226, 232, 240);
+            var accent = Color.FromArgb(56, 189, 248);
 
             var ip = NetworkInfo.GetLanIp();
             var key = ApiKeyProvider.GetKey();
 
             _appMode = new RadioButton
             {
-                Text = L.Ui("App Android"),
+                Text = L.Ui("Android app"),
                 Location = new Point(40, 8),
                 Size = new Size(130, 24),
                 Checked = true,
             };
             var browserMode = new RadioButton
             {
-                Text = L.Ui("Abrir no navegador"),
+                Text = L.Ui("Open in browser"),
                 Location = new Point(180, 8),
                 Size = new Size(150, 24),
             };
@@ -58,6 +56,8 @@ namespace DroidDeck
                 Location = new Point(20, 82),
                 Size = new Size(320, 320),
                 SizeMode = PictureBoxSizeMode.Zoom,
+                BackColor = Color.White,
+                Padding = new Padding(8),
             };
 
             FormClosed += (_, _) => SetQr(null);
@@ -67,31 +67,37 @@ namespace DroidDeck
                 Location = new Point(10, 406),
                 Size = new Size(340, 20),
                 TextAlign = ContentAlignment.MiddleCenter,
+                LinkColor = accent,
+                ActiveLinkColor = Color.White,
             };
             _url.LinkClicked += (_, _) =>
             {
-                try { Clipboard.SetText(PairingInfo.BuildBrowserUrl()); _url.Text = L.Ui("Endereço copiado"); }
+                try { Clipboard.SetText(PairingInfo.BuildBrowserUrl()); _url.Text = L.Ui("Address copied"); }
                 catch { }
             };
 
             var details = new TextBox
             {
-                Text = L.Ui("IP: {ip}    Chave: {key}", ("ip", $"{ip}:{PairingInfo.Port}"), ("key", key)),
+                Text = L.Ui("IP: {ip}    Key: {key}", ("ip", $"{ip}:{PairingInfo.Port}"), ("key", key)),
                 Location = new Point(10, 432),
                 Size = new Size(340, 44),
                 Multiline = true,
                 ReadOnly = true,
                 BorderStyle = BorderStyle.None,
-                BackColor = SystemColors.Control,
+                BackColor = BackColor,
+                ForeColor = ForeColor,
                 TextAlign = HorizontalAlignment.Center,
             };
 
             var close = new Button
             {
-                Text = L.Ui("Fechar"),
+                Text = L.Ui("Close"),
                 Location = new Point(140, 488),
                 Size = new Size(80, 30),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(30, 41, 59),
             };
+            close.FlatAppearance.BorderColor = accent;
             close.Click += (_, _) => Close();
             AcceptButton = close;
 
@@ -111,14 +117,14 @@ namespace DroidDeck
         {
             if (_appMode.Checked)
             {
-                _info.Text = L.Ui("No app DroidDeck, vá em Configurar → Parear (QR)\ne escaneie este código para conectar com segurança.");
+                _info.Text = L.Ui("In the KZ Companion app, go to Settings → Pair (QR)\nand scan this code to connect securely.");
                 _url.Visible = false;
                 SetQr(PairingInfo.BuildUri());
             }
             else
             {
-                _info.Text = L.Ui("Aponte a câmera do iPhone, iPad ou tablet para este código:\no deck abre no navegador, sem instalar nada.");
-                _url.Text = L.Ui("Copiar o endereço (para abrir em outro PC)");
+                _info.Text = L.Ui("Point your iPhone, iPad or tablet camera at this code:\nthe deck opens in the browser, nothing to install.");
+                _url.Text = L.Ui("Copy the address (to open on another PC)");
                 _url.Visible = true;
                 SetQr(PairingInfo.BuildBrowserUrl());
             }
@@ -126,16 +132,12 @@ namespace DroidDeck
 
         private void SetQr(string? content)
         {
-            // O PictureBox não descarta a própria Image: sem isto vaza um HBITMAP por troca.
             var old = _pic.Image;
             _pic.Image = null;
             try { old?.Dispose(); } catch { }
             if (content == null) return;
             try
             {
-                // Um Bitmap construído a partir de um stream exige que o stream continue vivo
-                // pelo resto da vida da imagem — daí a cópia independente, que permite fechar
-                // o MemoryStream aqui mesmo.
                 using var ms = new MemoryStream(PairingInfo.BuildQrPng(content));
                 using var qr = new Bitmap(ms);
                 _pic.Image = new Bitmap(qr);

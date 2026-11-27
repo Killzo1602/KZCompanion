@@ -1,17 +1,15 @@
 import 'package:droiddeck/src/kz/config/apps_config_page.dart';
 import 'package:droiddeck/src/kz/kz_appearance_page.dart';
 import 'package:droiddeck/src/kz/kz_integrations_page.dart';
+import 'package:droiddeck/src/kz/kz_appearance.dart';
+import 'package:droiddeck/src/kz/kz_ring.dart';
 import 'package:flutter/material.dart';
 
-/// Configurador do KZ Companion (navegador no próprio PC): aplicativos, integrações e aparência.
 class KzConfigShell extends StatefulWidget {
   const KzConfigShell({super.key, this.pages});
 
-  /// Os unicos destinos do configurador do Windows. Buttons, Profiles, o editor do deck antigo e a
-  /// importacao do Stream Deck foram removidos de proposito (546ed96): nao voltam por aqui.
   static const destinationLabels = ['Applications', 'Integrations', 'Appearance'];
 
-  /// Só para testes: páginas no lugar das reais (que precisam do PC).
   final List<Widget>? pages;
 
   @override
@@ -30,29 +28,53 @@ class _KzConfigShellState extends State<KzConfigShell> {
           KzIntegrationsPage(),
           KzAppearancePage(),
         ];
+    final theme = Theme.of(context);
     return Scaffold(
-      body: Row(children: [
-        NavigationRail(
-          selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          labelType: NavigationRailLabelType.all,
-          leading: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Column(children: [
-              Icon(Icons.bolt_rounded, color: scheme.primary, size: 28),
-              const SizedBox(height: 4),
-              const Text('KZ Companion', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-            ]),
+      body: KzBackdrop(
+        child: Theme(
+          data: theme.copyWith(
+            scaffoldBackgroundColor: Colors.transparent,
+            appBarTheme: theme.appBarTheme.copyWith(backgroundColor: Colors.transparent, scrolledUnderElevation: 0),
           ),
-          destinations: const [
-            NavigationRailDestination(icon: Icon(Icons.apps_rounded), label: Text('Applications')),
-            NavigationRailDestination(icon: Icon(Icons.extension_outlined), label: Text('Integrations')),
-            NavigationRailDestination(icon: Icon(Icons.palette_outlined), label: Text('Appearance')),
-          ],
+          child: Row(children: [
+            NavigationRail(
+              selectedIndex: _index,
+              onDestinationSelected: (i) => setState(() => _index = i),
+              labelType: NavigationRailLabelType.all,
+              minWidth: 112,
+              backgroundColor: scheme.onSurface.withValues(alpha: 0.03),
+              indicatorColor: scheme.primary.withValues(alpha: 0.18),
+              leading: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [KzColors.audio, KzColors.ram],
+                      ),
+                    ),
+                    child: const Icon(Icons.bolt_rounded, color: Colors.white, size: 28),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text('KZ Companion', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                ]),
+              ),
+              destinations: const [
+                NavigationRailDestination(icon: Icon(Icons.apps_rounded), label: Text('Applications')),
+                NavigationRailDestination(icon: Icon(Icons.extension_outlined), label: Text('Integrations')),
+                NavigationRailDestination(icon: Icon(Icons.palette_outlined), label: Text('Appearance')),
+              ],
+            ),
+            VerticalDivider(width: 1, color: scheme.onSurface.withValues(alpha: 0.08)),
+            Expanded(child: IndexedStack(index: _index, children: pages)),
+          ]),
         ),
-        VerticalDivider(width: 1, color: scheme.outlineVariant),
-        Expanded(child: IndexedStack(index: _index, children: pages)),
-      ]),
+      ),
     );
   }
 }

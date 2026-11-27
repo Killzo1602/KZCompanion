@@ -33,7 +33,6 @@ class ConfigPageState extends State<ConfigPage> {
   Future<void> _loadIP() async {
     final prefs = await SharedPreferences.getInstance();
     var pcs = await PcStore.load();
-    // PC migrado da versão antiga ainda sem nome: pergunta ao PC em uso.
     final current = pcs.where((p) => p.id == PcStore.currentId).firstOrNull;
     if (current != null && (current.name == 'PC' || current.name == current.ip)) {
       await fetchPcName(current);
@@ -46,12 +45,11 @@ class ConfigPageState extends State<ConfigPage> {
     });
   }
 
-  /// PCs pareados: tocar troca de PC; o menu renomeia ou esquece.
   Widget _buildPcList() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(tr('PCs pareados'), style: Theme.of(context).textTheme.titleSmall),
+        Text(tr('Paired PCs'), style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 4),
         for (final pc in _pcs)
           ListTile(
@@ -65,13 +63,13 @@ class ConfigPageState extends State<ConfigPage> {
             trailing: PopupMenuButton<String>(
               onSelected: (v) => v == 'rename' ? _renamePc(pc) : _removePc(pc),
               itemBuilder: (_) => [
-                PopupMenuItem(value: 'rename', child: Text(tr('Renomear'))),
-                PopupMenuItem(value: 'remove', child: Text(tr('Esquecer este PC'))),
+                PopupMenuItem(value: 'rename', child: Text(tr('Rename'))),
+                PopupMenuItem(value: 'remove', child: Text(tr('Forget this PC'))),
               ],
             ),
           ),
         Text(
-          tr('Para acrescentar outro PC, pareie com o QR dele (ou digite o IP abaixo).'),
+          tr('To add another PC, pair with its QR code (or type the IP below).'),
           style: TextStyle(
               fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
         ),
@@ -84,13 +82,13 @@ class ConfigPageState extends State<ConfigPage> {
     final name = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(tr('Nome do PC')),
+        title: Text(tr('PC name')),
         content: TextField(controller: ctrl, autofocus: true),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancelar'))),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(tr('Cancel'))),
           FilledButton(
               onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-              child: Text(tr('Salvar'))),
+              child: Text(tr('Save'))),
         ],
       ),
     );
@@ -119,11 +117,11 @@ class ConfigPageState extends State<ConfigPage> {
       if (result != 'Not Found') {
         _ipController.text = result;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('Servidor encontrado: {server}', {'server': result}))),
+          SnackBar(content: Text(tr('Server found: {server}', {'server': result}))),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('Servidor não encontrado'))),
+          SnackBar(content: Text(tr('Server not found'))),
         );
       }
     } catch (e) {
@@ -139,43 +137,38 @@ class ConfigPageState extends State<ConfigPage> {
     var ip = _ipController.text.trim();
     if (ip.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('Por favor insira um IP válido'))),
+        SnackBar(content: Text(tr('Please enter a valid IP'))),
       );
       return;
     }
 
-    // Basic Sanitization
     ip = ip.replaceAll('http://', '').replaceAll('https://', '');
     if (ip.endsWith('/')) ip = ip.substring(0, ip.length - 1);
 
-    // Check for port
     String baseUrl;
     String port;
     if (ip.contains(':')) {
-      // User provided port
       baseUrl = 'http://$ip';
       port = ip.substring(ip.indexOf(':') + 1);
     } else {
-      // Default port
       port = Constants.defaultPort;
       baseUrl = 'http://$ip:$port';
     }
 
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(Constants.ipAddrKey, ip); // Save raw IP for UI
-    await prefs.setString(Constants.portKey, port); // persiste a porta p/ o splash
-    final apiKey = prefs.getString(Constants.apiKeyKey); // mantém a chave do pareamento
+    await prefs.setString(Constants.ipAddrKey, ip);
+    await prefs.setString(Constants.portKey, port);
+    final apiKey = prefs.getString(Constants.apiKeyKey);
     final host = ip.contains(':') ? ip.substring(0, ip.indexOf(':')) : ip;
     final pc = await PcStore.upsert(ip: host, port: port, apiKey: apiKey);
     fetchPcName(pc);
 
-    // Update Singletons immediately
     final client = Injector.get<DroidDeckClient>();
     client.setBaseUrl(baseUrl);
     client.setApiKey(apiKey);
 
     final signalR = Injector.get<SignalRService>();
-    await signalR.updateUrl(baseUrl, apiKey: apiKey); // Use local baseUrl, not client.baseUrl
+    await signalR.updateUrl(baseUrl, apiKey: apiKey);
 
     if (mounted) {
       Navigator.of(context).pushReplacementNamed('/home');
@@ -200,7 +193,7 @@ class ConfigPageState extends State<ConfigPage> {
         key == null ||
         key.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('Esse QR não é de pareamento do DroidDeck. Use o da janela "Parear dispositivo (QR)" do PC.'))),
+        SnackBar(content: Text(tr('That QR isn\'t a KZ Companion pairing code. Use the one in the PC\'s "Pair device (QR)" window.'))),
       );
       return;
     }
@@ -208,9 +201,8 @@ class ConfigPageState extends State<ConfigPage> {
     final baseUrl = 'http://$ip:$port';
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(Constants.ipAddrKey, ip);
-    await prefs.setString(Constants.portKey, port); // persiste a porta p/ o splash
+    await prefs.setString(Constants.portKey, port);
     await prefs.setString(Constants.apiKeyKey, key);
-    // Parear com outro PC acrescenta à lista; o mesmo IP atualiza a chave.
     final pc = await PcStore.upsert(ip: ip, port: port, apiKey: key);
     await fetchPcName(pc);
 
@@ -222,18 +214,16 @@ class ConfigPageState extends State<ConfigPage> {
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('Pareado com sucesso!'))),
+        SnackBar(content: Text(tr('Paired successfully!'))),
       );
       Navigator.of(context).pushReplacementNamed('/home');
     }
   }
 
-  /// Deck no navegador: mostra a qual PC está ligado e permite esquecer a chave.
   Widget _buildBrowserPairing() {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: const Icon(Icons.computer),
-      // Nome do PC (como no Windows), não o endereço.
       title: FutureBuilder<dynamic>(
         future: Injector.get<DroidDeckClient>().getJson('/api/system/info'),
         builder: (context, snap) {
@@ -241,14 +231,14 @@ class ConfigPageState extends State<ConfigPage> {
           return Text(name ?? Uri.base.host);
         },
       ),
-      subtitle: Text(tr('Este navegador está pareado com o PC.')),
+      subtitle: Text(tr('This browser is paired with the PC.')),
       trailing: TextButton(
         onPressed: () async {
           await (await SharedPreferences.getInstance()).remove(Constants.apiKeyKey);
           if (!mounted) return;
           Navigator.of(context).pushNamedAndRemoveUntil('/', (_) => false);
         },
-        child: Text(tr('Esquecer')),
+        child: Text(tr('Forget')),
       ),
     );
   }
@@ -257,7 +247,7 @@ class ConfigPageState extends State<ConfigPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr('Configuração')),
+        title: Text(tr('Settings')),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -265,7 +255,6 @@ class ConfigPageState extends State<ConfigPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-            // No navegador o PC é o próprio endereço da página: sem lista de PCs nem IP.
             if (kIsWeb) _buildBrowserPairing(),
             if (!kIsWeb) ...[
             if (_pcs.isNotEmpty) ...[
@@ -279,13 +268,13 @@ class ConfigPageState extends State<ConfigPage> {
                   MaterialPageRoute(builder: (_) => const WelcomePage()),
                 ),
                 icon: const Icon(Icons.help_outline),
-                label: Text(tr('Ainda não instalou no PC? Veja como')),
+                label: Text(tr('Not installed on the PC yet? See how')),
               ),
             ),
             TextField(
               controller: _ipController,
               decoration: InputDecoration(
-                labelText: tr('IP do Servidor'),
+                labelText: tr('Server IP'),
                 hintText: '192.168.x.x',
               ),
             ),
@@ -295,18 +284,18 @@ class ConfigPageState extends State<ConfigPage> {
                 : ElevatedButton.icon(
                     onPressed: _findServer,
                     icon: const Icon(Icons.search),
-                    label: Text(tr('Pesquisar Servidor')),
+                    label: Text(tr('Search for server')),
                   ),
             const SizedBox(height: 16),
             ElevatedButton.icon(
               onPressed: _pairWithQr,
               icon: const Icon(Icons.qr_code_scanner),
-              label: Text(tr('Parear (QR)')),
+              label: Text(tr('Pair (QR)')),
             ),
             const SizedBox(height: 16),
             ElevatedButton(
               onPressed: _saveAndGoBack,
-              child: Text(tr('Salvar')),
+              child: Text(tr('Save')),
             ),
             ],
           ],

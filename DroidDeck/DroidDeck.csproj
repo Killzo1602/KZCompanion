@@ -35,15 +35,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Bandeja e janelas carregam o tamanho exato daqui (ver AppIcon.cs). -->
     <EmbeddedResource Include="kzcompanion.ico" LogicalName="DroidDeck.droiddeck.ico" />
-    <!-- Um arquivo por idioma, os mesmos do app: o PC acha os idiomas por eles. -->
-    <EmbeddedResource Include="..\app\assets\i18n\*.json" LogicalName="i18n.%(Filename).json" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- TuyaCrypto e interno de proposito (ninguem fora do plugin deve montar assinatura),
-         mas precisa ser testavel: e a unica peca do plugin que falha em silencio. -->
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>DroidDeck.Tests</_Parameter1>
     </AssemblyAttribute>
@@ -73,10 +68,8 @@
     </Content>
   </ItemGroup>
 
-  <!-- Sem o index.html do configurador, "/" respondia 401 e a janela abria vazia. -->
   <Target Name="RequireWebBuild" BeforeTargets="PrepareForPublish">
     <Error Condition="!Exists('$(ProjectDir)wwwroot/index.html')" Text="wwwroot/index.html ausente: rode scripts/publish-windows.ps1 (ou scripts/deploy-web.ps1) antes de publicar." />
-    <!-- wwwroot nao vai para o git e fica velho em silencio: um front-end sem o menu atual (ou com o deck antigo) nao e publicado. -->
     <PropertyGroup>
       <KzWebJs>$([System.IO.File]::ReadAllText('$(ProjectDir)wwwroot/main.dart.js'))</KzWebJs>
       <KzWebStale Condition="!$(KzWebJs.Contains('Integrations')) Or $(KzWebJs.Contains('Import from Stream Deck')) Or $(KzWebJs.Contains('Automations'))">true</KzWebStale>

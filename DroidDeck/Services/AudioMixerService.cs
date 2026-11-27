@@ -22,7 +22,6 @@ namespace DroidDeck.Services
         public int Pid { get; set; }
         public string Name { get; set; } = "";
         public bool System { get; set; }
-        /// <summary>Identidade do aplicativo (hash do caminho do .exe; sem o caminho): sessoes do mesmo programa compartilham.</summary>
         public string GroupKey { get; set; } = "";
         public bool Active { get; set; }
         public int Volume { get; set; }
@@ -34,22 +33,15 @@ namespace DroidDeck.Services
     {
         public string? OutputId { get; set; }
         public string OutputName { get; set; } = "";
-        public int? Volume { get; set; }      // null = sem dispositivo de saida
+        public int? Volume { get; set; }
         public bool Muted { get; set; }
         public string? InputId { get; set; }
         public string InputName { get; set; } = "";
-        public bool? InputMuted { get; set; } // null = sem microfone
+        public bool? InputMuted { get; set; }
         public bool Deafened { get; set; }
         public List<AudioSessionDto> Sessions { get; set; } = new();
     }
 
-    /// <summary>
-    /// Estado de audio do Windows (autoritativo): volume e mudo do dispositivo de saida padrao,
-    /// mudo do microfone padrao e as sessoes de audio por aplicativo (volume proprio de cada
-    /// sessao, SEM multiplicar pelo mestre). O Windows avisa por eventos (volume, sessao nova,
-    /// troca do dispositivo padrao) e so entao o estado e enviado ao celular; um repasse a cada
-    /// 5 s cobre evento perdido. Objetos COM ficam vivos so enquanto registrados.
-    /// </summary>
     public sealed class AudioMixerService : BackgroundService, IMMNotificationClient
     {
         private readonly IHubContext<DeckHub> _hub;
@@ -57,18 +49,17 @@ namespace DroidDeck.Services
         private MMDeviceEnumerator? _enumerator;
         private MMDevice? _render;
         private MMDevice? _capture;
-        private readonly Dictionary<string, Tracked> _sessions = new(); // por id da instancia da sessao
+        private readonly Dictionary<string, Tracked> _sessions = new();
         private readonly SessionEvents _events;
         private readonly AudioEndpointVolumeNotificationDelegate _renderCb;
         private readonly AudioEndpointVolumeNotificationDelegate _captureCb;
         private System.Threading.Timer? _debounce;
         private string _lastJson = "";
 
-        // Deafen: guarda o mudo anterior por dispositivo (id), para devolver exatamente como estava.
         private bool _deafen;
         private string? _deafOutId, _deafInId;
         private bool _deafOutPrev, _deafInPrev;
-        private bool? _inSeen; // ultimo mudo do microfone visto durante o deafen (detecta mudanca explicita)
+        private bool? _inSeen;
         private static string DeafenFile => System.IO.Path.Combine(AppPaths.LocalDir, "deafen.json");
 
         private sealed class Tracked
@@ -88,13 +79,9 @@ namespace DroidDeck.Services
             _captureCb = _ => MarkDirty();
         }
 
-        // ---- ciclo de vida ----
-
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             if (!OperatingSystem.IsWindows()) return;
-            // Em thread do pool (MTA): o host sobe servicos na thread STA da janela, e um objeto COM
-            // criado la nao pode ser usado depois pelas threads das requisicoes (E_NOINTERFACE).
             await Task.Run(() =>
             {
                 try
@@ -129,7 +116,6 @@ namespace DroidDeck.Services
             base.Dispose();
         }
 
-        /// <summary>(Re)abre os dispositivos padrao e assina os eventos. Chamar com _gate.</summary>
         private void Rebind()
         {
             Unbind();
@@ -167,7 +153,6 @@ namespace DroidDeck.Services
 
         private void OnSessionCreated(object sender, IAudioSessionControl newSession) => MarkDirty(rescan: true);
 
-        /// <summary>Descobre sessoes novas e esquece as expiradas. Chamar com _gate.</summary>
         private void SyncSessions()
         {
             if (_render == null) return;
@@ -183,7 +168,7 @@ namespace DroidDeck.Services
                     string key;
                     try { key = c.GetSessionInstanceIdentifier; } catch { c.Dispose(); continue; }
                     live.Add(key);
-                    if (_sessions.ContainsKey(key)) { c.Dispose(); continue; } // ja acompanhada
+                    if (_sessions.ContainsKey(key)) { c.Dispose(); continue; }
                     try { c.RegisterEventClient(_events); } catch { }
                     _sessions[key] = new Tracked { Control = c, ShortId = ShortHash(key) };
                 }
@@ -200,14 +185,10 @@ namespace DroidDeck.Services
         internal static string ShortHash(string s) =>
             Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(s)))[..12].ToLowerInvariant();
 
-        // ---- eventos -> envio ao celular (debounce de 80 ms) ----
-
         private bool _rescan;
 
         private readonly object _timerGate = new();
 
-        // NAO usar _gate aqui: o Windows chama os eventos de volume de forma sincrona, de outra
-        // thread, enquanto quem esta mudando o volume ainda segura _gate (deadlock garantido).
         private void MarkDirty(bool rescan = false)
         {
             if (rescan) _rescan = true;
@@ -228,14 +209,12 @@ namespace DroidDeck.Services
                 state = Snapshot(withIcons: false);
             }
             var json = System.Text.Json.JsonSerializer.Serialize(state);
-            if (json == _lastJson) return; // nada mudou: nao gasta rede
+            if (json == _lastJson) return;
             _lastJson = json;
             if (DeckHub.ConnectedCount <= 0) return;
             try { await _hub.Clients.All.SendAsync("ReceiveAudioState", state); }
             catch (Exception ex) { Log.Warning($"Audio: envio falhou: {ex.Message}"); }
         }
-
-        // ---- snapshot ----
 
         public AudioStateDto GetState(bool withIcons)
         {
@@ -304,12 +283,11 @@ namespace DroidDeck.Services
                     }
                     s.Sessions.Add(dto);
                 }
-                catch { /* sessao morreu no meio da leitura */ }
+                catch {  }
             }
 
             s.Sessions = s.Sessions.OrderByDescending(x => x.System ? 0 : x.Active ? 2 : 1)
                                    .ThenBy(x => x.System ? "" : x.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
-            // Ordem estavel: Sons do sistema por ultimo na lista visual.
             s.Sessions = s.Sessions.Where(x => !x.System).Concat(s.Sessions.Where(x => x.System)).ToList();
             return s;
         }
@@ -319,8 +297,6 @@ namespace DroidDeck.Services
             var i = friendly.IndexOf('(');
             return i > 0 ? friendly[..i].Trim() : friendly.Trim();
         }
-
-        // ---- nome e icone do processo (cache por PID) ----
 
         private ProcInfo ProcessInfoFor(int pid, AudioSessionControl c)
         {
@@ -352,8 +328,6 @@ namespace DroidDeck.Services
                 try { using var p = Process.GetProcessById(pid); name = p.ProcessName; } catch { name = $"Process {pid}"; }
             }
             name = name.Replace("Â®", "").Replace("®", "").Replace("™", "").Trim();
-            // Agrupar so por identidade verificada (caminho do executavel). Sem caminho (processo
-            // protegido), cada PID e seu proprio grupo: nunca mistura por nome parecido.
             var groupKey = path != null ? ShortHash(path.ToLowerInvariant()) : "pid" + pid;
             var info = new ProcInfo(name, icon, groupKey);
             if (_procCache.Count > 200) _procCache.Clear();
@@ -363,7 +337,7 @@ namespace DroidDeck.Services
 
         private static string? QueryProcessPath(int pid)
         {
-            var h = OpenProcess(0x1000 /*PROCESS_QUERY_LIMITED_INFORMATION*/, false, pid);
+            var h = OpenProcess(0x1000  , false, pid);
             if (h == IntPtr.Zero) return null;
             try
             {
@@ -378,8 +352,6 @@ namespace DroidDeck.Services
         [DllImport("kernel32.dll", SetLastError = true)] private static extern bool CloseHandle(IntPtr h);
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern bool QueryFullProcessImageName(IntPtr h, int flags, StringBuilder name, ref int size);
-
-        // ---- comandos (validados; resolvem a sessao AO VIVO pelo id) ----
 
         public (bool Ok, string? Error) SetMaster(int? volume, bool? mute)
         {
@@ -399,7 +371,6 @@ namespace DroidDeck.Services
             return (true, null);
         }
 
-        /// <summary>Varias sessoes de uma vez (grupo do mesmo aplicativo). Cada id e validado; desconhecidos nao mudam nada.</summary>
         public (bool Ok, string? Error, bool NotFound, int Applied) SetSessions(IReadOnlyCollection<string> ids, int? volume, bool? mute)
         {
             if (volume is < 0 or > 100) return (false, "Volume must be 0-100.", false, 0);
@@ -420,7 +391,7 @@ namespace DroidDeck.Services
                         if (mute != null) v.Mute = mute.Value;
                         applied++;
                     }
-                    catch { /* a sessao fechou no meio */ }
+                    catch {  }
                 }
             }
             if (applied == 0) return (false, "Unknown or expired sessions.", true, 0);
@@ -449,7 +420,6 @@ namespace DroidDeck.Services
             return (true, null, false);
         }
 
-        /// <summary>Microfone padrao: SO ele. Nao toca na saida nem no volume.</summary>
         public (bool Ok, string? Error) SetMic(bool mute)
         {
             lock (_gate)
@@ -458,8 +428,6 @@ namespace DroidDeck.Services
                 try
                 {
                     _capture.AudioEndpointVolume.Mute = mute;
-                    // Durante o deafen, a escolha explicita vira o estado a restaurar (senao o
-                    // "desfazer" desfaria o que o usuario acabou de pedir).
                     if (_deafen && _capture.ID == _deafInId)
                     {
                         _deafInPrev = mute;
@@ -473,10 +441,6 @@ namespace DroidDeck.Services
             return (true, null);
         }
 
-        /// <summary>
-        /// Deafen do sistema: muta saida E microfone padrao, guardando o mudo anterior de cada um,
-        /// e ao desligar devolve exatamente isso (quem ja estava mudo continua mudo).
-        /// </summary>
         public (bool Ok, string? Error) SetDeafen(bool enable)
         {
             lock (_gate)
@@ -509,12 +473,6 @@ namespace DroidDeck.Services
             return (true, null);
         }
 
-        /// <summary>
-        /// Mantem o deafen coerente com o Windows (chamar com _gate): se o padrao de saida/microfone
-        /// trocou, devolve o mudo dos dispositivos antigos; se alguem desmutou os alto-falantes por
-        /// fora (Windows, Discord...), o deafen acabou: restaura o microfone; mudanca explicita do
-        /// microfone vira o novo estado a restaurar.
-        /// </summary>
         private void ReconcileDeafen()
         {
             if (!_deafen) return;
@@ -527,7 +485,7 @@ namespace DroidDeck.Services
                 }
                 if (!_render!.AudioEndpointVolume.Mute)
                 {
-                    RestoreDeafen(restoreOutput: false); // a saida ja foi desmutada pelo usuario
+                    RestoreDeafen(restoreOutput: false);
                     return;
                 }
                 if (_capture != null)
@@ -544,7 +502,6 @@ namespace DroidDeck.Services
             catch (Exception ex) { Log.Warning($"Audio: conferencia do deafen falhou: {ex.Message}"); }
         }
 
-        /// <summary>Devolve o mudo salvo aos dispositivos guardados (se ainda existirem). Chamar com _gate.</summary>
         private void RestoreDeafen(bool restoreOutput)
         {
             if (!_deafen) return;
@@ -565,8 +522,6 @@ namespace DroidDeck.Services
             try { System.IO.File.Delete(DeafenFile); } catch { }
         }
 
-        // O estado do deafen vai para o disco: se o app cair com o PC "ensurdecido", ao voltar ele
-        // reassume e o usuario consegue desfazer com o mudo anterior certo (e nao fica preso mudo).
         private void PersistDeafen()
         {
             try
@@ -601,14 +556,11 @@ namespace DroidDeck.Services
             catch { try { System.IO.File.Delete(DeafenFile); } catch { } }
         }
 
-        /// <summary>Encerrar o app com o deafen ligado devolve o audio como estava.</summary>
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             try { lock (_gate) RestoreDeafen(restoreOutput: true); } catch { }
             await base.StopAsync(cancellationToken);
         }
-
-        // ---- IMMNotificationClient: troca do dispositivo padrao ----
 
         public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)
         {
@@ -616,8 +568,6 @@ namespace DroidDeck.Services
             {
                 lock (_gate)
                 {
-                    // Guarda os ids do deafen, reabre os padroes e deixa o Reconcile devolver o
-                    // mudo dos dispositivos antigos se algum padrao mudou.
                     Rebind();
                     ReconcileDeafen();
                 }
@@ -629,8 +579,6 @@ namespace DroidDeck.Services
         public void OnDeviceAdded(string pwstrDeviceId) { }
         public void OnDeviceRemoved(string deviceId) => Task.Run(() => { lock (_gate) Rebind(); MarkDirty(); });
         public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key) { }
-
-        // ---- eventos de sessao ----
 
         private sealed class SessionEvents : IAudioSessionEventsHandler
         {

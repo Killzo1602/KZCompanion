@@ -70,7 +70,7 @@ namespace DroidDeck.Tests
 
             s.Apply("c", "toggle", p);
             _now += TimeSpan.FromSeconds(10);
-            s.Apply("c", "toggle", p); // pausa
+            s.Apply("c", "toggle", p);
             _now += TimeSpan.FromMinutes(5);
 
             Assert.Equal(10_000, Field(s, "c", "elapsedMs"));
@@ -98,7 +98,6 @@ namespace DroidDeck.Tests
             var p = P(("mode", "pomodoro"), ("workSec", "1500"), ("breakSec", "300"));
             s.Apply("p", "toggle", p);
 
-            // O laco percebe o fim 1s atrasado: a pausa conta a partir do fim real.
             _now += TimeSpan.FromSeconds(1501);
             Assert.True(s.Tick());
 

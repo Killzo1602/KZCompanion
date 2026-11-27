@@ -17,9 +17,9 @@ namespace DroidDeck.Tests
             var b = new DeckButton { Id = "t-" + System.Guid.NewGuid(), Toggle = true, Action = Media("play"), ActiveAction = Media("pause") };
 
             Assert.False(toggles.IsOn(b.Id));
-            Assert.Same(b.Action, toggles.Press(b));        // desligado -> liga, roda a acao normal
+            Assert.Same(b.Action, toggles.Press(b));
             Assert.True(toggles.IsOn(b.Id));
-            Assert.Same(b.ActiveAction, toggles.Press(b));  // ligado -> desliga, roda a acao do ligado
+            Assert.Same(b.ActiveAction, toggles.Press(b));
             Assert.False(toggles.IsOn(b.Id));
         }
 

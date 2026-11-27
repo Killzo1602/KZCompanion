@@ -2,7 +2,6 @@ import 'package:droiddeck/core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Fundo do painel.
 enum KzBackground {
   flat('Flat', 'Plain graphite'),
   glow('Glow', 'Soft accent glow at the top');
@@ -12,7 +11,6 @@ enum KzBackground {
   final String description;
 }
 
-/// Espaçamento do painel: quanto respiro os cartões têm.
 enum KzDensity {
   comfortable('Comfortable', 1.0, 12.0),
   compact('Compact', 0.72, 8.0);
@@ -20,14 +18,11 @@ enum KzDensity {
   const KzDensity(this.label, this.padScale, this.gap);
   final String label;
 
-  /// Multiplica o padding interno dos cartões.
   final double padScale;
 
-  /// Espaço entre os cartões do painel.
   final double gap;
 }
 
-/// Cantos dos cartões.
 enum KzCorners {
   sharp('Sharp', 8),
   standard('Standard', 16),
@@ -38,8 +33,6 @@ enum KzCorners {
   final double radius;
 }
 
-/// Preferências de exibição do KZ Companion (persistidas no aparelho). O tema (preset,
-/// modo e destaque) fica no [ThemeController]; aqui ficam as opções do painel.
 class KzPrefs {
   static const keepAwakeKey = 'kz_keep_awake';
   static const immersiveKey = 'kz_immersive';
@@ -53,7 +46,9 @@ class KzPrefs {
 
   static final keepAwake = signal(true);
   static final immersive = signal(true);
-  static final background = signal(KzBackground.flat);
+  static final background = signal(KzBackground.glow);
+  static final sideBar = signal(false);
+  static const sideBarKey = 'kz_side_bar';
   static final density = signal(KzDensity.comfortable);
   static final corners = signal(KzCorners.standard);
   static final showStats = signal(true);
@@ -68,13 +63,14 @@ class KzPrefs {
     final sp = await SharedPreferences.getInstance();
     keepAwake.value = sp.getBool(keepAwakeKey) ?? true;
     immersive.value = sp.getBool(immersiveKey) ?? true;
-    background.value = _enum(KzBackground.values, sp.getString(backgroundKey), KzBackground.flat);
+    background.value = _enum(KzBackground.values, sp.getString(backgroundKey), KzBackground.glow);
     density.value = _enum(KzDensity.values, sp.getString(densityKey), KzDensity.comfortable);
     corners.value = _enum(KzCorners.values, sp.getString(cornersKey), KzCorners.standard);
     showStats.value = sp.getBool(showStatsKey) ?? true;
     showFavorites.value = sp.getBool(showFavoritesKey) ?? true;
     showAudio.value = sp.getBool(showAudioKey) ?? true;
     showRunningApps.value = sp.getBool(showRunningAppsKey) ?? true;
+    sideBar.value = sp.getBool(sideBarKey) ?? false;
   }
 
   static Future<void> setKeepAwake(bool v) async {
@@ -122,9 +118,14 @@ class KzPrefs {
     (await SharedPreferences.getInstance()).setBool(showRunningAppsKey, v);
   }
 
-  /// Volta o visual (fundo, espaçamento, cantos e seções) ao padrão do KZ Companion.
+  static Future<void> setSideBar(bool v) async {
+    sideBar.value = v;
+    (await SharedPreferences.getInstance()).setBool(sideBarKey, v);
+  }
+
   static Future<void> resetDashboard() async {
-    await setBackground(KzBackground.flat);
+    await setBackground(KzBackground.glow);
+    await setSideBar(false);
     await setDensity(KzDensity.comfortable);
     await setCorners(KzCorners.standard);
     await setShowStats(true);
@@ -134,7 +135,6 @@ class KzPrefs {
   }
 }
 
-/// Fundo do painel conforme a preferência: liso, ou com um brilho suave do destaque no topo.
 class KzBackdrop extends StatelessWidget {
   const KzBackdrop({super.key, required this.child});
   final Widget child;
@@ -144,15 +144,21 @@ class KzBackdrop extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Watch((context) {
       if (KzPrefs.background.value == KzBackground.flat) return child;
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0, -1.4),
-            radius: 1.3,
-            colors: [scheme.primary.withValues(alpha: 0.16), scheme.primary.withValues(alpha: 0)],
-          ),
-        ),
-        child: child,
+      Widget glow(Alignment center, Color color, double alpha, Widget child) => DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: center,
+                radius: 1.1,
+                colors: [color.withValues(alpha: alpha), color.withValues(alpha: 0)],
+              ),
+            ),
+            child: child,
+          );
+      return glow(
+        const Alignment(-0.6, -1.3),
+        scheme.primary,
+        0.18,
+        glow(const Alignment(1.1, 1.2), const Color(0xFF8B5CF6), 0.14, child),
       );
     });
   }

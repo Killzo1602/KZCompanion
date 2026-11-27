@@ -8,19 +8,6 @@ using Xunit;
 
 namespace DroidDeck.Tests
 {
-    /// <summary>
-    /// Cobre a divergência entre os dois caminhos de enumeração de áudio.
-    ///
-    /// O <see cref="MixerMaster"/> tem dois construtores — um a partir do MMDevice do NAudio,
-    /// outro a partir da abstração <see cref="IAudioDevice"/> — e ambos populam o MESMO DTO.
-    /// O caminho da abstração deixava de preencher nome e ícone dos canais, então trocar o
-    /// serviço para ele fazia o mixer aparecer sem identificação nenhuma no app. Isso não era
-    /// pego por nada: o teste de integração mocka o enumerador com lista vazia e nunca chega
-    /// a construir um canal.
-    ///
-    /// Aqui usamos o PID do próprio processo de teste: é um processo garantidamente vivo,
-    /// então a descrição tem que sair preenchida sem depender de nada instalado na máquina.
-    /// </summary>
     public class MixerChannelEnrichmentTests
     {
         private static Mock<IAudioSession> FakeSession(int pid, bool systemSounds = false)
@@ -61,7 +48,6 @@ namespace DroidDeck.Tests
         {
             var channel = new MixerChannel { Description = "intocado" };
 
-            // PID inválido: GetProcessById lança e o enriquecimento é best-effort.
             channel.DescribeFromProcess(-1);
 
             Assert.Equal("intocado", channel.Description);
@@ -70,7 +56,6 @@ namespace DroidDeck.Tests
         [Fact]
         public void AbstractionPath_PopulatesChannelDescription()
         {
-            // Esta é a regressão: por este caminho os canais vinham sem nome nenhum.
             var pid = System.Environment.ProcessId;
             var master = new MixerMaster(FakeRenderDevice(FakeSession(pid).Object).Object);
 
@@ -94,7 +79,6 @@ namespace DroidDeck.Tests
             var master = new MixerMaster(FakeRenderDevice().Object);
 
             Assert.Equal("dispositivo-de-teste", master.Id);
-            // O título corta no primeiro parêntese; a descrição vem do nome amigável do device.
             Assert.Equal("Alto-falantes", master.Title);
             Assert.Equal("Placa de Teste", master.Description);
             Assert.Equal(100, master.Volume);
@@ -103,7 +87,6 @@ namespace DroidDeck.Tests
         [Fact]
         public void AbstractionPath_IgnoresSessionsOnCaptureDevices()
         {
-            // Só dispositivos de saída montam canais; entrada não tem sessão por app.
             var device = FakeRenderDevice(FakeSession(System.Environment.ProcessId).Object);
             device.SetupGet(d => d.DataFlow).Returns(DataFlow.Capture);
 

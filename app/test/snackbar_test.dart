@@ -2,7 +2,6 @@ import 'package:droiddeck/core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// "Botão removido." com "Desfazer", como o configurador mostra ao limpar um botão.
 Future<void> _showUndo(WidgetTester tester, Size screen) async {
   tester.view.physicalSize = screen;
   tester.view.devicePixelRatio = 1;
@@ -20,7 +19,7 @@ Future<void> _showUndo(WidgetTester tester, Size screen) async {
             content: const Text('Botão removido.'),
             duration: const Duration(seconds: 6),
             persist: false,
-            action: SnackBarAction(label: 'Desfazer', onPressed: () {}),
+            action: SnackBarAction(label: 'Undo', onPressed: () {}),
           )),
           child: const Text('limpar'),
         ),
@@ -31,7 +30,6 @@ Future<void> _showUndo(WidgetTester tester, Size screen) async {
   await tester.pumpAndSettle();
 }
 
-/// Largura do cartão do aviso (sem a margem em volta).
 double _cardWidth(WidgetTester tester) => tester
     .getSize(find.descendant(of: find.byType(SnackBar), matching: find.byType(Material)).first)
     .width;
@@ -47,7 +45,6 @@ void main() {
 
   testWidgets('no celular o aviso continua da largura da tela', (tester) async {
     await _showUndo(tester, const Size(400, 800));
-    // Margem do tema: 16 à esquerda e 88 à direita (o botão de tela cheia fica livre).
     expect(_cardWidth(tester), 400 - 16 - 88);
   });
 }

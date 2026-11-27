@@ -6,14 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Reconecta a Tuya no startup e vigia a conexao, no mesmo espirito do ObsAutoConnect.
-    ///
-    /// A diferenca importante: o intervalo aqui e LONGO. Cada reconexao reenumera dispositivos
-    /// (~4 chamadas por aparelho) e a cota gratuita e de 26 mil chamadas/mes; um watchdog
-    /// agressivo queimaria a cota do usuario sozinho. O push MQTT ja tem reconexao propria com
-    /// backoff, entao este laco so cobre o caso de a sessao inteira ter caido.
-    /// </summary>
     public class TuyaAutoConnect : IHostedService
     {
         private static readonly TimeSpan Interval = TimeSpan.FromMinutes(15);
@@ -38,7 +30,6 @@ namespace DroidDeck.Services
 
         private async Task WatchdogAsync(CancellationToken ct)
         {
-            // Nao competir com o resto do startup.
             try { await Task.Delay(3000, ct); } catch { return; }
 
             while (!ct.IsCancellationRequested)
@@ -54,10 +45,6 @@ namespace DroidDeck.Services
                 }
                 catch (Exception ex)
                 {
-                    // Sem internet ou token revogado: tenta de novo no proximo ciclo. A
-                    // primeira falha costuma ser so a rede ainda subindo depois de um boot,
-                    // entao fica em Debug; da segunda em diante o problema e persistente e
-                    // precisa aparecer -- ficar mudo aqui ja custou dois dias de deck quebrado.
                     _consecutiveFailures++;
                     if (_consecutiveFailures > 1)
                         _logger.LogWarning("Tuya auto-connect: {N} tentativas seguidas falharam ({Msg})",

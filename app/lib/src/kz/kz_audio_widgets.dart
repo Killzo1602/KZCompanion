@@ -1,17 +1,13 @@
 import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/kz/kz_audio.dart';
+import 'package:droiddeck/src/kz/kz_ring.dart';
+import 'package:droiddeck/src/kz/kz_style.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:flutter/material.dart';
 
 const _red = Color(0xFFEF5350);
+const _muted = Color(0xFF64748B);
 
-SliderThemeData _sliderTheme(BuildContext context) => SliderTheme.of(context).copyWith(
-      trackHeight: 4,
-      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
-      overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
-    );
-
-/// Avisos do audio: PC com app antigo, falha de comando. Vazio quando esta tudo bem.
 class _AudioNotice extends StatelessWidget {
   const _AudioNotice(this.store);
   final AudioStore store;
@@ -39,7 +35,6 @@ class _AudioNotice extends StatelessWidget {
   }
 }
 
-/// Mudo | Deafen e o volume do Windows. Tudo reflete o estado real do PC; offline fica esmaecido.
 class KzAudioControls extends StatelessWidget {
   const KzAudioControls(this.store, {super.key});
   final AudioStore store;
@@ -48,6 +43,7 @@ class KzAudioControls extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return KzCard(
+      accent: KzColors.audio,
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         _AudioNotice(store),
@@ -65,7 +61,6 @@ class KzAudioControls extends StatelessWidget {
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Row(children: [
                   Expanded(
-                    // Mute = MICROFONE do Windows (so ele). Mostra o estado real do microfone.
                     child: _toggle(context,
                         icon: micMuted == true ? Icons.mic_off_rounded : Icons.mic_rounded,
                         label: micMuted == null ? 'No mic' : (micMuted ? 'Mic muted' : 'Mute mic'),
@@ -89,18 +84,28 @@ class KzAudioControls extends StatelessWidget {
                       child: Icon(Icons.volume_off_rounded, size: 15, color: _red),
                     ),
                   Expanded(
-                    child: Text(
-                      s == null || s.outputName.isEmpty ? 'Windows volume' : (speakersMuted ? '${s.outputName} (muted)' : s.outputName),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 12, color: scheme.onSurface.withValues(alpha: 0.65)),
+                    child: InkWell(
+                      onTap: () => showAudioOutputs(context, store),
+                      child: Row(children: [
+                        Flexible(
+                          child: Text(
+                            s == null || s.outputName.isEmpty
+                                ? 'Windows volume'
+                                : (speakersMuted ? '${s.outputName} (muted)' : s.outputName),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 12, color: scheme.onSurface.withValues(alpha: 0.65)),
+                          ),
+                        ),
+                        Icon(Icons.expand_more_rounded, size: 16, color: scheme.onSurface.withValues(alpha: 0.65)),
+                      ]),
                     ),
                   ),
                   Text(volume == null ? '--' : '$volume%',
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                 ]),
                 SliderTheme(
-                  data: _sliderTheme(context),
+                  data: kzSliderTheme(context),
                   child: Slider(
                     value: (volume ?? 0).toDouble(),
                     min: 0,
@@ -119,32 +124,23 @@ class KzAudioControls extends StatelessWidget {
 
   Widget _toggle(BuildContext context,
       {required IconData icon, required String label, required bool active, required VoidCallback onTap}) {
-    final scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: active ? _red.withValues(alpha: 0.18) : scheme.surfaceContainer,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          height: 44,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: active ? _red : Colors.transparent, width: 1.2),
-          ),
-          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Icon(icon, size: 20, color: active ? _red : scheme.onSurface),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 13, color: active ? _red : null, fontWeight: FontWeight.w600)),
-          ]),
-        ),
+    final ink = Theme.of(context).colorScheme.onSurface;
+    return KzTile(
+      onTap: onTap,
+      active: active,
+      color: active ? _red : KzColors.audio,
+      child: SizedBox(
+        height: 44,
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, size: 20, color: active ? _red : ink),
+          const SizedBox(width: 6),
+          Text(label, style: TextStyle(fontSize: 13, color: active ? _red : null, fontWeight: FontWeight.w600)),
+        ]),
       ),
     );
   }
 }
 
-/// Sessoes do mesmo aplicativo (mesma identidade de executavel no PC). Cada sessao continua com o
-/// seu id; o grupo e so visual e para o comando "todas de uma vez".
 class AudioGroup {
   AudioGroup(this.key, this.members);
   final String key;
@@ -168,9 +164,6 @@ class AudioGroup {
   }
 }
 
-/// Mixer de volume ao estilo do Windows 11: uma linha por aplicativo. Aplicativo com varias sessoes
-/// (Discord, navegadores...) mostra um slider/mudo principal e abre as sessoes, cada uma independente.
-/// [scroll] = rola sozinho dentro do espaco que recebe (coluna da direita do painel).
 class KzMixer extends StatelessWidget {
   const KzMixer(this.store, {super.key, this.scroll = false});
   final AudioStore store;
@@ -181,12 +174,13 @@ class KzMixer extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return KzCard(
       title: 'Volume mixer',
+      accent: KzColors.audio,
       icon: Icons.tune_rounded,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
       expand: scroll,
       child: Watch((context) {
         final s = store.state.value;
-        store.icons.value; // icones chegam depois do estado
+        store.icons.value;
         final open = store.expanded.value;
         final online = store.signalR.linkState.value == 'online';
         final muted = scheme.onSurface.withValues(alpha: 0.55);
@@ -241,7 +235,6 @@ Widget _appIcon(BuildContext context, AudioStore store, AudioSession session, {d
   return SizedBox(
     width: size,
     height: size,
-    // contain: o icone inteiro, sem cortar, qualquer que seja a proporcao
     child: icon != null
         ? Image.memory(icon, fit: BoxFit.contain, filterQuality: FilterQuality.medium, gaplessPlayback: true)
         : Icon(session.system ? Icons.notifications_active_outlined : Icons.apps_rounded,
@@ -249,7 +242,6 @@ Widget _appIcon(BuildContext context, AudioStore store, AudioSession session, {d
   );
 }
 
-/// Um aplicativo com varias sessoes: slider e mudo principais + lista de sessoes que abre/fecha.
 class _GroupRow extends StatelessWidget {
   const _GroupRow({super.key, required this.store, required this.group, required this.open});
   final AudioStore store;
@@ -283,11 +275,11 @@ class _GroupRow extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
-                color: scheme.primary.withValues(alpha: 0.16),
+                color: KzColors.audio.withValues(alpha: 0.18),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text('${group.members.length}',
-                  style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: scheme.primary)),
+                  style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: KzColors.audio)),
             ),
             Icon(open ? Icons.expand_less_rounded : Icons.expand_more_rounded, size: 20,
                 color: scheme.onSurface.withValues(alpha: 0.6)),
@@ -308,11 +300,10 @@ class _GroupRow extends StatelessWidget {
             ),
           ]),
         ),
-        // O slider principal mostra o MAIOR volume e so muda as sessoes quando o dedo o move.
         SizedBox(
           height: 30,
           child: SliderTheme(
-            data: _sliderTheme(context),
+            data: kzSliderTheme(context, color: group.allMuted ? _muted : KzColors.audio, track: 8),
             child: Slider(
               value: group.maxVolume.toDouble(),
               min: 0,
@@ -327,7 +318,7 @@ class _GroupRow extends StatelessWidget {
             margin: const EdgeInsets.only(left: 12, bottom: 4),
             padding: const EdgeInsets.only(left: 8),
             decoration: BoxDecoration(
-              border: Border(left: BorderSide(color: scheme.primary.withValues(alpha: 0.35), width: 2)),
+              border: Border(left: BorderSide(color: KzColors.audio.withValues(alpha: 0.45), width: 2)),
             ),
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               for (var i = 0; i < group.members.length; i++)
@@ -345,7 +336,6 @@ class _GroupRow extends StatelessWidget {
   }
 }
 
-/// Duas linhas: icone + nome + % + mudo, e o slider abaixo (largo, bom para o dedo).
 class _SessionRow extends StatelessWidget {
   const _SessionRow(
       {super.key, required this.store, required this.session, required this.label, this.showIcon = true});
@@ -385,7 +375,7 @@ class _SessionRow extends StatelessWidget {
         SizedBox(
           height: 30,
           child: SliderTheme(
-            data: _sliderTheme(context),
+            data: kzSliderTheme(context, color: session.muted ? _muted : KzColors.audio, track: 8),
             child: Slider(
               value: session.volume.toDouble(),
               min: 0,
@@ -397,5 +387,42 @@ class _SessionRow extends StatelessWidget {
         ),
       ]),
     );
+  }
+}
+
+Future<void> showAudioOutputs(BuildContext context, AudioStore store) async {
+  final List<Map<String, dynamic>> outputs;
+  try {
+    outputs = await store.client.getAudioOutputs();
+  } on DioException catch (e) {
+    if (context.mounted) {
+      kzToast(context,
+          e.response?.statusCode == 404 ? 'Update KZ Companion on your PC to switch outputs.' : friendlyError(e));
+    }
+    return;
+  }
+  if (!context.mounted) return;
+  if (outputs.isEmpty) {
+    kzToast(context, 'No audio outputs found on the PC.');
+    return;
+  }
+  final id = await showModalBottomSheet<String>(
+    context: context,
+    builder: (ctx) => ListView(shrinkWrap: true, children: [
+      for (final o in outputs)
+        ListTile(
+          dense: true,
+          leading: Icon(o['isDefault'] == true ? Icons.check_rounded : Icons.speaker_rounded, size: 20),
+          title: Text('${o['name']}'),
+          onTap: () => Navigator.pop(ctx, '${o['id']}'),
+        ),
+    ]),
+  );
+  if (id == null) return;
+  try {
+    await store.client.setAudioOutput(id);
+    await store.refresh();
+  } catch (e) {
+    if (context.mounted) kzToast(context, friendlyError(e));
   }
 }

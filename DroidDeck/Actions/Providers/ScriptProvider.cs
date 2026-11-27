@@ -11,16 +11,8 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Actions.Providers
 {
-    /// <summary>
-    /// Roda um script (PowerShell, Python ou .bat) escrito no proprio botao ou um arquivo do PC,
-    /// com argumentos. O mesmo script serve para varios botoes, cada um com os seus argumentos
-    /// ($args no PowerShell, sys.argv no Python, %1 no .bat).
-    ///
-    /// Privilegiada (ActionPolicy): executa codigo no PC, so nasce no configurador.
-    /// </summary>
     public class ScriptProvider : IActionProvider
     {
-        /// <summary>Script que trava nao fica pendurado para sempre.</summary>
         private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(5);
 
         private readonly ILogger<ScriptProvider> _logger;
@@ -34,26 +26,26 @@ namespace DroidDeck.Actions.Providers
             Type = Type,
             Title = "Script",
             Icon = "code",
-            Category = "Utilidades",
-            Description = "Roda um script do PowerShell, do Python ou um .bat, com argumentos.",
+            Category = "Utilities",
+            Description = "Runs a PowerShell or Python script or a .bat file, with arguments.",
             Fields =
             {
                 ActionField.Select("source", "Script",
-                    ("inline", "Escrito aqui"),
-                    ("file", "Um arquivo do PC")),
-                ActionField.Select("language", "Linguagem",
+                    ("inline", "Written here"),
+                    ("file", "A file on the PC")),
+                ActionField.Select("language", "Language",
                     ("powershell", "PowerShell"),
                     ("python", "Python"),
-                    ("cmd", "Prompt de comando (.bat)"))
+                    ("cmd", "Command Prompt (.bat)"))
                     .When("source", "inline"),
-                ActionField.Multiline("code", "Código", "Write-Output \"Olá, $($args[0])\"",
-                    "Os argumentos chegam em $args (PowerShell), sys.argv (Python) ou %1, %2… (.bat).")
+                ActionField.Multiline("code", "Code", "Write-Output \"Hello, $($args[0])\"",
+                    "Arguments arrive in $args (PowerShell), sys.argv (Python) or %1, %2… (.bat).")
                     .When("source", "inline"),
-                ActionField.Text("path", "Arquivo", @"C:\scripts\backup.ps1",
-                    ".ps1, .py, .bat ou .cmd.")
+                ActionField.Text("path", "File", @"C:\scripts\backup.ps1",
+                    ".ps1, .py, .bat or .cmd.")
                     .When("source", "file"),
-                ActionField.Text("arguments", "Argumentos (opcional)", "\"meu jogo\" 2",
-                    "Separados por espaço; use aspas para um argumento com espaços."),
+                ActionField.Text("arguments", "Arguments (optional)", "\"my game\" 2",
+                    "Separated by spaces; use quotes for an argument with spaces."),
             },
         };
 
@@ -104,7 +96,6 @@ namespace DroidDeck.Actions.Providers
             }
         }
 
-        /// <summary>Grava o codigo num arquivo (um por conteudo) para o interpretador rodar.</summary>
         public static string Materialize(string language, string code)
         {
             var ext = language switch { "python" => ".py", "cmd" => ".bat", _ => ".ps1" };
@@ -114,14 +105,12 @@ namespace DroidDeck.Actions.Providers
             var file = Path.Combine(dir, hash + ext);
             if (!File.Exists(file))
             {
-                // PowerShell 5 le .ps1 sem BOM como ANSI: com BOM os acentos funcionam.
                 var encoding = ext == ".ps1" ? new UTF8Encoding(true) : new UTF8Encoding(false);
                 File.WriteAllText(file, code.Replace("\r\n", "\n").Replace("\n", "\r\n"), encoding);
             }
             return file;
         }
 
-        /// <summary>Interpretador conforme a extensao. Null para extensao desconhecida.</summary>
         public static ProcessStartInfo? StartInfo(string file, string arguments)
         {
             var args = SplitArguments(arguments);
@@ -135,7 +124,6 @@ namespace DroidDeck.Actions.Providers
                     break;
                 case ".py":
                 case ".pyw":
-                    // O "py" vem com o instalador oficial do Python; sem ele, tenta o python do PATH.
                     psi = new ProcessStartInfo(FindOnPath("py.exe") ?? "python.exe");
                     psi.ArgumentList.Add(file);
                     break;
@@ -161,7 +149,6 @@ namespace DroidDeck.Actions.Providers
             return psi;
         }
 
-        /// <summary>Divide como a linha de comando: espacos separam, aspas agrupam.</summary>
         public static List<string> SplitArguments(string text)
         {
             var result = new List<string>();

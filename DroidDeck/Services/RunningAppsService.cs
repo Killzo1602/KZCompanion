@@ -17,11 +17,11 @@ namespace DroidDeck.Services
     public enum AppActionOutcome
     {
         Ok,
-        AppGone,       // o app fechou entre a listagem e o comando
-        WindowGone,    // a janela pedida nao e mais uma janela deste app
-        Elevated,      // o app roda como administrador e o KZ nao
-        FocusDenied,   // o Windows recusou trazer a janela para a frente
-        StillOpen,     // o pedido de fechar foi entregue, mas o app continua aberto (ex.: "salvar?")
+        AppGone,
+        WindowGone,
+        Elevated,
+        FocusDenied,
+        StillOpen,
         Failed,
     }
 
@@ -30,26 +30,12 @@ namespace DroidDeck.Services
         public bool Ok => Outcome == AppActionOutcome.Ok;
     }
 
-    /// <summary>
-    /// Aplicativos com janela aberta agora, para a secao "Running now" da tela Apps do celular.
-    ///
-    /// - So le janelas de topo (EnumWindows) e metadados do processo (caminho, hora de inicio).
-    ///   Nao abre memoria de ninguem, nao injeta DLL e nao instala hook dentro de outro processo:
-    ///   os WinEvents sao "out of context" (o Windows entrega o aviso na nossa thread).
-    /// - Sem celular olhando, nao faz nada: os WinEvents so existem enquanto ha quem observe
-    ///   (WatchRunningApps no hub) e a lista so e remontada quando um evento a marca como suja.
-    /// - Toda acao reenumera na hora e confere a identidade (hash do .exe + HWND + processo da
-    ///   janela) antes de mexer: titulo nunca e usado para achar janela.
-    /// - Fechar e so WM_CLOSE (o app pode perguntar "salvar?"). Nunca TerminateProcess.
-    /// </summary>
     public sealed class RunningAppsService : IDisposable
     {
         public const string Event = "ReceiveRunningApps";
 
         private static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(500);
 
-        // Rede de seguranca enquanto alguem observa: eventos de processos elevados nao chegam a um
-        // hook de integridade menor, entao a lista e conferida de tempos em tempos.
         private static readonly TimeSpan Heartbeat = TimeSpan.FromSeconds(10);
 
         private readonly IHubContext<DeckHub>? _hub;
@@ -65,7 +51,6 @@ namespace DroidDeck.Services
         private string _lastJson = "";
         private bool _disposed;
 
-        /// <summary>Processo que nao entra na lista (o proprio KZ). Os testes trocam.</summary>
         internal uint ExcludePid { get; set; } = (uint)Environment.ProcessId;
 
         public RunningAppsService(IHubContext<DeckHub>? hub, ILogger<RunningAppsService>? logger = null)
@@ -74,12 +59,9 @@ namespace DroidDeck.Services
             _logger = logger;
         }
 
-        /// <summary>Path/Name sao do dono do aplicativo (ver <see cref="RunningAppsGrouper.IsOwnerOf"/>); Own* do processo da janela.</summary>
         private sealed record ProcInfo(string? Path, string Name, bool Elevated, string OwnName);
 
         private static readonly string WindowsDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-
-        // ---- observadores (celulares que estao na tela Apps) ----
 
         public int WatcherCount
         {
@@ -97,7 +79,7 @@ namespace DroidDeck.Services
             {
                 if (_disposed || !_watchers.Add(connectionId)) return;
                 if (_watchers.Count != 1) return;
-                _lastJson = ""; // o primeiro observador recebe o estado completo
+                _lastJson = "";
                 _pump = new WinEventPump(MarkDirty, _logger);
                 _pump.Start();
                 _debounce = new Timer(_ => _ = PushAsync(), null, Timeout.Infinite, Timeout.Infinite);
@@ -139,7 +121,7 @@ namespace DroidDeck.Services
                 var json = System.Text.Json.JsonSerializer.Serialize(payload);
                 lock (_gate)
                 {
-                    if (json == _lastJson) return; // nada mudou: nao gasta rede
+                    if (json == _lastJson) return;
                     _lastJson = json;
                 }
                 if (_hub != null) await _hub.Clients.Clients(targets).SendAsync(Event, payload);
@@ -149,8 +131,6 @@ namespace DroidDeck.Services
                 _logger?.LogDebug(ex, "RunningApps: falha ao enviar");
             }
         }
-
-        // ---- listagem ----
 
         public object Payload() => new { apps = List().Select(Dto).ToList() };
 
@@ -167,7 +147,6 @@ namespace DroidDeck.Services
             windows = a.Windows.Select(w => new { id = w.Id, title = w.Title, minimized = w.Minimized, foreground = w.Foreground }),
         };
 
-        /// <summary>Aplicativos do usuario com janela visivel agora (um por executavel).</summary>
         public List<RunningApp> List()
         {
             return RunningAppsGrouper.Group(EnumerateWindows(), NameFor);
@@ -193,7 +172,6 @@ namespace DroidDeck.Services
             });
         }
 
-        /// <summary>Icone do aplicativo (PNG), do cache; null se o executavel nao deixa ler.</summary>
         public byte[]? IconFor(string id)
         {
             if (_icons.TryGetValue(id, out var cached)) return cached;
@@ -206,8 +184,6 @@ namespace DroidDeck.Services
             return png;
         }
 
-        // ---- enumeracao (Win32) ----
-
         internal List<RawWindow> EnumerateWindows()
         {
             var result = new List<RawWindow>();
@@ -219,7 +195,7 @@ namespace DroidDeck.Services
                     var w = Inspect(hwnd, foreground);
                     if (w != null) result.Add(w);
                 }
-                catch { /* janela morreu no meio da leitura */ }
+                catch {  }
                 return true;
             }, IntPtr.Zero);
             return result;
@@ -264,10 +240,6 @@ namespace DroidDeck.Services
             return new RawWindow(hwnd.ToInt64(), framePid, pid, title, iconic, hwnd == foreground, info.Path, info.Name, info.Elevated);
         }
 
-        /// <summary>
-        /// Apps da Loja ficam numa janela do ApplicationFrameHost; o app de verdade e o dono do
-        /// CoreWindow filho. Sem ele (app suspenso) devolve 0 e a janela some da lista.
-        /// </summary>
         private static uint RealPackagedPid(IntPtr frame, uint hostPid)
         {
             uint found = 0;
@@ -290,7 +262,6 @@ namespace DroidDeck.Services
             if (handle == IntPtr.Zero) return new ProcInfo(null, SafeProcessName(pid), false, SafeProcessName(pid));
             try
             {
-                // O par (pid, hora de inicio) evita que um PID reaproveitado herde o caminho do anterior.
                 long started = Native.GetProcessTimes(handle, out var created, out _, out _, out _) ? created : 0;
                 if (_procs.TryGetValue((pid, started), out var cached)) return cached;
 
@@ -313,11 +284,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>
-        /// Sobe pela arvore de processos (ate 3 niveis) enquanto o pai for o dono do aplicativo.
-        /// So leitura: ProcessBasicInformation do proprio filho e hora de inicio do pai (o PID do pai
-        /// pode ter sido reaproveitado: um pai mais novo que o filho nunca conta).
-        /// </summary>
         private static (string Path, string Name) ResolveOwner(IntPtr childHandle, string path, long childStarted, string name)
         {
             var currentPath = path;
@@ -350,7 +316,6 @@ namespace DroidDeck.Services
             }
             catch
             {
-                // Leitura falhou: fica com o processo da propria janela.
             }
             finally
             {
@@ -377,12 +342,6 @@ namespace DroidDeck.Services
             }
         }
 
-        // ---- acoes ----
-
-        /// <summary>
-        /// Reenumera e confere a identidade: o app (hash do .exe) ainda existe, a janela pedida
-        /// ainda e uma janela dele (mesmo HWND e mesmo processo-dono) e ainda e uma janela de verdade.
-        /// </summary>
         internal (AppActionResult? Error, RunningApp? App, AppWindow? Window) Resolve(string id, string? windowId)
         {
             var app = List().FirstOrDefault(a => a.Id == id);
@@ -402,7 +361,6 @@ namespace DroidDeck.Services
             return (null, app, window);
         }
 
-        /// <summary>Traz a janela para a frente (restaura se estiver minimizada).</summary>
         public async Task<AppActionResult> FocusAsync(string id, string? windowId = null)
         {
             var (error, _, window) = Resolve(id, windowId);
@@ -418,8 +376,6 @@ namespace DroidDeck.Services
 
             if (!Native.SetForegroundWindow(hwnd) && Native.GetForegroundWindow() != hwnd)
             {
-                // Sem AttachThreadInput nem teclas simuladas: nada que toque a thread de outro
-                // processo (jogos com anti-cheat incluidos). SwitchToThisWindow e a rota do proprio shell.
                 Native.SwitchToThisWindow(hwnd, true);
             }
             await Task.Delay(120);
@@ -437,10 +393,6 @@ namespace DroidDeck.Services
             return new AppActionResult(AppActionOutcome.Ok);
         }
 
-        /// <summary>
-        /// Pede ao app que feche a janela (WM_CLOSE): o mesmo que o X da janela. Nunca mata o
-        /// processo. Se o app pergunta "salvar?", a janela continua e o resultado e StillOpen.
-        /// </summary>
         public async Task<AppActionResult> CloseAsync(string id, string? windowId = null)
         {
             var (error, _, window) = Resolve(id, windowId);
@@ -448,7 +400,7 @@ namespace DroidDeck.Services
             var hwnd = new IntPtr(window!.Hwnd);
             if (!Native.PostMessage(hwnd, Native.WM_CLOSE, IntPtr.Zero, IntPtr.Zero))
             {
-                return Marshal.GetLastWin32Error() == 5 // ACCESS_DENIED: barreira de integridade (UIPI)
+                return Marshal.GetLastWin32Error() == 5
                     ? new AppActionResult(AppActionOutcome.Elevated)
                     : new AppActionResult(AppActionOutcome.WindowGone);
             }
@@ -476,8 +428,6 @@ namespace DroidDeck.Services
             pump?.Stop();
         }
 
-        // ---- WinEvents: uma thread pequena com laco de mensagens, so enquanto ha observador ----
-
         private sealed class WinEventPump
         {
             private readonly Action _onChange;
@@ -486,7 +436,7 @@ namespace DroidDeck.Services
             private Thread? _thread;
             private uint _threadId;
             private readonly List<IntPtr> _hooks = new();
-            private Native.WinEventProc? _proc; // referencia viva: o GC nao pode levar o delegate
+            private Native.WinEventProc? _proc;
 
             public WinEventPump(Action onChange, ILogger? logger)
             {
@@ -513,9 +463,8 @@ namespace DroidDeck.Services
                 try
                 {
                     _threadId = Native.GetCurrentThreadId();
-                    Native.PeekMessage(out _, IntPtr.Zero, 0, 0, 0); // cria a fila de mensagens da thread
+                    Native.PeekMessage(out _, IntPtr.Zero, 0, 0, 0);
                     _proc = OnEvent;
-                    // Foreground, minimizar/restaurar, criar/mostrar/esconder/destruir, titulo, cloak.
                     foreach (var (min, max) in new (uint, uint)[]
                     {
                         (0x0003, 0x0003), (0x0016, 0x0017), (0x8001, 0x8003), (0x800C, 0x800C), (0x8017, 0x8018),
@@ -546,14 +495,11 @@ namespace DroidDeck.Services
 
             private void OnEvent(IntPtr hook, uint evt, IntPtr hwnd, int idObject, int idChild, uint thread, uint time)
             {
-                if (hwnd == IntPtr.Zero || idObject != 0 || idChild != 0) return; // so a propria janela
-                // Controles filhos geram eventos o tempo todo: so janela de topo interessa.
+                if (hwnd == IntPtr.Zero || idObject != 0 || idChild != 0) return;
                 if (evt != 0x0003 && Native.GetAncestor(hwnd, Native.GA_ROOT) != hwnd) return;
                 _onChange();
             }
         }
-
-        // ---- Win32 ----
 
         private static class Native
         {

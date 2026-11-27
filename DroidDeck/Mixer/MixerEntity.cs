@@ -13,7 +13,6 @@ namespace DroidDeck.Mixer
 
             Id = Device.Id;
 
-            // Tenta recuperar a configuração salva; se não existir, cria uma nova
             Config = DBHelper.Retrieve(Device.Id) as MixerConfig
                      ?? new MixerConfig(true, master.Title ?? string.Empty);
         }
@@ -21,14 +20,10 @@ namespace DroidDeck.Mixer
         public MixerMaster Device { get; private set; }
         public MixerConfig Config { get; private set; }
 
-        /// <summary>
-        /// Atualiza volume/mute do dispositivo ou de uma sessão específica.
-        /// </summary>
         public void SetOptions(MixerData data)
         {
             Device.SetOptions(Id, data);
 
-            // Atualiza propriedades locais
             Volume = Device.Volume;
             Mute = Device.Mute;
         }
@@ -37,9 +32,6 @@ namespace DroidDeck.Mixer
         public int Volume { get; private set; }
         public bool Mute { get; private set; }
 
-        /// <summary>
-        /// Retorna uma sessão específica (MixerChannel) pelo ID do processo
-        /// </summary>
         public MixerChannel? GetSession(int sessionId)
         {
             return Device.Channels?.FirstOrDefault(c => c.Id == sessionId);

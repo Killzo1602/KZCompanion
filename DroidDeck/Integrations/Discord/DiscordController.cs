@@ -31,7 +31,7 @@ namespace DroidDeck.Controllers
             if (!DroidDeck.Services.ActionPolicy.IsLocal(HttpContext.Connection))
                 return StatusCode(403, new { error = "Credentials are entered on the PC only." });
             if (string.IsNullOrWhiteSpace(dto?.ClientId) || string.IsNullOrWhiteSpace(dto?.ClientSecret))
-                return BadRequest(L.T("clientId e clientSecret obrigatórios"));
+                return BadRequest(L.T("clientId and clientSecret are required"));
             _discord.SetCredentials(dto.ClientId!, dto.ClientSecret!);
             return Ok();
         }
@@ -96,7 +96,6 @@ namespace DroidDeck.Controllers
             catch (System.Exception ex) { return StatusCode(502, new { error = L.Message(ex) }); }
         }
 
-        // ---- Soundboard nativa do Discord ----
         [HttpGet("soundboard-sounds")]
         public async Task<IActionResult> SoundboardSounds()
         {
@@ -114,7 +113,7 @@ namespace DroidDeck.Controllers
         public async Task<IActionResult> PlaySoundboard([FromBody] PlaySoundDto? dto)
         {
             if (string.IsNullOrWhiteSpace(dto?.SoundId))
-                return BadRequest(new { error = L.T("soundId é obrigatório") });
+                return BadRequest(new { error = L.T("soundId is required") });
             try
             {
                 await _discord.PlaySoundboardSoundAsync(dto!.SoundId!, dto.GuildId);

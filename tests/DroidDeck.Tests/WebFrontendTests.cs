@@ -5,10 +5,6 @@ using Xunit;
 
 namespace DroidDeck.Tests
 {
-    /// <summary>
-    /// Regressao: o configurador do Windows mostrou o deck antigo (Buttons, Profiles, importar do
-    /// Stream Deck) porque um wwwroot velho do codigo-fonte (fora do git) ganhou do wwwroot do .exe.
-    /// </summary>
     public class WebRootSelectionTests : IDisposable
     {
         private readonly string _tmp = Path.Combine(Path.GetTempPath(), "kz-webroot-" + Guid.NewGuid().ToString("N"));
@@ -30,7 +26,7 @@ namespace DroidDeck.Tests
         public void ExePublicado_ServeOWwwrootAoLadoDele_MesmoComOutroNoDiretorioDeTrabalho()
         {
             var published = MakeDir("dist\\KZCompanion-win-x64", true);
-            var sourceTree = MakeDir("repo\\DroidDeck", true); // wwwroot velho do fonte
+            var sourceTree = MakeDir("repo\\DroidDeck", true);
             Assert.Equal(published, WebRoot.ResolveContentRoot(sourceTree, published));
         }
 
@@ -61,10 +57,6 @@ namespace DroidDeck.Tests
         }
     }
 
-    /// <summary>
-    /// O front-end embutido (DroidDeck/wwwroot, que nao vai para o git) nao pode ter o deck antigo
-    /// nem faltar o menu atual. Sem wwwroot na maquina (CI limpo), o teste nao tem o que conferir.
-    /// </summary>
     public class WebFrontendContentTests
     {
         private static readonly string[] Legacy = { "Import from Stream Deck", "Automations", "Profiles", "StreamDeck/profiles", "Edit profile" };
@@ -104,9 +96,9 @@ namespace DroidDeck.Tests
             Assert.NotNull(script);
             var text = File.ReadAllText(script!);
             Assert.Contains("Assert-WebClean", text);
-            Assert.Contains("Remove-Item $wwwroot", text);   // substitui, nao mistura
-            Assert.Contains("is running from", text);        // recusa pasta em uso
-            Assert.Contains("Get-FileHash", text);           // confere o que foi publicado
+            Assert.Contains("Remove-Item $wwwroot", text);
+            Assert.Contains("is running from", text);
+            Assert.Contains("Get-FileHash", text);
         }
     }
 }

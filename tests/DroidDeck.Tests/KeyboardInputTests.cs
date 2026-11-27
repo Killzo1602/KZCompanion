@@ -73,12 +73,6 @@ namespace DroidDeck.Tests
             Assert.Throws<FormatException>(() => KeySequence.Parse(keys));
     }
 
-    /// <summary>
-    /// Envia de verdade com SendInput e confere o que o Windows recebeu num hook de teclado de
-    /// baixo nivel. O hook engole os eventos injetados, entao nada chega ao app em foco.
-    /// Precisa de uma sessao de desktop interativa: o CI exclui a categoria (o runner pode nao
-    /// ter uma); localmente roda junto com o resto.
-    /// </summary>
     [Trait("Category", "RequiresDesktop")]
     public class KeyboardInputTests
     {
@@ -98,7 +92,7 @@ namespace DroidDeck.Tests
                 {
                     lock (events)
                         events.Add(new Event(info.vkCode, info.scanCode, (info.flags & LLKHF_UP) != 0, (info.flags & LLKHF_EXTENDED) != 0));
-                    return (IntPtr)1; // engole: nao chega a janela nenhuma
+                    return (IntPtr)1;
                 }
                 return CallNextHookEx(IntPtr.Zero, nCode, wParam, lParam);
             };
@@ -120,7 +114,7 @@ namespace DroidDeck.Tests
             try
             {
                 KeyboardInput.Send(KeySequence.Parse(keys));
-                Thread.Sleep(100); // o hook roda na outra thread
+                Thread.Sleep(100);
             }
             finally
             {
@@ -138,7 +132,7 @@ namespace DroidDeck.Tests
 
             Assert.Equal(new[] { (0xA2u, false), (0x43u, false), (0x43u, true), (0xA2u, true) },
                 ev.Select(e => (e.Vk, e.Up)).ToArray());
-            Assert.Equal(0x2Eu, ev[1].Scan); // scancode do C: o que jogos com DirectInput leem
+            Assert.Equal(0x2Eu, ev[1].Scan);
         }
 
         [Fact]
@@ -153,7 +147,7 @@ namespace DroidDeck.Tests
             var win = ev.First();
             Assert.Equal(0x5Bu, win.Vk);
             Assert.True(win.Extended);
-            Assert.Contains(ev, e => e.Vk == 0x87 && !e.Up); // F24
+            Assert.Contains(ev, e => e.Vk == 0x87 && !e.Up);
         }
 
         [Fact]
@@ -162,9 +156,8 @@ namespace DroidDeck.Tests
 
         [Fact]
         public void CaractereForaDoLayout_VaiComoUnicode() =>
-            Assert.All(Capture("â˜ƒ"), e => Assert.Equal(0xE7u, e.Vk)); // VK_PACKET
+            Assert.All(Capture("â˜ƒ"), e => Assert.Equal(0xE7u, e.Vk));
 
-        // ---- Win32 ----
         private const int WH_KEYBOARD_LL = 13;
         private const uint WM_QUIT = 0x0012;
         private const uint LLKHF_EXTENDED = 0x01, LLKHF_INJECTED = 0x10, LLKHF_UP = 0x80;
@@ -240,7 +233,6 @@ namespace DroidDeck.Tests
         }
     }
 
-    /// <summary>HeldKeys com um envio falso: nada chega ao teclado do PC.</summary>
     public class HeldKeysTests
     {
         private readonly List<(ushort vk, bool down)> _sent = new();
@@ -308,7 +300,6 @@ namespace DroidDeck.Tests
             keys.Down(HeldKeys.OneShotPrefix + "ctrl", 0x11);
             keys.Down("latch:alt", 0x12);
 
-            // Outro modificador nao conta; a seta segurada mantem o Shift ate ela subir.
             keys.Down("cel", 0x5B);
             keys.Up("cel", 0x5B);
             keys.Down("cel", 0x26);
@@ -324,7 +315,7 @@ namespace DroidDeck.Tests
         {
             using var keys = Make();
             keys.Down(HeldKeys.OneShotPrefix + "shift", 0x10);
-            keys.KeyTapped(0x11); // so Ctrl: nao conta
+            keys.KeyTapped(0x11);
             Assert.Contains((ushort)0x10, keys.Keys);
             keys.KeyTapped();
             Assert.Empty(keys.Keys);
@@ -337,12 +328,11 @@ namespace DroidDeck.Tests
             keys.RepeatDelay = TimeSpan.FromMilliseconds(20);
             keys.RepeatInterval = TimeSpan.FromMilliseconds(10);
 
-            keys.Down("cel", 0x10); // Shift
+            keys.Down("cel", 0x10);
             Thread.Sleep(150);
             Assert.Single(Sent(), s => s == (0x10, true));
 
-            keys.Down("cel", 0x26); // seta
-            // Espera a condicao, nao um tempo fixo: numa maquina ocupada o temporizador atrasa.
+            keys.Down("cel", 0x26);
             Assert.True(SpinWait.SpinUntil(() => Sent().Count(s => s == (0x26, true)) > 2, TimeSpan.FromSeconds(10)));
 
             keys.Up("cel", 0x26);

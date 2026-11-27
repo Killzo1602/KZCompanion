@@ -15,15 +15,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Plugin Tuya/Smart Life (cobre as marcas que sao rebrand da Tuya: Nova Digital, Positivo,
-    /// RSmart, Elgin...). Mesmo formato do ObsService: config em %LocalAppData%\DroidDeck,
-    /// estado espelhado ao vivo pelo SignalR, e um watchdog cuidando da conexao.
-    ///
-    /// O estado vem por PUSH (MQTT), nunca por polling: o tier gratuito da Tuya permite ~26 mil
-    /// chamadas de API por mes (~0,6/min), o que torna polling impossivel; as mensagens de push
-    /// tem cota separada de 68 mil/mes.
-    /// </summary>
     public class TuyaService : IAsyncDisposable, Integrations.IIntegration
     {
         private readonly ILogger<TuyaService> _logger;
@@ -39,7 +30,6 @@ namespace DroidDeck.Services
         private TuyaDeviceRepository? _repo;
         private TuyaMqttClient? _mqtt;
 
-        // Pareamento em andamento (o QR expira em 1-2 min, entao isso e efemero de proposito).
         private (string Token, string UserCode, DateTime Expires)? _pendingPairing;
 
         public bool Connected => _api != null;
@@ -56,8 +46,6 @@ namespace DroidDeck.Services
             _http = httpFactory.CreateClient("tuya");
             _config = LoadConfig();
         }
-
-        // ---- Config em %LocalAppData%\DroidDeck\tuya.json ----
 
         private static string ConfigPath
         {
@@ -84,12 +72,6 @@ namespace DroidDeck.Services
 
         public bool HasSavedSession() => _config.HasSession;
 
-        /// <summary>
-        /// Grava em arquivo temporario e troca, em vez de escrever por cima. Uma queda de luz
-        /// no meio de um WriteAllText deixa o tuya.json truncado, o LoadConfig cai no catch e
-        /// a sessao evapora -- o usuario tem que refazer o pareamento por QR. Aqui o arquivo
-        /// bom so e substituido depois que o novo esta inteiro no disco.
-        /// </summary>
         private void SaveConfig()
         {
             var path = ConfigPath;
@@ -110,9 +92,6 @@ namespace DroidDeck.Services
             }
         }
 
-        // ---- Pareamento por QR ----
-
-        /// <summary>Passo 1: gera o QR que o usuario escaneia com o app Smart Life / Tuya Smart.</summary>
         public async Task<object> StartPairingAsync(string userCode)
         {
             var auth = new TuyaAuth(_http, _logger);
@@ -120,17 +99,11 @@ namespace DroidDeck.Services
 
             _pendingPairing = (token, userCode, DateTime.UtcNow.AddMinutes(2));
 
-            // O QR ja vai renderizado: o app Flutter nao tem lib de geracao de QR (so de
-            // leitura), e o backend ja carrega o QRCoder para o pareamento do proprio DroidDeck.
             var png = Convert.ToBase64String(Lib.PairingInfo.BuildQrPng(payload));
 
             return new { qrPayload = payload, qrPng = png, expiresInSeconds = 120 };
         }
 
-        /// <summary>
-        /// Passo 2: o configurador chama isso em laco ate virar true. Devolve false enquanto
-        /// o usuario nao escaneou -- nao e erro.
-        /// </summary>
         public async Task<bool> PollPairingAsync()
         {
             if (_pendingPairing is not { } pending) return false;
@@ -138,7 +111,7 @@ namespace DroidDeck.Services
             if (DateTime.UtcNow > pending.Expires)
             {
                 _pendingPairing = null;
-                throw new InvalidOperationException("QR expirado; gere outro.");
+                throw new InvalidOperationException("QR code expired; generate a new one.");
             }
 
             var auth = new TuyaAuth(_http, _logger);
@@ -156,21 +129,17 @@ namespace DroidDeck.Services
             return true;
         }
 
-        // ---- Conexao ----
-
         public async Task ConnectAsync()
         {
             await _connectLock.WaitAsync();
             try
             {
                 if (!_config.HasSession)
-                    throw new InvalidOperationException("Tuya nao pareado.");
+                    throw new InvalidOperationException("Tuya is not paired.");
 
                 var api = new TuyaApiClient(_http, _logger, _config.Token!, _config.ClientId);
                 api.TokenRefreshed += token =>
                 {
-                    // O refresh token gira a cada renovacao; perder isso obriga o usuario a
-                    // parear de novo, entao a sessao e regravada na hora.
                     _config.Token = token;
                     SaveConfig();
                 };
@@ -185,10 +154,6 @@ namespace DroidDeck.Services
                 }
                 catch
                 {
-                    // Sem isso o servico fica preso em "conectado" com zero dispositivo: o
-                    // watchdog so reage a !Connected, e Connected e so _api != null. Foi o que
-                    // aconteceu numa queda de energia -- o connect do boot pegou a rede ainda
-                    // subindo, falhou aqui, e ninguem tentou de novo por dois dias.
                     _api = null;
                     _repo = null;
                     throw;
@@ -202,13 +167,9 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>
-        /// Reconstroi o cache de dispositivos. CARO: ~4 chamadas por aparelho. Chamar so a
-        /// pedido do usuario ou no startup, nunca periodicamente.
-        /// </summary>
         public async Task RefreshDevicesAsync()
         {
-            if (_repo == null) throw new InvalidOperationException("Tuya nao conectado.");
+            if (_repo == null) throw new InvalidOperationException("Tuya is not connected.");
             await RefreshDevicesInternalAsync();
             await StartPushAsync();
             await BroadcastStateAsync();
@@ -244,10 +205,6 @@ namespace DroidDeck.Services
             var first = true;
             mqtt.ConnectionChanged += connected =>
             {
-                // A primeira conexao vem logo depois da enumeracao, que ja trouxe o estado.
-                // Nas seguintes (queda, renovacao da credencial) o que mudou enquanto o push
-                // estava fora nunca chegaria: o botao ficava com a luz apagada que alguem
-                // acendeu pelo interruptor. Uma chamada por casa traz tudo de volta.
                 if (connected && !first) _ = ResyncStatusAsync();
                 if (connected) first = false;
                 _ = BroadcastStateAsync();
@@ -258,7 +215,6 @@ namespace DroidDeck.Services
 
         private void OnStatusReported(TuyaStatusReport report) => ApplyStatus(report.DeviceId, report.Changes);
 
-        /// <summary>Le o estado atual de todos os aparelhos (sem specifications: 1 chamada por casa).</summary>
         private async Task ResyncStatusAsync()
         {
             var repo = _repo;
@@ -273,7 +229,7 @@ namespace DroidDeck.Services
                         ApplyStatus(deviceId, status);
                     }
                 }
-                await BroadcastStateAsync(); // leva o "online" junto
+                await BroadcastStateAsync();
             }
             catch (Exception ex)
             {
@@ -285,23 +241,18 @@ namespace DroidDeck.Services
         {
             if (!_devices.TryGetValue(deviceId, out var device)) return;
 
-            // Push (thread do MQTT), comando e o snapshot de quem conecta mexem no mesmo
-            // Dictionary; sem a trava a serializacao do snapshot podia estourar no meio.
             lock (device.Status)
             {
                 foreach (var change in changes)
                     device.Status[change.Key] = change.Value;
             }
 
-            // Empurra so o que mudou: o app usa isso para repintar o botao (ActiveColor).
             _ = _hub.Clients.All.SendAsync("ReceiveTuyaDeviceState", new
             {
                 deviceId,
                 status = changes,
             });
         }
-
-        // ---- Acoes ----
 
         public IReadOnlyCollection<TuyaDevice> Devices => _devices.Values.ToList();
 
@@ -310,13 +261,8 @@ namespace DroidDeck.Services
 
         public async Task SendCommandAsync(string deviceId, string code, object? value)
         {
-            if (_repo == null) throw new InvalidOperationException("Tuya nao conectado.");
+            if (_repo == null) throw new InvalidOperationException("Tuya is not connected.");
 
-            // Guarda o valor enviado ANTES da resposta da nuvem (que leva ~1 s). Sem isso, com
-            // o push fora do ar o toggle lia sempre o mesmo estado velho; e dois toques
-            // seguidos liam o mesmo valor e mandavam o mesmo comando duas vezes, deixando a luz
-            // acesa com o botao mostrando apagada. Se a nuvem recusar, volta o valor anterior;
-            // se o aparelho relatar outra coisa depois, o push corrige.
             var device = GetDevice(deviceId);
             object? previous = null;
             var hadPrevious = false;
@@ -343,10 +289,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>
-        /// Inverte um DP booleano usando o ultimo estado conhecido (que o push mantem fresco).
-        /// E a acao mais util no deck: um botao que liga e desliga.
-        /// </summary>
         public async Task ToggleAsync(string deviceId, string code)
         {
             var device = GetDevice(deviceId)
@@ -355,7 +297,6 @@ namespace DroidDeck.Services
             await SendCommandAsync(deviceId, code, ToggleTarget(device, code));
         }
 
-        /// <summary>O valor que o toggle manda: o contrario do ultimo estado conhecido.</summary>
         public static bool ToggleTarget(TuyaDevice device, string code)
         {
             lock (device.Status)

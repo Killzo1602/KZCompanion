@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/services/signalr_service.dart';
 
-/// Uma janela de um aplicativo aberto no PC.
 class KzWindow {
   const KzWindow({required this.id, required this.title, required this.minimized, required this.foreground});
   final String id;
@@ -20,8 +19,6 @@ class KzWindow {
       );
 }
 
-/// Um aplicativo aberto no PC. [id] e a identidade do executavel no PC: e a mesma chave
-/// (groupKey) das sessoes do mixer de audio, entao o volume casa por ela, nunca pelo nome.
 class KzRunningApp {
   const KzRunningApp({
     required this.id,
@@ -39,11 +36,9 @@ class KzRunningApp {
   final bool foreground;
   final bool minimized;
 
-  /// Roda como administrador: o Windows nao deixa um programa comum controla-lo.
   final bool elevated;
   final List<KzWindow> windows;
 
-  /// Titulo so quando agrega algo (nao repete o nome do app).
   String get subtitle {
     final t = title.trim();
     if (t.isEmpty || t.toLowerCase() == name.toLowerCase()) return '';
@@ -64,15 +59,12 @@ class KzRunningApp {
       );
 }
 
-/// Resultado de uma acao, ja em texto para o usuario (null = deu certo, sem aviso).
 class RunningAppResult {
   const RunningAppResult(this.message, {this.refresh = false});
   final String? message;
   final bool refresh;
 }
 
-/// Aplicativos abertos: lista por push enquanto a tela Apps esta visivel (o PC so observa
-/// janelas nesse tempo), acoes por id e icones sob demanda com cache.
 class RunningAppsStore {
   RunningAppsStore({required this.client, required this.signalR}) {
     _disposers.add(effect(() {
@@ -101,7 +93,6 @@ class RunningAppsStore {
 
   bool get active => _active;
 
-  /// A tela Apps ficou visivel: pede o estado e passa a receber as mudancas.
   void start() {
     if (_active) return;
     _active = true;
@@ -109,7 +100,6 @@ class RunningAppsStore {
     refresh();
   }
 
-  /// A tela saiu de cena (ou o app foi para segundo plano): o PC para de observar.
   void stop() {
     if (!_active) return;
     _active = false;
@@ -133,14 +123,12 @@ class RunningAppsStore {
     }
   }
 
-  /// Pede o icone uma vez por app (o push nao leva imagens).
   Future<void> ensureIcon(String id) async {
     if (icons.value.containsKey(id) || !_iconRequested.add(id)) return;
     try {
       final bytes = await client.getRunningAppIcon(id);
       if (bytes.isNotEmpty) icons.value = {...icons.value, id: Uint8List.fromList(bytes)};
     } catch (_) {
-      // Sem icone (processo protegido): a tela usa a inicial do nome.
     }
   }
 
@@ -150,7 +138,6 @@ class RunningAppsStore {
   Future<RunningAppResult> minimize(KzRunningApp app, {KzWindow? window}) =>
       _run(app, 'minimize', windowId: window?.id);
 
-  /// So depois da confirmacao do usuario na tela.
   Future<RunningAppResult> close(KzRunningApp app, {KzWindow? window}) =>
       _run(app, 'close', windowId: window?.id, confirm: true);
 

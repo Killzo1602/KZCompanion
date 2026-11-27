@@ -9,14 +9,6 @@ using DroidDeck.Models;
 
 namespace DroidDeck.Lib.Input
 {
-    /// <summary>
-    /// Grava o que se digita no PC (hook de teclado de baixo nivel) e transforma em passos de
-    /// multi-acao: teclas digitadas em sequencia viram um passo de atalho; uma pausa maior
-    /// que <see cref="PauseMs"/> vira a espera do passo seguinte.
-    ///
-    /// Le o teclado inteiro enquanto grava, entao so pode ser ligado pelo configurador no
-    /// proprio PC, e desliga sozinho depois de <see cref="MaxDuration"/>.
-    /// </summary>
     public sealed class MacroRecorder : IDisposable
     {
         public static readonly TimeSpan MaxDuration = TimeSpan.FromSeconds(60);
@@ -30,7 +22,7 @@ namespace DroidDeck.Lib.Input
         private uint _threadId;
         private Stopwatch _clock = new();
         private KeyModifiers _held;
-        private LowLevelKeyboardProc? _proc; // referencia viva: o GC nao pode coletar o callback
+        private LowLevelKeyboardProc? _proc;
 
         public bool Recording => _thread != null;
 
@@ -54,7 +46,6 @@ namespace DroidDeck.Lib.Input
             ready.Wait(TimeSpan.FromSeconds(2));
         }
 
-        /// <summary>Para e devolve as teclas gravadas.</summary>
         public List<KeyEvent> Stop()
         {
             var thread = _thread;
@@ -99,7 +90,6 @@ namespace DroidDeck.Lib.Input
                 var data = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lParam);
                 var down = wParam == (IntPtr)WM_KEYDOWN || wParam == (IntPtr)WM_SYSKEYDOWN;
                 var up = wParam == (IntPtr)WM_KEYUP || wParam == (IntPtr)WM_SYSKEYUP;
-                // Teclas que o proprio DroidDeck injeta (LLKHF_INJECTED) nao entram.
                 if ((data.flags & 0x10) == 0 && (down || up))
                 {
                     var vk = (ushort)data.vkCode;
@@ -127,8 +117,6 @@ namespace DroidDeck.Lib.Input
             _ => KeyModifiers.None,
         };
 
-        // ---- Conversao para passos ----
-
         private static readonly Dictionary<ushort, string> Named = new()
         {
             [0x08] = "BACKSPACE", [0x09] = "TAB", [0x0D] = "ENTER", [0x13] = "BREAK", [0x14] = "CAPSLOCK",
@@ -140,16 +128,14 @@ namespace DroidDeck.Lib.Input
             [0xB0] = "MEDIA_NEXT", [0xB1] = "MEDIA_PREV", [0xB2] = "MEDIA_STOP", [0xB3] = "MEDIA_PLAY_PAUSE",
         };
 
-        /// <summary>Caracteres com significado na sintaxe e que precisam de chaves: {+}.</summary>
         private const string Special = "+^%~(){}#[]";
 
-        /// <summary>Uma tecla na sintaxe do SendKeys ("^c", "{ENTER}", "+{TAB}"). Null = tecla sem traducao.</summary>
         public static string? Token(KeyEvent e, Func<ushort, char>? charOf = null)
         {
             string? key;
-            if (e.Vk is >= 0x41 and <= 0x5A) key = ((char)(e.Vk + 32)).ToString();          // A-Z -> a-z
-            else if (e.Vk is >= 0x30 and <= 0x39) key = ((char)e.Vk).ToString();            // 0-9
-            else if (e.Vk is >= 0x70 and <= 0x87) key = "{F" + (e.Vk - 0x6F) + "}";         // F1-F24
+            if (e.Vk is >= 0x41 and <= 0x5A) key = ((char)(e.Vk + 32)).ToString();
+            else if (e.Vk is >= 0x30 and <= 0x39) key = ((char)e.Vk).ToString();
+            else if (e.Vk is >= 0x70 and <= 0x87) key = "{F" + (e.Vk - 0x6F) + "}";
             else if (e.Vk is >= 0x60 and <= 0x69) key = "{NUMPAD" + (e.Vk - 0x60) + "}";
             else if (Named.TryGetValue(e.Vk, out var name)) key = "{" + name + "}";
             else
@@ -166,7 +152,6 @@ namespace DroidDeck.Lib.Input
             return mods + key;
         }
 
-        /// <summary>Junta as teclas em passos de atalho, separando nas pausas.</summary>
         public static List<MultiStep> ToSteps(IReadOnlyList<KeyEvent> events, Func<ushort, char>? charOf = null)
         {
             var steps = new List<MultiStep>();
@@ -191,7 +176,6 @@ namespace DroidDeck.Lib.Input
                 if (last >= 0 && e.AtMs - last > PauseMs)
                 {
                     Flush();
-                    // Arredonda para 100 ms: ninguem quer "espera de 1.237 ms".
                     delay = (int)(Math.Round((e.AtMs - last) / 100.0) * 100);
                 }
                 keys.Append(token);
@@ -201,17 +185,13 @@ namespace DroidDeck.Lib.Input
             return steps;
         }
 
-        /// <summary>Caractere que a tecla produz sem modificadores, no layout atual (sinais, acentos).</summary>
         private static char LayoutChar(ushort vk)
         {
             var c = MapVirtualKey(vk, MAPVK_VK_TO_CHAR);
-            // Bit alto = tecla morta (acento): grava o proprio acento.
             return (char)(c & 0x7FFF);
         }
 
         public void Dispose() => Stop();
-
-        // ---- Win32 ----
 
         private const int WH_KEYBOARD_LL = 13;
         private const int WM_KEYDOWN = 0x0100, WM_KEYUP = 0x0101, WM_SYSKEYDOWN = 0x0104, WM_SYSKEYUP = 0x0105;

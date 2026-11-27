@@ -9,16 +9,11 @@ class DroppedFiles {
   final List<String> paths;
   final List<String> rejected;
 
-  /// Itens soltos sem caminho de arquivo (ex.: apps do Menu Iniciar): so o nome; abre o seletor.
   final List<String> unresolved;
 
-  /// O item solto nao tem nada utilizavel (nem arquivo nem nome): orienta a usar o seletor.
   final bool unsupported;
 }
 
-/// Arrastar arquivos do Explorer para o configurador (WebView2). O navegador so entrega File sem
-/// caminho; o WebView2 passa o caminho real ao app do PC (postMessageWithAdditionalObjects), que
-/// responde com a lista validada. Sem WebView2 (navegador comum) o arrastar e simplesmente ignorado.
 class DropImport {
   static final _files = StreamController<DroppedFiles>.broadcast();
   static final _dragging = StreamController<bool>.broadcast();
@@ -34,8 +29,6 @@ class DropImport {
     return (wv != null && wv.isA<JSObject>()) ? wv as JSObject : null;
   }
 
-  /// So escuta o host. O arrasto em si NAO passa pela pagina: o app do PC trata o OLE nativamente,
-  /// valida e manda JSON simples ({type: dragging|dropped}).
   static void start() {
     if (_started) return;
     _started = true;

@@ -25,7 +25,7 @@ namespace DroidDeck.Tests
                 {
                     new()
                     {
-                        Id = "atalho", Row = 0, Column = 0, Label = "Copiar",
+                        Id = "atalho", Row = 0, Column = 0, Label = "Copy",
                         Action = new DeckAction { Type = "hotkey", Parameters = new() { ["keys"] = "^c" } },
                     },
                 },
@@ -45,7 +45,7 @@ namespace DroidDeck.Tests
 
             var copy = _config.GetProfile(_b)!.Buttons.Single(b => b.Row == 0 && b.Column == 1);
             Assert.NotEqual("atalho", copy.Id);
-            Assert.Equal("Copiar", copy.Label);
+            Assert.Equal("Copy", copy.Label);
             Assert.Equal("^c", copy.Action!.Parameters["keys"]);
             Assert.Single(_config.GetProfile(_a)!.Buttons);
         }

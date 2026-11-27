@@ -13,10 +13,6 @@ using MQTTnet.Protocol;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// MQTT generico: o DroidDeck fica conectado ao broker configurado (Mosquitto, o do Home
-    /// Assistant, Node-RED...) e os botoes publicam mensagens. So publica; nao assina nada.
-    /// </summary>
     public class MqttIntegration : AccountIntegration
     {
         public const string Event = "ReceiveMqttState";
@@ -46,7 +42,6 @@ namespace DroidDeck.Integrations
 
         public override object GetState() => new { connected = _connected };
 
-        /// <summary>Endereco do broker: "host", "host:porta", "mqtt://host:1883" ou "mqtts://host:8883" (TLS).</summary>
         public record BrokerAddress(string Host, int Port, bool Tls)
         {
             public override string ToString() => $"{(Tls ? "mqtts" : "mqtt")}://{Host}:{Port}";
@@ -62,7 +57,7 @@ namespace DroidDeck.Integrations
             if (scheme >= 0) s = s[(scheme + 3)..];
             s = s.TrimEnd('/');
             if (s.Length == 0 || !Uri.TryCreate("tcp://" + s, UriKind.Absolute, out var uri) || uri.PathAndQuery != "/")
-                throw new InvalidOperationException("Endereço do broker inválido. Ex.: mqtt://192.168.0.10:1883");
+                throw new InvalidOperationException("Invalid broker address. E.g.: mqtt://192.168.0.10:1883");
             var port = uri.Port > 0 ? uri.Port : tls ? 8883 : 1883;
             return new BrokerAddress(uri.Host, port, tls);
         }
@@ -73,7 +68,6 @@ namespace DroidDeck.Integrations
             var username = (fields.GetValueOrDefault("username") ?? "").Trim();
             var password = fields.GetValueOrDefault("password") ?? "";
             Set(("server", server.ToString()), ("username", username),
-                // Senha vazia mantem a guardada, a nao ser que o usuario tambem tenha sido apagado.
                 ("password", password.Length > 0 ? password : username.Length > 0 ? Get("password") : null));
 
             Restart();
@@ -115,8 +109,8 @@ namespace DroidDeck.Integrations
                     if (!_reconnect.IsCancellationRequested)
                     {
                         _error = ex is MQTTnet.Adapter.MqttConnectingFailedException { ResultCode: MqttClientConnectResultCode.BadUserNameOrPassword or MqttClientConnectResultCode.NotAuthorized }
-                            ? "O broker MQTT recusou o usuário ou a senha."
-                            : "Não foi possível conectar ao broker MQTT. Confira o endereço.";
+                            ? "The MQTT broker rejected the username or password."
+                            : "Couldn't connect to the MQTT broker. Check the address.";
                         Logger.LogInformation("MQTT: {Error}", ex.Message);
                     }
                 }
@@ -175,22 +169,20 @@ namespace DroidDeck.Integrations
             }
         }
 
-        /// <summary>Publica uma mensagem. Lanca se o broker nao estiver conectado.</summary>
         public async Task PublishAsync(string topic, string payload, int qos, bool retain)
         {
             var client = _client;
-            if (!_connected || client == null || !client.IsConnected) throw new InvalidOperationException("MQTT desconectado.");
+            if (!_connected || client == null || !client.IsConnected) throw new InvalidOperationException("MQTT disconnected.");
             var message = BuildMessage(topic, payload, qos, retain);
             var result = await client.PublishAsync(message);
-            if (!result.IsSuccess) throw new InvalidOperationException(result.ReasonString ?? "O broker MQTT recusou a mensagem.");
+            if (!result.IsSuccess) throw new InvalidOperationException(result.ReasonString ?? "The MQTT broker refused the message.");
         }
 
         public static MqttApplicationMessage BuildMessage(string topic, string payload, int qos, bool retain)
         {
             var t = topic.Trim();
-            // Curingas so valem para assinar, nunca para publicar.
             if (t.Length == 0 || t.Contains('#') || t.Contains('+'))
-                throw new InvalidOperationException("Tópico MQTT inválido.");
+                throw new InvalidOperationException("Invalid MQTT topic.");
             return new MqttApplicationMessageBuilder()
                 .WithTopic(t)
                 .WithPayload(Encoding.UTF8.GetBytes(payload))

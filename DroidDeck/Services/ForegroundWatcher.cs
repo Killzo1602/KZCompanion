@@ -13,16 +13,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Troca de perfil pelo app em foco: observa a janela em primeiro plano e, quando o
-    /// processo dela esta na lista AutoSwitchApps de um perfil, avisa os celulares
-    /// (ReceiveAutoProfile). Quando o foco vai para um app sem perfil, avisa com profileId
-    /// nulo e o celular volta para onde estava.
-    ///
-    /// Le o foco a cada 500 ms em vez de usar SetWinEventHook: o hook exige uma thread com
-    /// laco de mensagens so para isso, e meio segundo de atraso nao se nota numa troca de
-    /// perfil. Sem celular conectado, nao faz nada.
-    /// </summary>
     public class ForegroundWatcher : BackgroundService
     {
         public const string Event = "ReceiveAutoProfile";
@@ -42,7 +32,6 @@ namespace DroidDeck.Services
             _logger = logger;
         }
 
-        /// <summary>Estado atual, enviado a quem conecta.</summary>
         public object GetState() => new { profileId = _currentProfileId, app = _lastProcess };
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -55,7 +44,6 @@ namespace DroidDeck.Services
                     if (DeckHub.ConnectedCount > 0)
                     {
                         var pid = ForegroundPid();
-                        // A propria janela do DroidDeck (QR, avisos) nao conta como troca.
                         if (pid != 0 && pid != _lastPid && pid != ownPid)
                         {
                             _lastPid = pid;
@@ -79,7 +67,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Primeiro perfil cuja lista contem o processo (sem diferenciar maiusculas, com ou sem .exe).</summary>
         public static string? Match(IEnumerable<Models.DeckProfile> profiles, string? process)
         {
             if (string.IsNullOrEmpty(process)) return null;
@@ -107,7 +94,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Processo (sem .exe) da janela em foco agora, ou null.</summary>
         public static string? ForegroundProcess() => ProcessName(ForegroundPid());
 
         private static uint ForegroundPid()
@@ -118,7 +104,6 @@ namespace DroidDeck.Services
             return pid;
         }
 
-        /// <summary>Apps com janela visivel agora, para o editor sugerir.</summary>
         public static List<Actions.FieldOption> RunningApps()
         {
             var titles = new Dictionary<uint, string>();

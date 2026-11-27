@@ -7,20 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Actions.Providers
 {
-    /// <summary>
-    /// Volume e mudo por aplicativo ou por dispositivo.
-    /// Parâmetros aceitos:
-    ///   operation   : "toggleMute" (padrão) | "mute" | "unmute" | "setVolume"
-    ///                 | "volumeUp" | "volumeDown"
-    ///   processName : nome do processo (ex.: "Spotify") -> controla o áudio daquele app
-    ///                 (só as operações de mudo)
-    ///   deviceId    : id do dispositivo -> controla o dispositivo inteiro.
-    ///                 "default" = dispositivo padrão do Windows (preferir isto a um id
-    ///                 fixo: o id muda quando o usuário troca de fone/monitor)
-    ///   deviceKind  : "output" (padrão) | "input" — só importa para deviceId="default"
-    ///   volume      : 0-100 (usado com setVolume)
-    ///   step        : passo em pontos percentuais do volumeUp/volumeDown (padrão 5)
-    /// </summary>
     public class MixerProvider : IActionProvider
     {
         private readonly MixerService _mixer;
@@ -41,9 +27,9 @@ namespace DroidDeck.Actions.Providers
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Volume e mudo",
+            Title = "Volume and mute",
             Icon = "volume_up",
-            Category = "Mídia",
+            Category = "Media",
             Stateful = true,
             Editor = "mixer",
         };
@@ -55,18 +41,14 @@ namespace DroidDeck.Actions.Providers
             var deviceId = c.Get("deviceId");
 
             int? volume = c.Get("volume").Length > 0 ? Math.Clamp(c.Int("volume", 0), 0, 100) : null;
-            // Passo do volumeUp/volumeDown, em pontos percentuais.
             var step = Math.Clamp(c.Int("step", 5), 1, 50);
 
             var isVolumeOp = operation is "setvolume" or "volumeup" or "volumedown";
 
-            // Alvo = aplicativo (por nome de processo): mute/toggle por sessao de audio.
             if (!string.IsNullOrWhiteSpace(processName))
             {
                 if (isVolumeOp)
                 {
-                    // O IAudioControlService so expoe mudo por processo; volume por app ainda
-                    // nao existe. Avisa em vez de silenciosamente nao fazer nada.
                     _logger.LogWarning(
                         "Mixer: '{Op}' nao e suportado por processo ('{Proc}'). " +
                         "Use um dispositivo como alvo para controlar volume.", operation, processName);
@@ -81,7 +63,7 @@ namespace DroidDeck.Actions.Providers
                     case "unmute":
                         _audio.MuteByProcessName(processName, false);
                         break;
-                    default: // toggleMute
+                    default:
                         _audio.ToggleMuteByProcessName(processName);
                         break;
                 }
@@ -91,13 +73,10 @@ namespace DroidDeck.Actions.Providers
                 return;
             }
 
-            // Alvo = dispositivo (por id): volume/mudo do dispositivo inteiro.
             if (!string.IsNullOrWhiteSpace(deviceId))
             {
                 var isInput = string.Equals(c.Get("deviceKind"), "input", StringComparison.OrdinalIgnoreCase);
 
-                // "default" em vez de um id fixo: o id do endpoint muda quando o usuario troca
-                // de fone/monitor, e ai o botao apontaria pra um dispositivo que nao existe mais.
                 var resolvedId = deviceId;
                 if (string.Equals(deviceId, "default", StringComparison.OrdinalIgnoreCase))
                 {

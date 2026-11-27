@@ -13,25 +13,12 @@ using DroidDeck.Lib;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Uso de IA para o botão "Uso de IA": a porcentagem dos limites do plano (janela de 5 h e
-    /// semana) e os tokens de hoje e dos últimos 7 dias. Tudo sai do que as ferramentas já
-    /// guardam no PC; nada é enviado a terceiros.
-    /// <list type="bullet">
-    /// <item>Claude: limites pela mesma consulta que o /usage do Claude Code faz, com o login que ele
-    /// salvou em ~/.claude/.credentials.json (só leitura: o login nunca é renovado daqui, para não
-    /// derrubar o do Claude Code). Tokens pelos registros em ~/.claude/projects.</item>
-    /// <item>Codex: limites e tokens pelos eventos token_count em ~/.codex/sessions.</item>
-    /// </list>
-    /// </summary>
     public class AiUsageService
     {
         public const string Claude = "claude";
         public const string Codex = "codex";
 
         private const string ClaudeUsageUrl = "https://api.anthropic.com/api/oauth/usage";
-        // A Anthropic devolve 429 com facilidade (o próprio Claude Code também consulta):
-        // pergunta no máximo a cada 5 min e, recusado, espera cada vez mais (até 30 min).
         private static readonly TimeSpan PlanCache = TimeSpan.FromMinutes(5);
         private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(30);
         private static readonly TimeSpan Keep = TimeSpan.FromDays(8);
@@ -47,14 +34,14 @@ namespace DroidDeck.Services
 
         public AiUsageService(IHttpClientFactory http) => _http = http;
 
-        /// <summary>Uma janela de limite: quanto já foi usado (0–100) e quando zera.</summary>
         public record Window(double Percent, DateTimeOffset? ResetsAt);
 
-        public record Plan(Window? Session, Window? Week);
+        public record Plan(Window? Session, Window? Week, IReadOnlyList<ModelWindow>? Models = null);
+
+        public record ModelWindow(string Model, Window Window);
 
         public record Tokens(long Today, long Week);
 
-        /// <summary>Uma linha lida de um registro: quando, quantos tokens e o id (para não contar repetido).</summary>
         public record Entry(DateTimeOffset At, long Tokens, string? Id, Plan? Plan = null);
 
         public static string ClaudeDir =>
@@ -67,14 +54,12 @@ namespace DroidDeck.Services
                 ? d
                 : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex");
 
-        // ---- Limites do plano ----
-
         public async Task<Plan> PlanAsync(string provider)
         {
             if (provider == Codex)
             {
                 var plan = await Task.Run(() => _codexLogs.LatestPlan(Path.Combine(CodexDir, "sessions")));
-                return plan ?? throw new LocalizedException("Sem registros do Codex neste PC.");
+                return plan ?? throw new LocalizedException("No Codex logs on this PC.");
             }
 
             await _lock.WaitAsync();
@@ -94,7 +79,6 @@ namespace DroidDeck.Services
                 }
                 catch (PlanBusyException busy)
                 {
-                    // Recusado: segura o último valor e só tenta de novo depois da espera.
                     _claudeBackoff = busy.RetryAfter
                         ?? (_claudeBackoff == TimeSpan.Zero ? PlanCache : TimeSpan.FromTicks(Math.Min(_claudeBackoff.Ticks * 2, MaxBackoff.Ticks)));
                     _claudeRetryAt = now + _claudeBackoff;
@@ -103,16 +87,14 @@ namespace DroidDeck.Services
                 }
                 catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
                 {
-                    // Login expirado, sem rede...: mostra o motivo, mas também não insiste a cada minuto.
                     _claudeBackoff = PlanCache;
                     _claudeRetryAt = now + PlanCache;
                     _claudeError = ex switch
                     {
                         LocalizedException le => le.Text,
                         InvalidOperationException => new L.Text(ex.Message),
-                        _ => new L.Text("A Anthropic não respondeu."),
+                        _ => new L.Text("Anthropic didn't respond."),
                     };
-                    // Queda de rede passageira: o último valor ainda serve.
                     if (ex is not InvalidOperationException && _claudePlan is { } last) return last.plan;
                     throw new LocalizedException(_claudeError);
                 }
@@ -127,21 +109,21 @@ namespace DroidDeck.Services
         {
             var file = Path.Combine(ClaudeDir, ".credentials.json");
             if (!File.Exists(file))
-                throw new LocalizedException("Entre no Claude Code neste PC para ver os limites.");
+                throw new LocalizedException("Sign in to Claude Code on this PC to see the limits.");
 
             string? token;
             long expires;
             using (var creds = JsonDocument.Parse(await File.ReadAllTextAsync(file)))
             {
                 if (!creds.RootElement.TryGetProperty("claudeAiOauth", out var o))
-                    throw new LocalizedException("Entre no Claude Code neste PC para ver os limites.");
+                    throw new LocalizedException("Sign in to Claude Code on this PC to see the limits.");
                 token = o.TryGetProperty("accessToken", out var t) ? t.GetString() : null;
                 expires = o.TryGetProperty("expiresAt", out var e) && e.TryGetInt64(out var ms) ? ms : 0;
             }
             if (string.IsNullOrEmpty(token))
-                throw new LocalizedException("Entre no Claude Code neste PC para ver os limites.");
+                throw new LocalizedException("Sign in to Claude Code on this PC to see the limits.");
             if (expires > 0 && DateTimeOffset.FromUnixTimeMilliseconds(expires) < DateTimeOffset.UtcNow)
-                throw new LocalizedException("O login do Claude Code expirou. Abra o Claude Code para renovar.");
+                throw new LocalizedException("The Claude Code login expired. Open Claude Code to renew it.");
 
             var client = _http.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(10);
@@ -151,16 +133,16 @@ namespace DroidDeck.Services
             req.Headers.UserAgent.ParseAdd("DroidDeck");
             using var resp = await client.SendAsync(req);
             if (resp.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                throw new LocalizedException("O login do Claude Code expirou. Abra o Claude Code para renovar.");
+                throw new LocalizedException("The Claude Code login expired. Open Claude Code to renew it.");
             if ((int)resp.StatusCode == 429 || (int)resp.StatusCode >= 500)
             {
                 var wait = resp.Headers.RetryAfter?.Delta
                     ?? (resp.Headers.RetryAfter?.Date is { } d ? d - DateTimeOffset.UtcNow : null);
-                throw new PlanBusyException(new L.Text("Anthropic pediu uma pausa; tento de novo logo."),
+                throw new PlanBusyException(new L.Text("Anthropic asked for a break; retrying soon."),
                     wait is { } w && w > TimeSpan.Zero ? (w < MaxBackoff ? w : MaxBackoff) : null);
             }
             if (!resp.IsSuccessStatusCode)
-                throw new LocalizedException("A Anthropic não respondeu ({code}).", ("code", (int)resp.StatusCode));
+                throw new LocalizedException("Anthropic didn't respond ({code}).", ("code", (int)resp.StatusCode));
             return ParseClaudePlan(await resp.Content.ReadAsStringAsync());
         }
 
@@ -170,10 +152,10 @@ namespace DroidDeck.Services
             public PlanBusyException(L.Text text, TimeSpan? retryAfter) : base(text) => RetryAfter = retryAfter;
         }
 
-        /// <summary>Resposta do /api/oauth/usage: five_hour e seven_day com utilization e resets_at.</summary>
         public static Plan ParseClaudePlan(string json)
         {
             using var doc = JsonDocument.Parse(json);
+            if (ParseClaudeLimits(doc.RootElement) is { } listed) return listed;
             Window? Read(string name)
             {
                 if (!doc.RootElement.TryGetProperty(name, out var w) || w.ValueKind != JsonValueKind.Object) return null;
@@ -186,7 +168,35 @@ namespace DroidDeck.Services
             return new Plan(Read("five_hour"), Read("seven_day"));
         }
 
-        // ---- Tokens ----
+        private static Plan? ParseClaudeLimits(JsonElement root)
+        {
+            if (!root.TryGetProperty("limits", out var limits) || limits.ValueKind != JsonValueKind.Array) return null;
+            static JsonElement Prop(JsonElement e, string name) =>
+                e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) ? v : default;
+            static string? Str(JsonElement e, string name) =>
+                Prop(e, name) is { ValueKind: JsonValueKind.String } v ? v.GetString() : null;
+
+            Window? session = null, week = null;
+            var models = new List<ModelWindow>();
+            foreach (var l in limits.EnumerateArray())
+            {
+                var percent = Prop(l, "percent");
+                if (percent.ValueKind != JsonValueKind.Number) continue;
+                DateTimeOffset? resets = DateTimeOffset.TryParse(Str(l, "resets_at"), CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var at) ? at : null;
+                var window = new Window(percent.GetDouble(), resets);
+                switch (Str(l, "kind"))
+                {
+                    case "session": session = window; break;
+                    case "weekly_all": week = window; break;
+                    case "weekly_scoped":
+                        models.Add(new ModelWindow(Str(Prop(Prop(l, "scope"), "model"), "display_name") ?? "model", window));
+                        break;
+                }
+            }
+            if (session == null && week == null && models.Count == 0) return null;
+            return new Plan(session, week, models.Count > 0 ? models : null);
+        }
 
         public Task<Tokens> TokensAsync(string provider) => Task.Run(() =>
         {
@@ -196,7 +206,6 @@ namespace DroidDeck.Services
             return Sum(entries, DateTimeOffset.Now);
         });
 
-        /// <summary>Hoje (desde a meia-noite local) e os últimos 7 dias, contando hoje.</summary>
         public static Tokens Sum(IEnumerable<Entry> entries, DateTimeOffset now)
         {
             var today = new DateTimeOffset(now.Date, now.Offset);
@@ -210,10 +219,6 @@ namespace DroidDeck.Services
             return new Tokens(t, w);
         }
 
-        /// <summary>
-        /// Uma linha do Claude Code com "usage". A mesma resposta aparece em várias linhas (uma por
-        /// bloco), então o id da mensagem evita contar duas vezes. Conta entrada, saída e cache.
-        /// </summary>
         public static Entry? ParseClaudeLine(string line)
         {
             using var doc = JsonDocument.Parse(line);
@@ -230,11 +235,6 @@ namespace DroidDeck.Services
             return new Entry(at, tokens, id);
         }
 
-        /// <summary>
-        /// Evento token_count do Codex: last_token_usage é o gasto daquela chamada; rate_limits traz a
-        /// janela primária (5 h) e a secundária (semana), com resets_at (segundos Unix) ou
-        /// resets_in_seconds nas versões antigas.
-        /// </summary>
         public static Entry? ParseCodexLine(string line)
         {
             using var doc = JsonDocument.Parse(line);
@@ -277,10 +277,6 @@ namespace DroidDeck.Services
             return new Entry(at, tokens, null, plan);
         }
 
-        /// <summary>
-        /// Lê os .jsonl recentes de uma pasta aos poucos: guarda até onde leu cada arquivo e só
-        /// processa o que foi acrescentado. Linhas sem o marcador nem são interpretadas.
-        /// </summary>
         public sealed class LogScanner
         {
             private readonly Func<string, Entry?> _parse;
@@ -339,7 +335,6 @@ namespace DroidDeck.Services
                     if (!_files.TryGetValue(path, out var st)) _files[path] = st = new FileState();
                     if (fi.Length < st.Offset)
                     {
-                        // Arquivo reescrito: começa de novo.
                         st.Offset = 0;
                         st.Entries.Clear();
                         st.Ids.Clear();
@@ -355,8 +350,6 @@ namespace DroidDeck.Services
 
             private void ReadFrom(string path, FileState st)
             {
-                // O Claude Code e o Codex continuam escrevendo enquanto lemos; um registro passa
-                // de centenas de MB, então vai em pedaços e só linhas completas contam.
                 using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 fs.Seek(st.Offset, SeekOrigin.Begin);
                 var marker = Encoding.UTF8.GetBytes(_marker);

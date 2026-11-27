@@ -44,12 +44,10 @@ class _VolumeControlState extends State<VolumeControl> {
   void didUpdateWidget(VolumeControl oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // Only update volume from props if not dragging
     if (!_isDragging && oldWidget.volume != widget.volume) {
       _currentVolume = widget.volume;
     }
 
-    // Only update mute from props if not changing
     if (!_isMuteChanging && oldWidget.isMuted != widget.isMuted) {
       _currentMute = widget.isMuted;
     }
@@ -85,7 +83,6 @@ class _VolumeControlState extends State<VolumeControl> {
 
     widget.onMuteToggle();
 
-    // Reset flag after a delay
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) {
         setState(() {

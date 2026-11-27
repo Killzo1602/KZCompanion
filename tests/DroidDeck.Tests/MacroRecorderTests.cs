@@ -7,7 +7,6 @@ namespace DroidDeck.Tests
 {
     public class MacroRecorderTests
     {
-        // Layout fixo para o teste nao depender do teclado da maquina.
         private static char Layout(ushort vk) => vk switch { 0xBE => '.', 0xBB => '=', 0xDB => '(', _ => '\0' };
 
         [Theory]
@@ -32,10 +31,10 @@ namespace DroidDeck.Tests
         {
             var events = new List<E>
             {
-                new(0x4F, KeyModifiers.None, 0),     // o
-                new(0x49, KeyModifiers.None, 120),   // i
-                new(0x0D, KeyModifiers.None, 300),   // enter
-                new(0x53, KeyModifiers.Ctrl, 1540),  // ^s, 1.24 s depois
+                new(0x4F, KeyModifiers.None, 0),
+                new(0x49, KeyModifiers.None, 120),
+                new(0x0D, KeyModifiers.None, 300),
+                new(0x53, KeyModifiers.Ctrl, 1540),
             };
             var steps = MacroRecorder.ToSteps(events, Layout);
 

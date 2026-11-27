@@ -15,11 +15,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Spotify Web API com o app do proprio usuario (Client ID, sem segredo: PKCE). Controlar a
-    /// reproducao exige Spotify Premium. O estado (faixa, capa, curtida) e consultado a cada 3 s
-    /// enquanto ha celular conectado e botao de Spotify no deck: a API nao avisa mudancas.
-    /// </summary>
     public class SpotifyIntegration : AccountIntegration
     {
         public const string Event = "ReceiveSpotifyState";
@@ -97,7 +92,7 @@ namespace DroidDeck.Integrations
         public override Task<IntegrationStatus> ConfigureAsync(Dictionary<string, string> fields)
         {
             var clientId = (fields.GetValueOrDefault("clientId") ?? Get("clientId") ?? "").Trim();
-            if (clientId.Length < 16) throw new InvalidOperationException("Cole o Client ID do app que você criou no Spotify for Developers.");
+            if (clientId.Length < 16) throw new InvalidOperationException("Paste the Client ID of the app you created in Spotify for Developers.");
             if (clientId != Get("clientId")) Clear();
             Set(("clientId", clientId));
 
@@ -117,14 +112,14 @@ namespace DroidDeck.Integrations
         public override async Task<string> CallbackAsync(IQueryCollection query)
         {
             if (_pendingState == null || query["state"] != _pendingState)
-                return Html("Spotify", L.T("Este link de login expirou. Comece de novo pelo DroidDeck."));
+                return Html("Spotify", L.T("This login link has expired. Start again from KZ Companion."));
             _pendingState = null;
             if (!string.IsNullOrEmpty(query["error"]))
             {
-                _error = query["error"] == "access_denied" ? "Login cancelado." : $"O Spotify recusou: {query["error"]}";
+                _error = query["error"] == "access_denied" ? "Login cancelled." : $"O Spotify recusou: {query["error"]}";
                 return Html("Spotify", query["error"] == "access_denied"
-                    ? L.T("Login cancelado.")
-                    : L.T("O Spotify recusou: {error}", ("error", query["error"].ToString())));
+                    ? L.T("Login cancelled.")
+                    : L.T("Spotify refused: {error}", ("error", query["error"].ToString())));
             }
             try
             {
@@ -138,12 +133,12 @@ namespace DroidDeck.Integrations
                 });
                 await LoadAccountAsync();
                 await BroadcastAsync();
-                return Html(L.T("Spotify conectado"), L.T("Conta {account}. Pode fechar esta aba.", ("account", _account)));
+                return Html(L.T("Spotify connected"), L.T("Account {account}. You can close this tab.", ("account", _account)));
             }
             catch (Exception ex)
             {
                 _error = ex.Message;
-                return Html("Spotify", L.T("Não deu certo: {error}", ("error", L.Message(ex))));
+                return Html("Spotify", L.T("That didn't work: {error}", ("error", L.Message(ex))));
             }
         }
 
@@ -189,7 +184,6 @@ namespace DroidDeck.Integrations
             }
         }
 
-        /// <summary>Le o player e publica se algo mudou.</summary>
         public async Task RefreshAsync()
         {
             using var doc = await CallAsync(HttpMethod.Get, "/me/player");
@@ -219,7 +213,6 @@ namespace DroidDeck.Integrations
                 }
             }
 
-            // Curtida so muda quando o usuario mexe: consulta so na troca de faixa.
             if (p.TrackId != null && p.TrackId == _playback?.TrackId) p.Liked = _playback.Liked;
             else if (p.TrackId != null) p.Liked = await IsLikedAsync(p.TrackId);
 
@@ -256,7 +249,7 @@ namespace DroidDeck.Integrations
 
         public async Task SetLikedAsync(bool like)
         {
-            var id = _playback?.TrackId ?? throw new InvalidOperationException("Nada tocando no Spotify.");
+            var id = _playback?.TrackId ?? throw new InvalidOperationException("Nothing playing on Spotify.");
             await CallAsync(like ? HttpMethod.Put : HttpMethod.Delete, "/me/tracks?ids=" + id);
             _playback!.Liked = like;
             await BroadcastAsync();

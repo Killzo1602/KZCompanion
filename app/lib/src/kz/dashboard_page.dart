@@ -1,6 +1,9 @@
 import 'package:droiddeck/core/core.dart';
+import 'package:droiddeck/src/kz/grid/kz_grid_layout.dart';
+import 'package:droiddeck/src/kz/grid/kz_grid_view.dart';
 import 'package:droiddeck/src/kz/kz_appearance.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
+import 'package:droiddeck/src/kz/kz_ring.dart';
 import 'package:droiddeck/src/kz/kz_audio_widgets.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +16,9 @@ class DashboardPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Watch((context) {
+      if (KzGrid.editing.value || KzGrid.layout.value != null) {
+        return KzGridView(c: c, onOpenApps: onOpenApps);
+      }
       final gap = KzPrefs.density.value.gap;
       final stats = KzPrefs.showStats.value;
       final favs = KzPrefs.showFavorites.value;
@@ -27,14 +33,12 @@ class DashboardPage extends StatelessWidget {
         );
       }
       return LayoutBuilder(builder: (context, box) {
-        // Paisagem (o painel e travado assim): esquerda = CPU/GPU/RAM + favoritos; direita = audio.
-        // Em tela estreita (nao deveria ocorrer) empilha, para nunca cortar nem estourar.
         if (box.maxWidth < 620) {
           return ListView(
             padding: EdgeInsets.all(gap),
             children: [
               if (stats) ...[_statsRow(gap), SizedBox(height: gap)],
-              if (favs) ...[_favorites(context, expand: false), SizedBox(height: gap)],
+              if (favs) ...[KzFavoritesCard(c, onOpenApps: onOpenApps), SizedBox(height: gap)],
               if (audio) ...[
                 KzAudioControls(c.audio),
                 SizedBox(height: gap),
@@ -48,12 +52,11 @@ class DashboardPage extends StatelessWidget {
         final leftColumn = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           if (stats) _statsRow(gap),
           if (stats && favs) SizedBox(height: gap),
-          if (favs) Expanded(child: _favorites(context, expand: true)),
-          // So as estatisticas: elas nao esticam, o resto fica vazio.
+          if (favs) Expanded(child: KzFavoritesCard(c, onOpenApps: onOpenApps, expand: true)),
           if (!favs) const Spacer(),
         ]);
         final rightColumn = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          KzAudioControls(c.audio),
+          if (stats) SizedBox(height: _statsHeight, child: KzAudioControls(c.audio)) else KzAudioControls(c.audio),
           SizedBox(height: gap),
           Expanded(child: KzMixer(c.audio, scroll: true)),
         ]);
@@ -69,57 +72,99 @@ class DashboardPage extends StatelessWidget {
     });
   }
 
-  Widget _statsRow(double gap) {
-    return Watch((context) {
-      final s = c.signalR.systemStats.value;
-      return IntrinsicHeight(
-        child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Expanded(child: _stat('CPU', Icons.memory_rounded, s.cpuUsage, s.cpuTemp, c.cpuHistory.value)),
-          SizedBox(width: gap),
-          Expanded(child: _stat('GPU', Icons.developer_board_rounded, s.gpuUsage, s.gpuTemp, c.gpuHistory.value)),
-          SizedBox(width: gap),
-          Expanded(
-            child: _stat('RAM', Icons.storage_rounded, s.ramUsedPercent, null, c.ramHistory.value,
-                sub: s.ramTotal > 0
-                    ? '${s.ramUsedGb.toStringAsFixed(1)} / ${s.ramTotalGb.toStringAsFixed(0)} GB'
-                    : null),
-          ),
-        ]),
-      );
-    });
-  }
+  static const _statsHeight = 168.0;
 
-  Widget _stat(String title, IconData icon, double usage, double? temp, List<double> history,
-      {String? sub}) {
-    final secondary = title == 'RAM' ? sub : fmtTemp(temp);
-    return KzCard(
-      title: title,
-      icon: icon,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-        Text(fmtPercent(usage), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, height: 1.05)),
-        const SizedBox(height: 2),
-        Text(secondary ?? '',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: secondary == 'Unavailable' ? Colors.white38 : null)),
-        const SizedBox(height: 6),
-        KzBar(usage),
-        const SizedBox(height: 6),
-        KzSparkline(history, height: 26),
+  Widget _statsRow(double gap) {
+    return SizedBox(
+      height: _statsHeight,
+      child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Expanded(child: KzStatCard(c, KzStat.cpu)),
+        SizedBox(width: gap),
+        Expanded(child: KzStatCard(c, KzStat.gpu)),
+        SizedBox(width: gap),
+        Expanded(child: KzStatCard(c, KzStat.ram)),
       ]),
     );
   }
+}
 
-  Widget _favorites(BuildContext context, {required bool expand}) {
+enum KzStat { cpu, gpu, ram }
+
+class KzStatCard extends StatelessWidget {
+  const KzStatCard(this.c, this.stat, {super.key});
+  final KzController c;
+  final KzStat stat;
+
+  @override
+  Widget build(BuildContext context) {
+    return Watch((context) {
+      final s = c.signalR.systemStats.value;
+      final (title, color, usage, temp, detail) = switch (stat) {
+        KzStat.cpu => ('CPU', KzColors.cpu, s.cpuUsage, s.cpuTemp, fmtTemp(s.cpuTemp)),
+        KzStat.gpu => ('GPU', KzColors.gpu, s.gpuUsage, s.gpuTemp, fmtTemp(s.gpuTemp)),
+        KzStat.ram => (
+            'RAM',
+            KzColors.ram,
+            s.ramUsedPercent,
+            null,
+            s.ramTotal > 0 ? '${s.ramUsedGb.toStringAsFixed(1)} / ${s.ramTotalGb.toStringAsFixed(0)} GB' : ''
+          ),
+      };
+      final muted = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.55);
+      return KzCard(
+        expand: true,
+        accent: color,
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+        child: SizedBox.expand(
+          child: Column(children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (_, box) => Center(
+                  child: KzRing(
+                    percent: usage,
+                    color: temp != null && temp >= 85 ? KzColors.danger : color,
+                    value: '${usage.round()}',
+                    unit: '%',
+                    size: box.biggest.shortestSide,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(title,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 1.4, color: color)),
+            Text(detail == 'Unavailable' ? 'No temperature' : detail,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 11.5, color: muted, fontFeatures: kzDigits)),
+          ]),
+        ),
+      );
+    });
+  }
+}
+
+class KzFavoritesCard extends StatelessWidget {
+  const KzFavoritesCard(this.c, {super.key, required this.onOpenApps, this.expand = false});
+  final KzController c;
+  final VoidCallback onOpenApps;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
     return KzCard(
       expand: expand,
       title: 'Favorites',
+      accent: KzColors.apps,
       icon: Icons.star_rounded,
-      trailing: TextButton(onPressed: onOpenApps, child: const Text('All apps')),
+      trailing: InkWell(
+        onTap: onOpenApps,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Text('All apps',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: KzColors.apps)),
+        ),
+      ),
       child: Watch((context) {
         final favs = c.apps.value.where((a) => a.favorite).toList();
         if (favs.isEmpty) {

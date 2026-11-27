@@ -25,15 +25,9 @@ namespace DroidDeck.Controllers
         public string? Path { get; set; }
         public string? Group { get; set; }
         public bool Favorite { get; set; }
-        /// <summary>PNG/JPG em base64 quando o usuario troca o icone; vazio = icone do programa.</summary>
         public string? IconBase64 { get; set; }
     }
 
-    /// <summary>
-    /// Biblioteca de aplicativos. Listar e abrir (por id) vale para o celular; escolher arquivo,
-    /// criar, editar e apagar so pelo proprio PC (configurador em localhost), porque o caminho
-    /// de um programa e execucao de codigo (ver ActionPolicy).
-    /// </summary>
     [Route("api/apps")]
     [ApiController]
     [Authorize]
@@ -79,7 +73,6 @@ namespace DroidDeck.Controllers
             if (app == null) return NotFound(new { error = "Aplicativo não encontrado." });
             if (app.Kind == "steam")
             {
-                // Pelo launcher da Steam (App ID numerico validado): nada de abrir o .exe do jogo direto.
                 if (!System.Text.RegularExpressions.Regex.IsMatch(app.AppId ?? "", @"^\d{1,10}$")) return BadRequest(new { error = "Invalid Steam App ID." });
                 try
                 {
@@ -112,7 +105,6 @@ namespace DroidDeck.Controllers
             }
             if (app.Kind == "packaged")
             {
-                // App da Loja: abre pelo AppUserModelID (validado de novo aqui; nunca vem do cliente).
                 if (!InstalledApps.IsValidAumid(app.AppId)) return BadRequest(new { error = "Invalid application id." });
                 try
                 {
@@ -143,7 +135,6 @@ namespace DroidDeck.Controllers
             }
         }
 
-        /// <summary>Aplicativos instalados (Menu Iniciar, programas registrados, apps da Loja), com "ja adicionado".</summary>
         [HttpGet("installed")]
         public IActionResult Installed([FromQuery] bool refresh = false)
         {
@@ -169,7 +160,6 @@ namespace DroidDeck.Controllers
             return Ok(new { iconBase64 = _installed.IconBase64(item) });
         }
 
-        /// <summary>Adiciona um item da lista de instalados pela CHAVE (o caminho/AUMID vem do servidor, nunca do cliente).</summary>
         [HttpPost("installed/{key}/add")]
         public async Task<IActionResult> AddInstalled(string key, [FromBody] AppUpsert? body)
         {
@@ -181,7 +171,7 @@ namespace DroidDeck.Controllers
             var entry = new AppEntry { Name = item.Name, Group = (body?.Group ?? "").Trim(), Favorite = body?.Favorite ?? false, Kind = item.Kind };
             if (item.Kind is "steam" or "battlenet")
             {
-                entry.AppId = item.Path; // App ID / codigo do jogo: vem da lista do servidor
+                entry.AppId = item.Path;
                 entry.Path = "";
             }
             else if (item.Kind == "packaged")
@@ -200,7 +190,6 @@ namespace DroidDeck.Controllers
             return Ok(Dto(saved));
         }
 
-        /// <summary>Abre o seletor de arquivos do Windows no PC e devolve o escolhido com o icone.</summary>
         [HttpPost("pick")]
         public async Task<IActionResult> Pick()
         {
@@ -234,7 +223,6 @@ namespace DroidDeck.Controllers
         {
             if (!IsLocal) return StatusCode(403, new { error = "Só pelo configurador no PC." });
             if (!AppLibrary.TryValidatePath(body.Path, out var full, out var error)) return BadRequest(new { error });
-            // Sem duplicata: o mesmo caminho, ou o .exe e um atalho que aponta para ele.
             var dup = _library.FindDuplicate(full);
             if (dup != null) return Conflict(new { error = $"\"{dup.Name}\" is already in your library.", id = dup.Id });
             var name = string.IsNullOrWhiteSpace(body.Name) ? System.IO.Path.GetFileNameWithoutExtension(full) : body.Name.Trim();
@@ -246,7 +234,6 @@ namespace DroidDeck.Controllers
             return Ok(Dto(entry));
         }
 
-        /// <summary>Ordem dos aplicativos (favoritos incluidos): ids na ordem desejada. So o PC edita a biblioteca.</summary>
         [HttpPut("order")]
         public async Task<IActionResult> Reorder([FromBody] AppOrder body)
         {

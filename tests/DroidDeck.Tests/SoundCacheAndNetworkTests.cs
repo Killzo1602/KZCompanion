@@ -18,7 +18,6 @@ namespace DroidDeck.Tests
         [Fact]
         public void NomeDoCache_EEstavelEntreChamadas()
         {
-            // O hash antigo (GetHashCode) mudava a cada processo; o SHA-256 nao muda nunca.
             var a = SoundboardService.CacheFileFor("", "https://www.myinstants.com/media/sounds/x.mp3");
             var b = SoundboardService.CacheFileFor("", "https://www.myinstants.com/media/sounds/x.mp3");
 
@@ -89,7 +88,6 @@ namespace DroidDeck.Tests
         [Fact]
         public void IpParaRemetenteDaLan_EUmIPv4Local()
         {
-            // So consulta a tabela de rotas; nada e enviado.
             var local = NetworkInfo.GetLocalIpFor(IPAddress.Parse("192.168.0.123"));
 
             Assert.True(IPAddress.TryParse(local, out var ip));

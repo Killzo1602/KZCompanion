@@ -16,13 +16,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// RadioDJ pelo plugin REST Server (no RadioDJ 2 ele vem na pasta "Disabled Plugins"). Tudo em
-    /// GET: /opt?auth=senha&amp;command=X&amp;arg=Y e /np?auth=senha (tocando agora, em XML).
-    ///
-    /// A senha vai na URL, entao aqui nao se usa o IHttpClientFactory: o HttpClient dele registra a
-    /// URL inteira no log a cada pedido. Por isso tambem nenhuma mensagem de erro leva a URL.
-    /// </summary>
     public class RadioDjIntegration : PolledHttpIntegration
     {
         public const string Event = "ReceiveRadioDjState";
@@ -49,12 +42,11 @@ namespace DroidDeck.Integrations
         protected override bool HasConfig => Url != null;
 
         protected override string UnreachableMessage =>
-            "Não foi possível falar com o RadioDJ. Confira se ele está aberto e o plugin REST Server ligado.";
+            "Couldn't reach RadioDJ. Check that it's open and the REST Server plugin is on.";
 
         public bool? AutoDj => Connected ? _autoDj : null;
         public bool? Assisted => Connected ? _assisted : null;
 
-        /// <summary>A entrada ao vivo esta ligada? E o que o tally do RadioDJ mostra.</summary>
         public bool? Input => Connected ? _input : null;
 
         public override IntegrationStatus GetStatus() => new()
@@ -112,11 +104,9 @@ namespace DroidDeck.Integrations
             }
             catch (Exception ex) when (ex is HttpRequestException or XmlException or InvalidDataException)
             {
-                // Sem nada tocando (ou versao sem /np): o resto continua valendo.
             }
-            // Respondeu, mas nada do que devia: o caminho comum e a senha errada.
             if (autoDj == null && assisted == null && input == null && !hasNowPlaying)
-                throw new InvalidOperationException("O RadioDJ não entendeu o pedido. Confira a senha do plugin REST Server.");
+                throw new InvalidOperationException("RadioDJ didn't understand the request. Check the REST Server plugin password.");
 
             _autoDj = autoDj;
             _assisted = assisted;
@@ -138,7 +128,6 @@ namespace DroidDeck.Integrations
             $"{Url}/opt?auth={Auth}&command={Uri.EscapeDataString(command)}" +
             (arg == null ? "" : "&arg=" + Uri.EscapeDataString(arg));
 
-        /// <summary>Executa um comando do plugin REST Server.</summary>
         public async Task CommandAsync(string command, string? arg)
         {
             if (!HasConfig) throw new InvalidOperationException("Configure o RadioDJ primeiro.");
@@ -148,10 +137,6 @@ namespace DroidDeck.Integrations
             PollNow();
         }
 
-        /// <summary>
-        /// O formato da resposta dos Status* nao e documentado (so "booleano"), entao aceita XML ou
-        /// texto: vale o primeiro true/false que aparecer. Null se nao tiver nenhum.
-        /// </summary>
         public static bool? ParseBool(string text)
         {
             var stripped = Regex.Replace(text, "<[^>]*>", " ");
@@ -159,7 +144,6 @@ namespace DroidDeck.Integrations
             return match.Success ? match.Value.Equals("true", StringComparison.OrdinalIgnoreCase) : null;
         }
 
-        /// <summary>Titulo e artista do XML do /np (raiz SongData, com namespace).</summary>
         public static (string? title, string? artist) ParseNowPlaying(string xml)
         {
             using var reader = XmlReader.Create(new StringReader(xml.TrimStart('﻿')),
@@ -174,7 +158,6 @@ namespace DroidDeck.Integrations
         }
     }
 
-    /// <summary>Acao "radiodj": players, AutoDJ, assistido, entrada ao vivo e carts.</summary>
     public class RadioDjProvider : IStatefulActionProvider
     {
         public const string TypeName = "radiodj";
@@ -192,40 +175,40 @@ namespace DroidDeck.Integrations
             Type = TypeName,
             Title = "RadioDJ",
             Icon = "radio",
-            Category = "Estúdio",
+            Category = "Studio",
             Stateful = true,
             Settings = "radiodj",
             StateEvent = StateEvent,
-            Description = "Player, AutoDJ, modo assistido, entrada ao vivo e carts do RadioDJ, pelo plugin REST Server.",
+            Description = "Player, AutoDJ, assisted mode, live input and carts in RadioDJ, through the REST Server plugin.",
             Fields =
             {
-                ActionField.Select("operation", "O que fazer",
-                    ("play_track", "Tocar uma faixa da playlist"),
-                    ("stop", "Parar o player"),
-                    ("pause", "Pausar"),
-                    ("resume", "Retomar"),
-                    ("restart", "Reiniciar a faixa"),
-                    ("play_intro", "Tocar da introdução"),
-                    ("autodj_toggle", "AutoDJ (alternar)"),
-                    ("assisted_toggle", "Assistido (alternar)"),
-                    ("input_toggle", "Entrada ao vivo (alternar)"),
-                    ("events_on", "Ligar os eventos"),
-                    ("events_off", "Desligar os eventos"),
-                    ("cart", "Tocar um cart"),
-                    ("load_playlist", "Carregar uma playlist"),
-                    ("load_track", "Pôr uma faixa no topo"),
-                    ("custom", "Outro comando")),
-                ActionField.Number("track", "Posição na playlist", 1, 1, 999,
-                    help: "Contando de cima, como na tela do RadioDJ (1 = a primeira).")
+                ActionField.Select("operation", "What to do",
+                    ("play_track", "Play a playlist track"),
+                    ("stop", "Stop the player"),
+                    ("pause", "Pause"),
+                    ("resume", "Resume"),
+                    ("restart", "Restart the track"),
+                    ("play_intro", "Play from the intro"),
+                    ("autodj_toggle", "AutoDJ (toggle)"),
+                    ("assisted_toggle", "Assisted (toggle)"),
+                    ("input_toggle", "Live input (toggle)"),
+                    ("events_on", "Turn events on"),
+                    ("events_off", "Turn events off"),
+                    ("cart", "Play a cart"),
+                    ("load_playlist", "Load a playlist"),
+                    ("load_track", "Put a track on top"),
+                    ("custom", "Other command")),
+                ActionField.Number("track", "Position in the playlist", 1, 1, 999,
+                    help: "Counting from the top, as on the RadioDJ screen (1 = the first).")
                     .When("operation", "play_track"),
-                ActionField.Number("cart", "Número do cart", 1, 1, 999).When("operation", "cart"),
+                ActionField.Number("cart", "Cart number", 1, 1, 999).When("operation", "cart"),
                 ActionField.Number("id", "ID", 1, 1, 99999999,
-                    help: "ID no banco do RadioDJ. Há relatos de erro nestes comandos na versão 2.0.4.")
+                    help: "ID in the RadioDJ database. Errors with these commands have been reported on version 2.0.4.")
                     .When("operation", "load_playlist", "load_track"),
-                ActionField.Text("command", "Comando", "RefreshEvents",
-                    "Um comando da lista nas opções do plugin REST Server.", required: true)
+                ActionField.Text("command", "Command", "RefreshEvents",
+                    "A command from the list in the REST Server plugin options.", required: true)
                     .When("operation", "custom"),
-                ActionField.Text("arg", "Argumento (opcional)").When("operation", "custom"),
+                ActionField.Text("arg", "Argument (optional)").When("operation", "custom"),
             },
         };
 
@@ -235,7 +218,6 @@ namespace DroidDeck.Integrations
             return _radio.CommandAsync(command, arg);
         }
 
-        /// <summary>Comando e argumento. Os "alternar" dependem do estado lido do RadioDJ.</summary>
         public static (string command, string? arg) Build(ActionContext c, bool? autoDj, bool? assisted, bool? input)
         {
             static string Flip(bool? current)
@@ -248,7 +230,6 @@ namespace DroidDeck.Integrations
 
             switch (c.Operation("play_track"))
             {
-                // O editor conta a partir de 1; o RadioDJ, de 0.
                 case "play_track":
                     return ("PlayPlaylistTrack", (Math.Clamp(c.Int("track", 1), 1, 999) - 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
                 case "stop": return ("StopPlayer", null);
@@ -273,7 +254,7 @@ namespace DroidDeck.Integrations
                     return (command, arg.Length > 0 ? arg : null);
                 }
                 default:
-                    throw new InvalidOperationException("Operação desconhecida.");
+                    throw new InvalidOperationException("Unknown operation.");
             }
         }
     }

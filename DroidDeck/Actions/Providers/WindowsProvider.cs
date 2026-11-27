@@ -14,13 +14,6 @@ using NAudio.CoreAudioApi.Interfaces;
 
 namespace DroidDeck.Actions.Providers
 {
-    /// <summary>
-    /// Acoes do proprio Windows: trocar o dispositivo de audio padrao, travar, suspender e
-    /// desligar a tela. Nenhuma executa codigo arbitrario, entao valem tambem pelo celular.
-    ///
-    /// O estado (dispositivos padrao atuais) acompanha trocas feitas fora do deck: o
-    /// Windows avisa pelo IMMNotificationClient.
-    /// </summary>
     public sealed class WindowsProvider : IStatefulActionProvider, IMMNotificationClient, IDisposable
     {
         public const string None = "none";
@@ -59,29 +52,29 @@ namespace DroidDeck.Actions.Providers
             Type = Type,
             Title = "Windows",
             Icon = "computer",
-            Category = "Sistema",
+            Category = "System",
             Stateful = true,
             Fields =
             {
-                ActionField.Select("operation", "Ação",
-                    ("setDefaultAudio", "Trocar o dispositivo de áudio padrão"),
-                    ("lock", "Travar o computador"),
-                    ("sleep", "Suspender"),
-                    ("displayOff", "Desligar a tela")),
-                ActionField.Select("deviceKind", "Tipo",
-                    ("output", "Saída (fone, caixa de som)"),
-                    ("input", "Entrada (microfone)"))
+                ActionField.Select("operation", "Action",
+                    ("setDefaultAudio", "Change the default audio device"),
+                    ("lock", "Lock the computer"),
+                    ("sleep", "Sleep"),
+                    ("displayOff", "Turn off the display")),
+                ActionField.Select("deviceKind", "Type",
+                    ("output", "Output (headphones, speakers)"),
+                    ("input", "Input (microphone)"))
                     .When("operation", "setDefaultAudio"),
-                ActionField.Dynamic("deviceId", "Dispositivo", "/api/actions/windows/audio-devices?kind={deviceKind}")
+                ActionField.Dynamic("deviceId", "Device", "/api/actions/windows/audio-devices?kind={deviceKind}")
                     .When("operation", "setDefaultAudio"),
                 new ActionField
                 {
                     Key = "altDeviceId",
-                    Label = "Alternar com (opcional)",
+                    Label = "Toggle with (optional)",
                     Kind = FieldKind.Select,
                     Default = None,
                     OptionsSource = "/api/actions/windows/audio-devices?kind={deviceKind}&optional=true",
-                    Help = "Com um segundo dispositivo, cada toque alterna entre os dois (fone ↔ caixa de som).",
+                    Help = "With a second device, each tap switches between the two (headphones ↔ speakers).",
                 }.When("operation", "setDefaultAudio"),
             },
         };
@@ -94,12 +87,9 @@ namespace DroidDeck.Actions.Providers
                     LockWorkStation();
                     break;
                 case "sleep":
-                    // Suspende (nao hiberna). Assincrono: o Windows dorme depois de responder.
                     _ = Task.Run(() => SetSuspendState(false, false, false));
                     break;
                 case "displayoff":
-                    // SC_MONITORPOWER 2 = desligar. SendMessageTimeout: um app travado no
-                    // broadcast nao pode prender o deck.
                     SendMessageTimeout(HwndBroadcast, WmSysCommand, ScMonitorPower, (IntPtr)2, 0x0002, 1000, out _);
                     break;
                 default:
@@ -120,7 +110,6 @@ namespace DroidDeck.Actions.Providers
             var input = c.Get("deviceKind") == "input";
             var alt = c.Get("altDeviceId", None);
             var target = deviceId;
-            // Alterna: se o principal ja e o padrao, vai para o outro.
             if (alt != None && alt.Length > 0 && DefaultAudioEndpoint.GetDefault(input) == deviceId)
                 target = alt;
 
@@ -131,19 +120,17 @@ namespace DroidDeck.Actions.Providers
             }
             catch (Exception ex)
             {
-                // Id de um dispositivo desconectado cai aqui.
                 _logger.LogWarning(ex, "Windows: nao foi possivel trocar o dispositivo padrao");
             }
             await BroadcastAsync();
         }
 
-        /// <summary>Opcoes do campo de dispositivo.</summary>
         public static List<Actions.FieldOption> AudioDevices(bool input, bool optional)
         {
             var list = DefaultAudioEndpoint.List(input)
                 .Select(d => new Actions.FieldOption(d.Id, d.Name))
                 .ToList();
-            if (optional) list.Insert(0, new Actions.FieldOption(None, L.T("Nenhum (só define o de cima)")));
+            if (optional) list.Insert(0, new Actions.FieldOption(None, L.T("None (only sets the one above)")));
             return list;
         }
 
@@ -152,11 +139,8 @@ namespace DroidDeck.Actions.Providers
             try { await _hub.Clients.All.SendAsync(StateEvent, GetState()); } catch { }
         }
 
-        // ---- IMMNotificationClient: troca feita fora do deck (bandeja do Windows, outro app) ----
-
         public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)
         {
-            // O Windows avisa uma vez por papel; agrupa num envio so.
             _debounce?.Dispose();
             _debounce = new System.Threading.Timer(_ => _ = BroadcastAsync(), null, 300, Timeout.Infinite);
         }
@@ -172,8 +156,6 @@ namespace DroidDeck.Actions.Providers
             _enumerator?.Dispose();
             _debounce?.Dispose();
         }
-
-        // ---- Win32 ----
 
         private static readonly IntPtr HwndBroadcast = new(0xffff);
         private const uint WmSysCommand = 0x0112;

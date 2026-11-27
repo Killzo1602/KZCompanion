@@ -6,14 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services.Tuya
 {
-    /// <summary>
-    /// Leitura/escrita de dispositivos na nuvem Tuya. Sem dependencia do resto do DroidDeck
-    /// de proposito: e o que permite testar contra a conta real fora do app.
-    ///
-    /// Cuidado com cota: enumerar UM dispositivo custa 4 chamadas (lista + specifications +
-    /// status/strategy + custom-type). O tier gratuito da 26k/mes, entao a lista e para ser
-    /// cacheada em disco e reconstruida so a pedido do usuario -- nunca em laco.
-    /// </summary>
     public class TuyaDeviceRepository
     {
         private readonly TuyaApiClient _api;
@@ -62,7 +54,6 @@ namespace DroidDeck.Services.Tuya
                     Online = item.TryGetProperty("online", out var on) && on.ValueKind == JsonValueKind.True,
                 };
 
-                // status vem como lista [{code,value}]; achatamos para um mapa code->valor.
                 if (item.TryGetProperty("status", out var status) && status.ValueKind == JsonValueKind.Array)
                 {
                     foreach (var s in status.EnumerateArray())
@@ -72,8 +63,6 @@ namespace DroidDeck.Services.Tuya
                     }
                 }
 
-                // Falhas aqui sao degradacao, nao erro fatal: sem specification o botao ainda
-                // dispara, so perde os campos guiados no editor.
                 try { await LoadSpecificationsAsync(device); }
                 catch (Exception ex) { _logger.LogWarning("Tuya: specifications de {Id} falhou: {Msg}", device.Id, ex.Message); }
 
@@ -85,10 +74,6 @@ namespace DroidDeck.Services.Tuya
             return devices;
         }
 
-        /// <summary>
-        /// So o estado (online + status) dos aparelhos de uma casa, numa chamada. Para
-        /// ressincronizar depois de o push cair; a enumeracao completa custa ~4 por aparelho.
-        /// </summary>
         public async Task<List<(string Id, bool Online, Dictionary<string, object?> Status)>> QueryStatusAsync(string homeId)
         {
             var result = await _api.GetAsync("/v1.0/m/life/ha/home/devices",
@@ -115,7 +100,6 @@ namespace DroidDeck.Services.Tuya
             return list;
         }
 
-        /// <summary>Funcoes comandaveis + faixas de valor. E o que alimenta o editor de botao.</summary>
         private async Task LoadSpecificationsAsync(TuyaDevice device)
         {
             var spec = await _api.GetAsync($"/v1.1/m/life/{device.Id}/specifications");
@@ -136,10 +120,6 @@ namespace DroidDeck.Services.Tuya
             }
         }
 
-        /// <summary>
-        /// Monta o mapa dpId -> code. Sem isso os relatos do MQTT de aparelho com suporte local
-        /// chegam como dpId numerico e nao ha como saber que 20 significa switch_1.
-        /// </summary>
         private async Task LoadStrategyAsync(TuyaDevice device)
         {
             var result = await _api.GetAsync($"/v1.0/m/life/devices/{device.Id}/status");
@@ -152,8 +132,6 @@ namespace DroidDeck.Services.Tuya
                 {
                     if (!(rel.TryGetProperty("supportLocal", out var sl) && sl.ValueKind == JsonValueKind.True))
                     {
-                        // Um unico DP sem suporte local rebaixa o aparelho inteiro: e assim que
-                        // o SDK de origem decide, e e o que define o topico MQTT la na frente.
                         supportLocal = false;
                         break;
                     }
@@ -167,7 +145,6 @@ namespace DroidDeck.Services.Tuya
 
             if (supportLocal)
             {
-                // custom-type ligado significa relato por code, nao por dpId.
                 try
                 {
                     var custom = await _api.GetAsync($"/v1.0/m/life/ha/{device.Id}/code/custom-type");

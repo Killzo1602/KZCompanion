@@ -15,18 +15,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Lib
 {
-    /// <summary>
-    /// Conexao pelo cabo USB: com a depuracao USB ligada no celular, o "adb reverse" faz o
-    /// 127.0.0.1:4787 do celular cair no 4787 do PC. Funciona sem Wi-Fi, em rede que isola
-    /// os aparelhos e com firewall fechado, e tem menos atraso.
-    ///
-    /// Usa o adb que ja existir (Android SDK, PATH). Sem ele, o menu da bandeja baixa as
-    /// platform-tools oficiais do Google para %LocalAppData%\DroidDeck\platform-tools.
-    ///
-    /// SEGURANCA: a conexao encaminhada chega no servidor como loopback, vinda do adb.exe.
-    /// Ela NAO pode valer como "o proprio PC": qualquer app do celular alcanca o
-    /// 127.0.0.1:4787 dele enquanto o encaminhamento existe. Ver <see cref="IsForwarded"/>.
-    /// </summary>
     public class UsbBridge : BackgroundService
     {
         public const string PlatformToolsUrl = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip";
@@ -37,7 +25,6 @@ namespace DroidDeck.Lib
         private readonly object _lock = new();
         private HashSet<string> _forwarded = new();
 
-        /// <summary>Instancia em uso (para a bandeja, que nao tem DI).</summary>
         public static UsbBridge? Instance { get; private set; }
 
         public UsbBridge(ILogger<UsbBridge> logger)
@@ -46,16 +33,12 @@ namespace DroidDeck.Lib
             Instance = this;
         }
 
-        /// <summary>Muda quando um celular entra ou sai pelo USB.</summary>
         public event Action? Changed;
 
-        /// <summary>Celulares (serial do adb) com o encaminhamento ativo.</summary>
         public IReadOnlyCollection<string> Devices
         {
             get { lock (_lock) return _forwarded.ToList(); }
         }
-
-        // ---- Configuracao ----
 
         private static string SettingsPath => Path.Combine(AppPaths.LocalDir, "usb.json");
 
@@ -64,10 +47,6 @@ namespace DroidDeck.Lib
             public bool Enabled { get; set; }
         }
 
-        /// <summary>
-        /// Ligado? Sem escolha salva, liga sozinho quando ja existe um adb no PC (quem tem o
-        /// SDK do Android). Baixar o adb e sempre uma escolha da pessoa.
-        /// </summary>
         public static bool Enabled
         {
             get
@@ -89,7 +68,6 @@ namespace DroidDeck.Lib
 
         private static string OwnPlatformTools => Path.Combine(AppPaths.LocalDir, "platform-tools");
 
-        /// <summary>Caminho do adb.exe, ou null se nao houver nenhum.</summary>
         public static string? FindAdb()
         {
             var candidates = new List<string>();
@@ -105,7 +83,6 @@ namespace DroidDeck.Lib
             return candidates.FirstOrDefault(File.Exists);
         }
 
-        /// <summary>Baixa as platform-tools do Google (uns 7 MB) para a pasta do DroidDeck.</summary>
         public static async Task DownloadAdbAsync(CancellationToken ct = default)
         {
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
@@ -116,7 +93,6 @@ namespace DroidDeck.Lib
             try
             {
                 if (Directory.Exists(OwnPlatformTools)) Directory.Delete(OwnPlatformTools, true);
-                // O zip tem a pasta platform-tools\ na raiz.
                 ZipFile.ExtractToDirectory(zip, AppPaths.LocalDir, overwriteFiles: true);
             }
             finally
@@ -124,8 +100,6 @@ namespace DroidDeck.Lib
                 try { File.Delete(zip); } catch { }
             }
         }
-
-        // ---- Laco ----
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -149,18 +123,33 @@ namespace DroidDeck.Lib
         private async Task SyncAsync(string adb, CancellationToken ct)
         {
             var devices = ParseDevices(await RunAsync(adb, "devices", ct));
-            var now = new HashSet<string>();
-            foreach (var serial in devices)
+            var now = await ForwardAllAsync(devices, async serial =>
             {
                 var list = await RunAsync(adb, $"-s {serial} reverse --list", ct);
-                if (!HasReverse(list, PairingInfo.Port))
-                {
-                    await RunAsync(adb, $"-s {serial} reverse tcp:{PairingInfo.Port} tcp:{PairingInfo.Port}", ct);
-                    _logger.LogInformation("USB: celular {Serial} conectado pelo cabo", serial);
-                }
-                now.Add(serial);
-            }
+                if (HasReverse(list, PairingInfo.Port)) return;
+                await RunAsync(adb, $"-s {serial} reverse tcp:{PairingInfo.Port} tcp:{PairingInfo.Port}", ct);
+                _logger.LogInformation("USB: celular {Serial} conectado pelo cabo", serial);
+            }, (serial, ex) => _logger.LogDebug("USB {Serial}: {Message}", serial, ex.Message), ct);
             SetForwarded(now);
+        }
+
+        public static async Task<HashSet<string>> ForwardAllAsync(IEnumerable<string> serials,
+            Func<string, Task> forward, Action<string, Exception> failed, CancellationToken ct)
+        {
+            var done = new HashSet<string>();
+            foreach (var serial in serials)
+            {
+                try
+                {
+                    await forward(serial);
+                    done.Add(serial);
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    failed(serial, ex);
+                }
+            }
+            return done;
         }
 
         private void SetForwarded(HashSet<string> now)
@@ -174,7 +163,7 @@ namespace DroidDeck.Lib
             if (changed) Changed?.Invoke();
         }
 
-        private static async Task<string> RunAsync(string exe, string args, CancellationToken ct)
+        public static async Task<string> RunAsync(string exe, string args, CancellationToken ct, TimeSpan? limit = null)
         {
             var psi = new ProcessStartInfo(exe, args)
             {
@@ -185,13 +174,24 @@ namespace DroidDeck.Lib
             };
             using var p = Process.Start(psi) ?? throw new InvalidOperationException("adb nao iniciou");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(15));
-            var output = await p.StandardOutput.ReadToEndAsync(timeout.Token);
-            await p.WaitForExitAsync(timeout.Token);
-            return output;
+            timeout.CancelAfter(limit ?? TimeSpan.FromSeconds(15));
+            try
+            {
+                var output = p.StandardOutput.ReadToEndAsync(timeout.Token);
+                var error = p.StandardError.ReadToEndAsync(timeout.Token);
+                await p.WaitForExitAsync(timeout.Token);
+                if (p.ExitCode != 0)
+                    throw new InvalidOperationException($"adb {args}: {(await error).Trim()}");
+                return await output;
+            }
+            catch (OperationCanceledException)
+            {
+                try { if (!p.HasExited) p.Kill(); } catch (InvalidOperationException) { }
+                ct.ThrowIfCancellationRequested();
+                throw new TimeoutException($"adb {args}: sem resposta");
+            }
         }
 
-        /// <summary>Seriais prontos ("device") na saida do "adb devices".</summary>
         public static List<string> ParseDevices(string output) =>
             output.Split('\n')
                 .Select(l => l.Trim())
@@ -201,16 +201,9 @@ namespace DroidDeck.Lib
                 .Select(p => p[0])
                 .ToList();
 
-        /// <summary>A saida do "adb reverse --list" ja tem tcp:porta → tcp:porta?</summary>
         public static bool HasReverse(string output, int port) =>
             output.Split('\n').Any(l => l.Contains($"tcp:{port} tcp:{port}"));
 
-        // ---- Quem esta do outro lado de uma conexao loopback ----
-
-        /// <summary>
-        /// A conexao loopback que chegou na porta do servidor vem do adb (um celular pelo
-        /// USB)? Procura na tabela TCP do Windows o processo dono da ponta do cliente.
-        /// </summary>
         public static bool IsForwarded(IPAddress? remoteIp, int remotePort)
         {
             if (remoteIp == null || !OperatingSystem.IsWindows()) return false;
@@ -243,7 +236,6 @@ namespace DroidDeck.Lib
 
         private static int NetPort(uint raw) => (int)(((raw & 0xFF) << 8) | ((raw >> 8) & 0xFF));
 
-        /// <summary>PID do processo com a conexao local:clientPort → local:serverPort.</summary>
         public static int? OwnerOfLoopbackClient(int clientPort, int serverPort)
         {
             int size = 0;

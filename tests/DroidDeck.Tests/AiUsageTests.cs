@@ -47,8 +47,6 @@ namespace DroidDeck.Tests
                     + "\",\"message\":{\"id\":\"" + id + "\",\"usage\":{\"input_tokens\":" + input + ",\"output_tokens\":" + output
                     + ",\"cache_creation_input_tokens\":10,\"cache_read_input_tokens\":5}}}";
                 var file = Path.Combine(dir, "proj", "a.jsonl");
-                // A mesma resposta em duas linhas (um bloco de texto e uma ferramenta) e uma linha
-                // de usuário que só cita "usage" no texto.
                 File.WriteAllText(file,
                     Line("m1", 100, 20, now) + "\n" +
                     Line("m1", 100, 20, now) + "\n" +
@@ -60,7 +58,6 @@ namespace DroidDeck.Tests
                 Assert.Equal(2, entries.Count);
                 Assert.Equal(135, entries.Single(e => e.Id!.StartsWith("m1")).Tokens);
 
-                // Linha pela metade (ainda sendo escrita) só conta quando termina.
                 File.AppendAllText(file, Line("m3", 1000, 0, now)[..^1]);
                 Assert.Equal(2, scanner.Entries(dir).Count);
                 File.AppendAllText(file, "}\n");
@@ -112,11 +109,9 @@ namespace DroidDeck.Tests
 
                 await Assert.ThrowsAnyAsync<InvalidOperationException>(() => ai.PlanAsync(AiUsageService.Claude));
                 handler.Status = HttpStatusCode.OK;
-                // Ainda dentro da espera: devolve o erro guardado sem perguntar de novo.
                 await Assert.ThrowsAnyAsync<InvalidOperationException>(() => ai.PlanAsync(AiUsageService.Claude));
                 Assert.Equal(1, handler.Calls);
 
-                // Com resposta boa guardada, a mesma janela de 5 min não pergunta de novo.
                 var fresh = new AiUsageService(new FakeFactory(handler));
                 Assert.Equal(10, (await fresh.PlanAsync(AiUsageService.Claude)).Session!.Percent);
                 Assert.Equal(20, (await fresh.PlanAsync(AiUsageService.Claude)).Week!.Percent);
@@ -127,6 +122,40 @@ namespace DroidDeck.Tests
                 Environment.SetEnvironmentVariable("CLAUDE_CONFIG_DIR", old);
                 Directory.Delete(dir, true);
             }
+        }
+
+        [Fact]
+        public void Claude_ListaDeLimites_TrazOsDeCadaModelo()
+        {
+            var plan = AiUsageService.ParseClaudePlan("""
+                {"five_hour":{"utilization":99},"limits":[
+                  {"kind":"session","percent":12,"resets_at":"2026-10-20T15:00:00Z"},
+                  {"kind":"weekly_all","percent":34,"resets_at":null},
+                  {"kind":"weekly_scoped","percent":56,"scope":{"model":{"display_name":"Opus"}}}]}
+                """);
+            Assert.Equal(12, plan.Session!.Percent);
+            Assert.Equal(34, plan.Week!.Percent);
+            var model = Assert.Single(plan.Models!);
+            Assert.Equal("Opus", model.Model);
+            Assert.Equal(56, model.Window.Percent);
+        }
+
+        [Fact]
+        public void Claude_ListaVazia_UsaOFormatoAntigo()
+        {
+            var plan = AiUsageService.ParseClaudePlan("""{"limits":[],"five_hour":{"utilization":3}}""");
+            Assert.Equal(3, plan.Session!.Percent);
+        }
+
+        [Fact]
+        public void Painel_JanelaComResetPassado_VoltaAZero()
+        {
+            var now = DateTimeOffset.UtcNow;
+            var plan = new AiUsageService.Plan(new AiUsageService.Window(80, now.AddMinutes(-1)),
+                new AiUsageService.Window(40, now.AddHours(1)));
+            var limits = DroidDeck.Controllers.AiUsageController.Limits(plan, now).ToList();
+            Assert.Equal(new[] { 0d, 40d }, limits.Select(l => l.Percent));
+            Assert.Null(limits[0].ResetsAt);
         }
 
         [Fact]
@@ -159,9 +188,9 @@ namespace DroidDeck.Tests
             var entries = new[]
             {
                 new AiUsageService.Entry(now.AddHours(-1), 10, null),
-                new AiUsageService.Entry(now.AddHours(-10), 20, null),  // ontem à noite
-                new AiUsageService.Entry(now.AddDays(-6).AddHours(-8), 40, null), // dia 14, ainda na semana
-                new AiUsageService.Entry(now.AddDays(-7), 80, null),    // fora
+                new AiUsageService.Entry(now.AddHours(-10), 20, null),
+                new AiUsageService.Entry(now.AddDays(-6).AddHours(-8), 40, null),
+                new AiUsageService.Entry(now.AddDays(-7), 80, null),
             };
             var sum = AiUsageService.Sum(entries, now);
             Assert.Equal(10, sum.Today);

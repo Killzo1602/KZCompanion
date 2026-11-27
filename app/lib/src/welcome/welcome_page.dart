@@ -5,17 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Primeira tela de quem ainda não pareou. O app sozinho não faz nada: precisa do
-/// DroidDeck rodando no PC. Boa parte das instalações chega pelo APK solto, sem passar
-/// pelo README, e caía direto numa tela pedindo "IP do Servidor".
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});
 
   static String get _shareText =>
-      tr('Baixe o DroidDeck para Windows: {url}', {'url': Constants.siteUrl});
+      tr('Download KZ Companion for Windows: {url}', {'url': Constants.siteUrl});
 
   void _goToPairing(BuildContext context) {
-    // Aberta a partir da configuração, só volta; no primeiro uso, segue para ela.
     final nav = Navigator.of(context);
     if (nav.canPop()) {
       nav.pop();
@@ -29,7 +25,7 @@ class WelcomePage extends StatelessWidget {
         mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('Não foi possível abrir o navegador.'))),
+        SnackBar(content: Text(tr('Could not open the browser.'))),
       );
     }
   }
@@ -38,7 +34,7 @@ class WelcomePage extends StatelessWidget {
     await Clipboard.setData(const ClipboardData(text: Constants.siteUrl));
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('Link copiado.'))),
+        SnackBar(content: Text(tr('Link copied.'))),
       );
     }
   }
@@ -60,27 +56,25 @@ class WelcomePage extends StatelessWidget {
               Image.asset('assets/images/logo.png', height: 88),
               const SizedBox(height: 24),
               Text(
-                tr('Bem-vindo ao DroidDeck'),
+                tr('Welcome to KZ Companion'),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineSmall
                     ?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
               Text(
-                tr('Este celular vira um painel de botões para o seu PC. Para '
-                    'funcionar, ele precisa do programa DroidDeck rodando no '
-                    'computador (Windows 10 ou 11).'),
+                tr('This phone becomes a button panel for your PC. To work, it needs the KZ Companion program running on the computer (Windows 10 or 11).'),
                 textAlign: TextAlign.center,
                 style: muted,
               ),
               const SizedBox(height: 28),
               _Step(
                 number: 1,
-                title: tr('No PC, baixe o DroidDeck'),
+                title: tr('On the PC, download KZ Companion'),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(tr('Abra este endereço no navegador do computador:'),
+                    Text(tr('Open this address in the computer\'s browser:'),
                         style: muted),
                     const SizedBox(height: 10),
                     _SiteBox(onTap: () => _copyLink(context)),
@@ -92,7 +86,7 @@ class WelcomePage extends StatelessWidget {
                             onPressed: () => SharePlus.instance
                                 .share(ShareParams(text: _shareText)),
                             icon: const Icon(Icons.share, size: 18),
-                            label: Text(tr('Enviar link')),
+                            label: Text(tr('Send link')),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -100,15 +94,14 @@ class WelcomePage extends StatelessWidget {
                           child: OutlinedButton.icon(
                             onPressed: () => _copyLink(context),
                             icon: const Icon(Icons.copy, size: 18),
-                            label: Text(tr('Copiar')),
+                            label: Text(tr('Copy')),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      tr('Dica: "Enviar link" manda pelo WhatsApp ou e-mail para '
-                          'você abrir no PC.'),
+                      tr('Tip: "Send link" sends it via WhatsApp or email so you can open it on the PC.'),
                       style: theme.textTheme.bodySmall,
                     ),
                   ],
@@ -116,23 +109,17 @@ class WelcomePage extends StatelessWidget {
               ),
               _Step(
                 number: 2,
-                title: tr('Instale e abra o DroidDeck no PC'),
+                title: tr('Install and open KZ Companion on the PC'),
                 child: Text(
-                  tr('Rode o DroidDeck-Setup.exe. Se o Windows avisar que o app não é '
-                      'reconhecido, clique em "Mais informações" → "Executar assim mesmo". '
-                      'Ele não abre janela: fica como um ícone na bandeja, perto do relógio. '
-                      'No Windows 11 o ícone pode estar escondido na setinha ^ ao lado.'),
+                  tr('Run KZCompanion-Setup.exe. If Windows warns that the app isn\'t recognized, click "More info" → "Run anyway". It doesn\'t open a window: it sits as an icon in the tray, near the clock. On Windows 11 the icon may be hidden under the ^ arrow next to it.'),
                   style: muted,
                 ),
               ),
               _Step(
                 number: 3,
-                title: tr('Pareie este celular'),
+                title: tr('Pair this phone'),
                 child: Text(
-                  tr('Clique com o botão direito no ícone do DroidDeck → '
-                      '"Parear dispositivo (QR)" e escaneie o código aqui no app. '
-                      'Celular e PC precisam estar na mesma rede Wi-Fi (ou ligados pelo '
-                      'cabo USB).'),
+                  tr('Right-click the KZ Companion icon → "Pair device (QR)" and scan the code here in the app. Phone and PC must be on the same Wi-Fi network (or connected by USB cable).'),
                   style: muted,
                 ),
               ),
@@ -140,7 +127,7 @@ class WelcomePage extends StatelessWidget {
               FilledButton.icon(
                 onPressed: () => _goToPairing(context),
                 icon: const Icon(Icons.qr_code_scanner),
-                label: Text(tr('Já instalei no PC: parear')),
+                label: Text(tr('Already installed on the PC: pair')),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   textStyle: const TextStyle(fontWeight: FontWeight.w600),
@@ -149,7 +136,7 @@ class WelcomePage extends StatelessWidget {
               const SizedBox(height: 4),
               TextButton(
                 onPressed: () => _openSite(context),
-                child: Text(tr('Ver o site neste celular')),
+                child: Text(tr('Open the site on this phone')),
               ),
             ],
           ),
@@ -203,7 +190,6 @@ class _Step extends StatelessWidget {
   }
 }
 
-/// O endereço em destaque, fácil de ler e digitar no PC. Tocar copia.
 class _SiteBox extends StatelessWidget {
   final VoidCallback onTap;
 

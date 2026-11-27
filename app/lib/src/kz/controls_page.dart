@@ -1,6 +1,8 @@
 import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:droiddeck/src/kz/kz_media.dart';
+import 'package:droiddeck/src/kz/kz_ring.dart';
+import 'package:droiddeck/src/kz/kz_style.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:flutter/material.dart';
 
@@ -33,7 +35,6 @@ class ControlsPage extends StatelessWidget {
       await c.client.power(op, confirm: needsConfirm);
       if (!context.mounted) return;
       if (needsConfirm) {
-        // O PC dá 10 s de margem: dá para desfazer um toque errado.
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(
@@ -50,19 +51,11 @@ class ControlsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListView(padding: const EdgeInsets.all(12), children: [
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(
-          child: KzCard(title: 'Volume', icon: Icons.volume_up_rounded, child: KzVolume(c)),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: KzCard(
-              title: 'Playback', icon: Icons.play_circle_outline_rounded, child: KzMediaControls(c)),
-        ),
-      ]),
+      SizedBox(height: 170, child: KzNowPlaying(c)),
       const SizedBox(height: 12),
       KzCard(
         title: 'Power',
+        accent: KzColors.power,
         icon: Icons.power_settings_new_rounded,
         child: Row(children: [
           Expanded(child: _tile(Icons.lock_rounded, 'Lock PC', () => _power(context, 'lock'))),
@@ -86,25 +79,18 @@ class ControlsPage extends StatelessWidget {
   }
 
   Widget _tile(IconData icon, String label, VoidCallback onTap, {bool danger = false}) {
-    return Builder(builder: (context) {
-      final scheme = Theme.of(context).colorScheme;
-      final color = danger ? const Color(0xFFEF5350) : scheme.primary;
-      return Material(
-        color: scheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(icon, size: 28, color: color),
-              const SizedBox(height: 6),
-              Text(label, style: const TextStyle(fontSize: 13)),
-            ]),
-          ),
-        ),
-      );
-    });
+    final color = danger ? KzColors.danger : KzColors.power;
+    return KzTile(
+      color: color,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 28, color: color),
+          const SizedBox(height: 6),
+          Text(label, style: const TextStyle(fontSize: 13)),
+        ]),
+      ),
+    );
   }
 }

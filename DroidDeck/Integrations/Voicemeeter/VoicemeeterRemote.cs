@@ -5,23 +5,15 @@ using Microsoft.Win32;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>O que o provedor usa do Voicemeeter (a DLL de verdade ou um falso nos testes).</summary>
     public interface IVoicemeeterApi
     {
-        /// <summary>Le um parametro numerico (ex.: "Strip[0].Mute"). Lanca se o Voicemeeter nao estiver aberto.</summary>
         float Get(string parameter);
 
         void Set(string parameter, float value);
 
-        /// <summary>Muda um botao do Macro Buttons (1 = apertado, 0 = solto).</summary>
         void SetMacroButton(int button, float value);
     }
 
-    /// <summary>
-    /// Voicemeeter Remote API (VoicemeeterRemote64.dll), carregada da pasta onde o Voicemeeter
-    /// foi instalado -- ela nao vem com o DroidDeck. O login e feito uma vez e vale ate o app
-    /// fechar (logar de novo sem logout a API recusa).
-    /// </summary>
     public sealed class VoicemeeterRemote : IVoicemeeterApi, IDisposable
     {
         private const string UninstallKey = @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\VB:Voicemeeter {17359A74-1236-5467}";
@@ -56,10 +48,9 @@ namespace DroidDeck.Integrations
             lock (_lock)
             {
                 EnsureReady();
-                // A API so atualiza os valores lidos depois de perguntar se mudou algo.
                 _isDirty!();
                 if (_getFloat!(parameter, out var value) != 0)
-                    throw new InvalidOperationException("Parâmetro do Voicemeeter desconhecido.");
+                    throw new InvalidOperationException("Unknown Voicemeeter parameter.");
                 return value;
             }
         }
@@ -70,7 +61,7 @@ namespace DroidDeck.Integrations
             {
                 EnsureReady();
                 if (_setFloat!(parameter, value) != 0)
-                    throw new InvalidOperationException("Parâmetro do Voicemeeter desconhecido.");
+                    throw new InvalidOperationException("Unknown Voicemeeter parameter.");
             }
         }
 
@@ -79,7 +70,6 @@ namespace DroidDeck.Integrations
             lock (_lock)
             {
                 EnsureReady();
-                // bitmode 0: aperta/solta o botao como um clique (roda os comandos dele).
                 _macroSet!(button, value, 0);
             }
         }
@@ -90,19 +80,18 @@ namespace DroidDeck.Integrations
             {
                 Load();
                 var login = Fn<NoArgs>("VBVMR_Login")();
-                if (login < 0) throw new InvalidOperationException("Não foi possível falar com o Voicemeeter.");
+                if (login < 0) throw new InvalidOperationException("Couldn't talk to Voicemeeter.");
                 _loggedIn = true;
             }
-            // Logado mas o Voicemeeter fechado: a consulta do tipo falha.
-            if (_getType!(out _) != 0) throw new InvalidOperationException("O Voicemeeter não está aberto.");
+            if (_getType!(out _) != 0) throw new InvalidOperationException("Voicemeeter is not running.");
         }
 
         private void Load()
         {
             if (_dll != IntPtr.Zero) return;
-            var path = FindDll() ?? throw new InvalidOperationException("Voicemeeter não está instalado neste PC.");
+            var path = FindDll() ?? throw new InvalidOperationException("Voicemeeter is not installed on this PC.");
             if (!NativeLibrary.TryLoad(path, out _dll))
-                throw new InvalidOperationException("Voicemeeter não está instalado neste PC.");
+                throw new InvalidOperationException("Voicemeeter is not installed on this PC.");
             _logout = Fn<NoArgs>("VBVMR_Logout");
             _isDirty = Fn<NoArgs>("VBVMR_IsParametersDirty");
             _getType = Fn<GetTypeFn>("VBVMR_GetVoicemeeterType");
@@ -114,7 +103,6 @@ namespace DroidDeck.Integrations
         private T Fn<T>(string name) where T : Delegate =>
             Marshal.GetDelegateForFunctionPointer<T>(NativeLibrary.GetExport(_dll, name));
 
-        /// <summary>Caminho da DLL: pasta do desinstalador no registro, senao a pasta padrao.</summary>
         public static string? FindDll()
         {
             var file = Environment.Is64BitProcess ? "VoicemeeterRemote64.dll" : "VoicemeeterRemote.dll";
@@ -139,7 +127,6 @@ namespace DroidDeck.Integrations
             return null;
         }
 
-        /// <summary>Pasta do executavel citado no UninstallString (com ou sem aspas e argumentos).</summary>
         public static string? DirFromUninstallString(string? value)
         {
             if (string.IsNullOrWhiteSpace(value)) return null;

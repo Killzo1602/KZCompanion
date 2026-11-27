@@ -4,15 +4,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DroidDeck.Controllers
 {
-    /// <summary>Jogos da Steam, apps com janela aberta e a identificacao do PC.</summary>
     [ApiController]
     public class LibraryController : ControllerBase
     {
         private readonly SteamLibrary _steam;
 
         public LibraryController(SteamLibrary steam) => _steam = steam;
-
-        // ---- Steam ----
 
         [HttpGet("api/steam/games")]
         public IActionResult Games() =>
@@ -22,12 +19,9 @@ namespace DroidDeck.Controllers
         public IActionResult Icon(string appId) =>
             _steam.IconBase64(appId) is { } icon ? Ok(new { iconBase64 = icon }) : NotFound();
 
-        // ---- Apps com janela aberta ----
-
         [HttpGet("api/system/apps")]
         public IActionResult Apps() => Ok(ForegroundWatcher.RunningApps());
 
-        /// <summary>Nome do PC e versao: o celular usa para identificar cada PC pareado e para checar a chave.</summary>
         [HttpGet("api/system/info")]
         public IActionResult Info() => Ok(new
         {

@@ -19,7 +19,6 @@ namespace DroidDeck.Controllers
 
         public class PairDto
         {
-            /// <summary>Codigo obtido no app: Eu -> Config -> Conta e seguranca -> Codigo de usuario.</summary>
             public string? UserCode { get; set; }
         }
 
@@ -30,21 +29,16 @@ namespace DroidDeck.Controllers
             public object? Value { get; set; }
         }
 
-        /// <summary>Passo 1 do pareamento: devolve o conteudo do QR para o app renderizar.</summary>
         [HttpPost("pair/start")]
         public async Task<IActionResult> StartPairing([FromBody] PairDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto?.UserCode))
-                return BadRequest(new { error = L.T("userCode obrigatorio") });
+                return BadRequest(new { error = L.T("userCode is required") });
 
             try { return Ok(await _tuya.StartPairingAsync(dto.UserCode!.Trim())); }
             catch (Exception ex) { return StatusCode(502, new { error = L.Message(ex) }); }
         }
 
-        /// <summary>
-        /// Passo 2: o configurador chama em laco. scanned=false enquanto o usuario nao escaneou
-        /// (nao e erro); 410 quando o QR expirou e outro precisa ser gerado.
-        /// </summary>
         [HttpPost("pair/poll")]
         public async Task<IActionResult> PollPairing()
         {
@@ -63,7 +57,6 @@ namespace DroidDeck.Controllers
             catch (Exception ex) { return StatusCode(502, new { error = L.Message(ex) }); }
         }
 
-        /// <summary>Reenumera na nuvem. Caro em cota: so a pedido explicito do usuario.</summary>
         [HttpPost("devices/refresh")]
         public async Task<IActionResult> RefreshDevices()
         {
@@ -71,12 +64,11 @@ namespace DroidDeck.Controllers
             catch (Exception ex) { return StatusCode(502, new { error = L.Message(ex) }); }
         }
 
-        /// <summary>Usado pelo botao "testar" do editor.</summary>
         [HttpPost("command")]
         public async Task<IActionResult> Command([FromBody] CommandDto dto)
         {
             if (string.IsNullOrWhiteSpace(dto?.DeviceId) || string.IsNullOrWhiteSpace(dto?.Code))
-                return BadRequest(new { error = L.T("deviceId e code obrigatorios") });
+                return BadRequest(new { error = L.T("deviceId and code are required") });
 
             try
             {

@@ -26,11 +26,6 @@ class HomeController {
   void Function()? _mediaSubDispose;
 
   void _init() {
-    // Subscribe to SignalR volume updates and refresh when they arrive.
-    // Guarda o dispose da assinatura pra cancelar no dispose() — senao o callback
-    // continua vivo e dispara fetch num controller ja descartado (leak + erro).
-    // Estado de midia mudou em OUTRO lugar (botao do deck, outro celular): recarrega
-    // o card de midia. Sem isto, o app so descobria a troca no poll de 60s.
     _mediaSubDispose = _signalR.mediaStateUpdates.subscribe((update) {
       if (update == null) return;
       _mediaRefreshDebounce?.cancel();
@@ -41,7 +36,6 @@ class HomeController {
     _volumeSubDispose = _signalR.volumeUpdates.subscribe((updates) {
       if (updates.isEmpty) return;
 
-      // Debounce to avoid excessive refreshes during rapid slider changes
       _signalRRefreshDebounce?.cancel();
       _signalRRefreshDebounce = Timer(const Duration(milliseconds: 500), () {
         fetchOutputs();
@@ -51,12 +45,10 @@ class HomeController {
   }
 
   void startPolling() {
-    // Initial fetch
     fetchOutputs();
     fetchInputs();
     fetchMediaSessions();
 
-    // Poll every 60 seconds (SignalR handles real-time updates)
     _pollingTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       fetchOutputs();
       fetchInputs();
@@ -70,7 +62,6 @@ class HomeController {
   }
 
   Future<void> fetchOutputs() async {
-    // Don't show loading on periodic refresh
     final isInitialLoad = outputs.value.isEmpty;
     if (isInitialLoad) {
       isLoading.value = true;
@@ -91,7 +82,6 @@ class HomeController {
   }
 
   Future<void> fetchInputs() async {
-    // Don't show loading on periodic refresh
     final isInitialLoad = inputs.value.isEmpty;
     if (isInitialLoad) {
       isLoading.value = true;
@@ -104,7 +94,6 @@ class HomeController {
       inputs.value = res;
       error.value = null;
 
-      // Debug: Print first input device
       if (res.isNotEmpty) {
         debugPrint('DEBUG: First input device title: ${res.first.device.title}');
       } else {
@@ -120,11 +109,9 @@ class HomeController {
     }
   }
 
-  // Send volume change and refresh immediately
   Future<void> setVolume(String id, int volume) async {
     try {
       await _client.setOutput(id, MixerData(volume: volume));
-      // Refresh immediately - slider won't jump because of _isDragging flag
       fetchOutputs();
     } catch (e) {
       error.value = e.toString();
@@ -134,7 +121,6 @@ class HomeController {
   Future<void> toggleMute(String id, bool currentMute) async {
     try {
       await _client.setOutput(id, MixerData(mute: !currentMute));
-      // Refresh immediately on mute for instant feedback
       fetchOutputs();
     } catch (e) {
       error.value = e.toString();
@@ -146,7 +132,6 @@ class HomeController {
     try {
       await _client.setOutput(
           deviceId, MixerData(session: sessionId, volume: volume));
-      // Refresh immediately - slider won't jump because of _isDragging flag
       fetchOutputs();
     } catch (e) {
       error.value = e.toString();
@@ -178,14 +163,12 @@ class HomeController {
     isFullscreen.value = !isFullscreen.value;
   }
 
-  // Media Control methods
   late final mediaSessions = signal<Map<String, MediaSession>>({});
 
   Future<void> fetchMediaSessions() async {
     try {
       final sessions = await _client.getMediaSessions();
       debugPrint('DEBUG: Fetched ${sessions.length} media sessions');
-      // Convert list to map by ID for easy lookup
       final sessionMap = <String, MediaSession>{};
       for (final session in sessions) {
         if (session.id != null) {
@@ -202,14 +185,9 @@ class HomeController {
 
   Future<void> sendMediaCommand(String sessionId, String command) async {
     try {
-      // A resposta ja traz o estado logo apos o comando — antes havia um
-      // Future.delayed(500ms) as cegas antes de recarregar tudo, que tanto podia
-      // ser cedo demais (voltava o estado velho) quanto atraso puro na UI.
       final result = await _client.sendMediaCommand(sessionId, command);
 
       final playing = result['playing'];
-      // O backend redireciona o comando quando o id salvo nao existe mais, entao
-      // o estado tem que ser aplicado na sessao que REALMENTE recebeu.
       final applied = result['sessionId'] as String? ?? sessionId;
 
       if (playing is bool) {
@@ -223,7 +201,6 @@ class HomeController {
         }
       }
 
-      // Recarrega para pegar faixa/capa novas (next/previous trocam a musica).
       fetchMediaSessions();
     } catch (e) {
       debugPrint('DEBUG ERROR (send media command): $e');

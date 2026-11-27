@@ -11,7 +11,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Responde o estado do audio e grava cada requisicao (metodo, caminho, corpo).
 class _Recorder implements HttpClientAdapter {
   final calls = <String>[];
 
@@ -47,7 +46,7 @@ void main() {
     final groups = AudioGroup.from([s('1', 'a', 'Discord'), s('2', 'b', 'Discord PTB'), s('3', 'a', 'Discord'), s('4', 'c', 'Discord')]);
     expect(groups.length, 3);
     expect(groups.first.members.map((m) => m.id), ['1', '3']);
-    expect(groups.where((g) => g.key == 'c').single.members.single.id, '4'); // mesmo nome, outro exe: nao mistura
+    expect(groups.where((g) => g.key == 'c').single.members.single.id, '4');
   });
 
   testWidgets('grouped mixer: one row, primary controls hit every session, sessions stay independent', (tester) async {
@@ -78,15 +77,12 @@ void main() {
     ));
     await tester.pump();
 
-    // um unico "Discord" com contador 2 + o Firefox
     expect(find.text('Discord'), findsOneWidget);
     expect(find.text('2'), findsOneWidget);
     expect(find.text('Mozilla Firefox'), findsOneWidget);
-    // volumes diferentes: mostra a faixa, nao altera nada por conta propria
     expect(find.text('70-100%'), findsOneWidget);
     expect(rec.calls, isEmpty, reason: 'exibir o grupo nao pode mandar comando algum');
 
-    // slider principal do Discord (o primeiro slider): aplica o mesmo valor nas duas sessoes
     await tester.drag(find.byType(Slider).first, const Offset(-80, 0));
     await settle();
     final volCall = rec.calls.lastWhere((c) => c.contains('/api/audio/sessions '));
@@ -94,7 +90,6 @@ void main() {
     expect(volCall, contains('"volume":'));
     expect(volCall, isNot(contains('f1')), reason: 'Firefox nao pode ser tocado');
 
-    // mudo principal: todas as sessoes do grupo
     rec.calls.clear();
     await tester.tap(find.byTooltip('Mute all'));
     await settle();
@@ -102,13 +97,11 @@ void main() {
     expect(rec.calls.single, contains('"mute":true'));
     await tester.pump(const Duration(seconds: 1));
 
-    // abrir o grupo: cada sessao com o seu controle
     await tester.tap(find.text('Discord'));
     await tester.pump();
     expect(find.text('Session 1'), findsOneWidget);
     expect(find.textContaining('Session 2'), findsOneWidget);
     rec.calls.clear();
-    // desmutar so a sessao 1 -> comando individual, so com o id d1
     await tester.tap(find.byTooltip('Unmute').first);
     await settle();
     expect(rec.calls.single, startsWith('PUT /api/audio/sessions/d1 '));

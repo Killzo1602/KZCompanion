@@ -25,8 +25,7 @@ void main() {
     expect(s.preset.id, 'kz');
     expect(s.mode, ThemeMode.light);
     expect(s.accent!.toARGB32(), 0xFFFDD400);
-    await AppLanguage.load();
-    expect(AppLanguage.current.value, 'en'); // idioma salvo e ignorado
+    expect(AppLanguage.current.value, 'en');
   });
 
   test('dashboard prefs persist and restore', () async {
@@ -36,7 +35,7 @@ void main() {
     await KzPrefs.setShowFavorites(false);
     await KzPrefs.setDensity(KzDensity.compact);
     await KzPrefs.setBackground(KzBackground.glow);
-    KzPrefs.showFavorites.value = true; // simula reinicio
+    KzPrefs.showFavorites.value = true;
     await KzPrefs.load();
     expect(KzPrefs.showFavorites.value, isFalse);
     expect(KzPrefs.density.value, KzDensity.compact);
@@ -59,7 +58,6 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('THEME'), findsOneWidget);
     expect(find.text('DASHBOARD'), findsOneWidget);
-    // Nada de opcoes do deck antigo.
     for (final legacy in ['Buttons', 'Button style', 'Haptics', 'Language', 'Deck only']) {
       expect(find.textContaining(legacy), findsNothing);
     }

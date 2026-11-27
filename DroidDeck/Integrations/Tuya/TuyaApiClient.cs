@@ -10,7 +10,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services.Tuya
 {
-    /// <summary>Erro devolvido pela propria Tuya (success=false), com o code dela.</summary>
     public class TuyaApiException : Exception
     {
         public int Code { get; }
@@ -18,17 +17,10 @@ namespace DroidDeck.Services.Tuya
             => Code = code;
     }
 
-    /// <summary>
-    /// Pipeline de requisicao assinada + cifrada do device-sharing. Toda chamada de negocio
-    /// passa por aqui; ninguem mais deve montar header ou cifrar nada.
-    /// </summary>
     public class TuyaApiClient
     {
         private static readonly JsonSerializerOptions Compact = new()
         {
-            // O SDK de origem serializa sem espacos (separators=(",", ":")). O JSON entra no
-            // ciphertext, entao formatacao diferente nao quebra a assinatura -- mas mantemos
-            // compacto por paridade e por economia de payload.
             WriteIndented = false
         };
 
@@ -49,7 +41,6 @@ namespace DroidDeck.Services.Tuya
 
         public TuyaToken Token => _token;
 
-        /// <summary>Disparado quando o token e renovado, para o chamador persistir a sessao.</summary>
         public event Action<TuyaToken>? TokenRefreshed;
 
         public Task<JsonElement> GetAsync(string path, IDictionary<string, object?>? query = null)
@@ -91,7 +82,6 @@ namespace DroidDeck.Services.Tuya
 
             headers["X-sign"] = TuyaCrypto.Sign(hashKey, queryEnc, bodyEnc, headers);
 
-            // O encdata vai percent-encoded na URL, mas a assinatura usa a forma CRUA.
             var url = _token.Endpoint + path;
             if (!string.IsNullOrEmpty(queryEnc))
                 url += "?encdata=" + Uri.EscapeDataString(queryEnc);
@@ -125,8 +115,6 @@ namespace DroidDeck.Services.Tuya
             if (!root.TryGetProperty("result", out var result) || result.ValueKind == JsonValueKind.Null)
                 return default;
 
-            // O result vem cifrado com o mesmo secret da requisicao. Nem sempre e JSON:
-            // alguns endpoints devolvem string crua.
             var decrypted = TuyaCrypto.Decrypt(result.GetString() ?? "", secret);
             try
             {
@@ -140,7 +128,6 @@ namespace DroidDeck.Services.Tuya
 
         private async Task RefreshIfNeededAsync()
         {
-            // 60s de folga, igual ao SDK de origem: evita corrida com um token no limite.
             if (_token.ExpiresAtMs - 60_000 > DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
                 return;
 
@@ -152,8 +139,6 @@ namespace DroidDeck.Services.Tuya
 
                 _logger.LogInformation("Tuya: renovando access token");
 
-                // allowRefresh:false corta a recursao -- esta chamada ainda assina com o
-                // refresh token atual, que e o que a Tuya espera aqui.
                 var result = await RequestAsync(
                     HttpMethod.Get, "/v1.0/m/token/" + _token.RefreshToken, null, null, allowRefresh: false);
 

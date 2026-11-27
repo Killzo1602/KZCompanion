@@ -20,7 +20,6 @@ namespace DroidDeck.Tests
             obs.ApplyRecordState(Ev("""{"outputActive":true,"outputState":"OBS_WEBSOCKET_OUTPUT_STARTED"}"""));
             Assert.True(obs.Recording);
 
-            // O OBS manda outputActive=false ao pausar, mas a gravacao segue aberta.
             obs.ApplyRecordState(Ev("""{"outputActive":false,"outputState":"OBS_WEBSOCKET_OUTPUT_PAUSED"}"""));
             Assert.True(obs.Recording);
             Assert.True(obs.RecordPaused);

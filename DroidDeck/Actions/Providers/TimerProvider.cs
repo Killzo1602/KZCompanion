@@ -8,14 +8,6 @@ using DroidDeck.Services;
 
 namespace DroidDeck.Actions.Providers
 {
-    /// <summary>
-    /// Timer, cronometro, pomodoro e contador num botao. O estado mora no TimerService; o
-    /// botao mostra o tempo ao vivo.
-    ///
-    /// Cada botao e dono do proprio timer (o id e o do botao). Um botao pode agir sobre o
-    /// timer de outro (parametro "target"), por exemplo um "zerar" ao lado do relogio: ai o
-    /// modo e as duracoes continuam vindo do botao dono.
-    /// </summary>
     public class TimerProvider : IStatefulActionProvider
     {
         public const string Self = "self";
@@ -36,40 +28,40 @@ namespace DroidDeck.Actions.Providers
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Timer, pomodoro e contador",
+            Title = "Timer, pomodoro and counter",
             Icon = "timer",
-            Category = "Utilidades",
+            Category = "Utilities",
             Stateful = true,
-            Description = "O botão mostra o tempo ao vivo. Quando uma contagem termina, o PC toca um aviso e o celular vibra.",
+            Description = "The button shows the time live. When a countdown ends, the PC plays an alert and the phone vibrates.",
             Fields =
             {
-                ActionField.Select("mode", "Tipo",
-                    ("countdown", "Timer (contagem regressiva)"),
-                    ("stopwatch", "Cronômetro"),
-                    ("pomodoro", "Pomodoro (foco e pausa)"),
-                    ("counter", "Contador")),
-                ActionField.Number("durationMin", "Duração", 5, min: 0.1, unit: "min")
+                ActionField.Select("mode", "Type",
+                    ("countdown", "Timer (countdown)"),
+                    ("stopwatch", "Stopwatch"),
+                    ("pomodoro", "Pomodoro (focus and break)"),
+                    ("counter", "Counter")),
+                ActionField.Number("durationMin", "Duration", 5, min: 0.1, unit: "min")
                     .When("mode", "countdown"),
-                ActionField.Number("workMin", "Foco", 25, min: 1, max: 120, unit: " min")
+                ActionField.Number("workMin", "Focus", 25, min: 1, max: 120, unit: " min")
                     .When("mode", "pomodoro"),
-                ActionField.Number("breakMin", "Pausa", 5, min: 1, max: 60, unit: " min")
+                ActionField.Number("breakMin", "Break", 5, min: 1, max: 60, unit: " min")
                     .When("mode", "pomodoro"),
-                ActionField.Select("operation", "Ao tocar",
-                    ("toggle", "Iniciar / pausar (contador: somar)"),
-                    ("reset", "Zerar"),
-                    ("skip", "Pular para a próxima fase (pomodoro)"),
-                    ("increment", "Somar (contador)"),
-                    ("decrement", "Subtrair (contador)")),
-                ActionField.Number("step", "Passo", 1, min: 1, max: 100)
+                ActionField.Select("operation", "On tap",
+                    ("toggle", "Start / pause (counter: add)"),
+                    ("reset", "Reset"),
+                    ("skip", "Skip to the next phase (pomodoro)"),
+                    ("increment", "Add (counter)"),
+                    ("decrement", "Subtract (counter)")),
+                ActionField.Number("step", "Step", 1, min: 1, max: 100)
                     .When("mode", "counter"),
                 new ActionField
                 {
                     Key = "target",
-                    Label = "Timer controlado",
+                    Label = "Controlled timer",
                     Kind = FieldKind.Select,
                     Default = Self,
                     OptionsSource = "/api/actions/timer/targets",
-                    Help = "Para um botão de \"zerar\" separado, escolha o timer de outro botão.",
+                    Help = "For a separate \"reset\" button, pick another button's timer.",
                 },
             },
         };
@@ -79,9 +71,8 @@ namespace DroidDeck.Actions.Providers
             var target = c.Get("target", Self);
             var ownerId = target == Self || target.Length == 0 ? c.ButtonId : target;
             if (string.IsNullOrEmpty(ownerId))
-                ownerId = "avulso"; // /execute sem botao: um timer compartilhado
+                ownerId = "avulso";
 
-            // Configuracao vem do dono; o passo do contador, de quem apertou.
             var owner = ownerId == c.ButtonId ? c.Parameters : FindButtonAction(ownerId)?.Parameters ?? c.Parameters;
             var p = ToServiceParams(owner);
             if (c.Get("step").Length > 0) p["step"] = c.Get("step");
@@ -90,7 +81,6 @@ namespace DroidDeck.Actions.Providers
             return Task.CompletedTask;
         }
 
-        /// <summary>Minutos do editor para os segundos que o TimerService usa.</summary>
         private static Dictionary<string, string> ToServiceParams(IDictionary<string, string> source)
         {
             var p = new Dictionary<string, string>(source);
@@ -108,10 +98,9 @@ namespace DroidDeck.Actions.Providers
                 .SelectMany(pr => pr.Buttons ?? new List<DeckButton>())
                 .FirstOrDefault(b => b.Id == buttonId)?.Action;
 
-        /// <summary>Opcoes do campo "target": este botao ou qualquer botao-timer salvo.</summary>
         public List<FieldOption> Targets()
         {
-            var options = new List<FieldOption> { new(Self, L.T("Este botão")) };
+            var options = new List<FieldOption> { new(Self, L.T("This button")) };
             foreach (var profile in _config.GetProfiles())
             {
                 foreach (var b in profile.Buttons ?? new List<DeckButton>())
@@ -128,9 +117,9 @@ namespace DroidDeck.Actions.Providers
 
         private static string ModeName(string mode) => mode switch
         {
-            "stopwatch" => "Cronômetro",
+            "stopwatch" => "Stopwatch",
             "pomodoro" => "Pomodoro",
-            "counter" => "Contador",
+            "counter" => "Counter",
             _ => "Timer",
         };
     }

@@ -5,7 +5,6 @@ import 'package:droiddeck/src/services/signalr_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
-/// Troca o PC em uso e reabre o app nele (deck, catálogo e estados vêm do novo PC).
 Future<void> switchToPc(BuildContext context, SavedPc pc) async {
   await PcStore.select(pc);
   final baseUrl = await UsbRoute.pick(pc.baseUrl, apiKey: pc.apiKey);
@@ -18,7 +17,6 @@ Future<void> switchToPc(BuildContext context, SavedPc pc) async {
   }
 }
 
-/// Pede o nome do PC (nome do Windows) e guarda, se o PC ainda tem o nome provisório.
 Future<void> fetchPcName(SavedPc pc) async {
   if (pc.name != pc.ip && pc.name != 'PC') return;
   try {
@@ -32,7 +30,6 @@ Future<void> fetchPcName(SavedPc pc) async {
   } catch (_) {}
 }
 
-/// Botão da barra do deck para trocar de PC. Só aparece com mais de um PC pareado.
 class PcMenuButton extends StatefulWidget {
   const PcMenuButton({super.key});
 
@@ -56,7 +53,7 @@ class _PcMenuButtonState extends State<PcMenuButton> {
     if (_pcs.length < 2) return const SizedBox.shrink();
     return PopupMenuButton<SavedPc>(
       icon: const Icon(Icons.computer),
-      tooltip: tr('Trocar de PC'),
+      tooltip: tr('Switch PC'),
       onSelected: (pc) {
         if (pc.id != PcStore.currentId) switchToPc(context, pc);
       },

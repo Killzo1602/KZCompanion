@@ -40,7 +40,7 @@ namespace DroidDeck.Controllers
         public async Task<IActionResult> Play([FromBody] PlayDto? dto)
         {
             if (string.IsNullOrWhiteSpace(dto?.Url))
-                return BadRequest(new { error = L.T("url é obrigatório") });
+                return BadRequest(new { error = L.T("url is required") });
             await _soundboard.PlayAsync(dto!.Id ?? "", dto.Url!, dto.Title);
             return Ok(_soundboard.GetStatePayload());
         }

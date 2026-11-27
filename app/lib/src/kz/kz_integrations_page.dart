@@ -3,17 +3,16 @@ import 'package:droiddeck/src/kz/kz_integration_catalog.dart';
 import 'package:droiddeck/src/kz/kz_integration_setup.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:droiddeck/src/services/signalr_service.dart';
+import 'package:droiddeck/src/kz/kz_ring.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// O que o PC informa agora sobre uma integracao (nunca um palpite).
 class KzLive {
   const KzLive({this.connected = false, this.configured = false, this.account, this.note});
   final bool connected;
   final bool configured;
   final String? account;
 
-  /// Observacao de deteccao (ex.: "sessao de midia do Apple Music presente").
   final String? note;
 }
 
@@ -21,16 +20,12 @@ const _green = Color(0xFF4ADE80);
 const _amber = Color(0xFFFBBF24);
 const _grey = Color(0xFF90A4AE);
 
-/// Catalogo de integracoes do KZ Companion. No PC (configurador) tem os botoes de configurar;
-/// no celular so mostra estado: credenciais e tokens se digitam no PC, nunca no Android.
 class KzIntegrationsPage extends StatefulWidget {
   const KzIntegrationsPage({super.key, this.signalR, this.client, this.canConfigure});
 
-  /// Para testes: sem isso usa o do Injector.
   final SignalRService? signalR;
   final DroidDeckClient? client;
 
-  /// Null = so o configurador no PC (navegador em localhost).
   final bool? canConfigure;
 
   @override
@@ -264,8 +259,6 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-/// Detalhe de uma integracao: o que ela faz, o que exige, o que ainda nao esta pronto e,
-/// so no PC, os botoes de configurar.
 class KzIntegrationDetailPage extends StatelessWidget {
   const KzIntegrationDetailPage({
     super.key,
@@ -317,10 +310,18 @@ class KzIntegrationDetailPage extends StatelessWidget {
                 child: _bullets(info.capabilities),
               ),
               const SizedBox(height: 12),
-              KzCard(title: 'Requirements', icon: Icons.checklist_rounded, child: _bullets(info.requirements)),
+              KzCard(
+                  title: 'Requirements',
+                  icon: Icons.checklist_rounded,
+                  accent: KzColors.audio,
+                  child: _bullets(info.requirements)),
               if (info.caveats.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                KzCard(title: 'Limits', icon: Icons.warning_amber_rounded, child: _bullets(info.caveats)),
+                KzCard(
+                    title: 'Limits',
+                    icon: Icons.warning_amber_rounded,
+                    accent: KzColors.apps,
+                    child: _bullets(info.caveats)),
               ],
               const SizedBox(height: 12),
               _actions(context, muted),
@@ -375,9 +376,6 @@ class KzIntegrationDetailPage extends StatelessWidget {
   }
 }
 
-/// Credenciais do Discord: cada usuario cria o PROPRIO app no Discord Developer Portal e cola
-/// aqui o Client ID e o Secret. So existe no PC (configurador); o servidor tambem recusa o
-/// Secret vindo de outro aparelho.
 class KzDiscordPage extends StatefulWidget {
   const KzDiscordPage({super.key});
 
@@ -395,7 +393,6 @@ class _KzDiscordPageState extends State<KzDiscordPage> {
 
   SignalRService get _signalR => Injector.get<SignalRService>();
 
-  /// O PC já guarda o Client ID e o Secret: reconectar não pede nada de novo.
   bool get _secretSaved => _signalR.discordState.value['configured'] == true;
 
   @override
@@ -404,7 +401,6 @@ class _KzDiscordPageState extends State<KzDiscordPage> {
     Injector.get<DroidDeckClient>().getDiscordState().then((s) {
       if (s == null || !mounted) return;
       _signalR.discordState.value = Map<String, dynamic>.from(s);
-      // O Client ID vem do PC; o Secret fica lá e nunca é mostrado.
       final savedId = s['clientId'];
       if (savedId is String && _idCtrl.text.isEmpty) _idCtrl.text = savedId;
       setState(() {});

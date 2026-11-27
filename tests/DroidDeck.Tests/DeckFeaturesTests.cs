@@ -72,7 +72,7 @@ namespace DroidDeck.Tests
                 Id = "a1",
                 Name = "Live",
                 AutoSwitchApps = new() { "obs64" },
-                Buttons = { new DeckButton { Id = "b1", Label = "Cena", IconBase64 = "AAAA", LongPressAction = new DeckAction { Type = "obs" } } },
+                Buttons = { new DeckButton { Id = "b1", Label = "Scene", IconBase64 = "AAAA", LongPressAction = new DeckAction { Type = "obs" } } },
             };
 
             using var ms = new MemoryStream();
@@ -96,7 +96,7 @@ namespace DroidDeck.Tests
         {
             using var ms = new MemoryStream(Encoding.UTF8.GetBytes("nao e zip"));
             var ex = Assert.Throws<InvalidDataException>(() => BackupService.Read(ms));
-            Assert.Contains("DroidDeck", ex.Message);
+            Assert.Contains("KZ Companion", ex.Message);
         }
 
         [Fact]

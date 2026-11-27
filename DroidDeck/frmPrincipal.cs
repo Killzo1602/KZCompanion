@@ -6,11 +6,6 @@ using DroidDeck.Lib;
 
 namespace DroidDeck
 {
-    /// <summary>
-    /// Janela invisível que serve apenas de host para o ícone de bandeja (NotifyIcon).
-    /// O DroidDeck roda como app de bandeja: o servidor web sobe em paralelo (ver Program.cs)
-    /// e o usuário interage pelo menu do ícone. Não há janela visível.
-    /// </summary>
     public partial class frmPrincipal : Form
     {
         private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -27,7 +22,6 @@ namespace DroidDeck
         {
             InitializeComponent();
 
-            // Nunca aparece na barra de tarefas nem como janela; só o ícone de bandeja.
             ShowInTaskbar = false;
             ntiTray.Icon = AppIcon.Small;
             Icon = AppIcon.Large;
@@ -35,9 +29,6 @@ namespace DroidDeck
             ntiTray.Visible = true;
         }
 
-        // A janela nunca é exibida, mas o handle precisa existir para o message loop
-        // (e o ícone de bandeja) continuarem vivos. Sem CreateHandle, o Application.Run
-        // encerraria de imediato por não haver janela principal realizada.
         protected override void SetVisibleCore(bool value)
         {
             if (!IsHandleCreated) CreateHandle();
@@ -60,10 +51,6 @@ namespace DroidDeck
 
         private readonly System.Threading.CancellationTokenSource _updateCts = new();
 
-        /// <summary>
-        /// Logo depois de instalar: liga o "Iniciar com o Windows" (o deck precisa do PC
-        /// ligado e o usuario quase sempre quer isso) e oferece liberar o firewall.
-        /// </summary>
         private void FirstRunSetup()
         {
             SetAutoStart(true);
@@ -71,7 +58,7 @@ namespace DroidDeck
 
             if (Lib.FirewallSetup.RulesExist()) return;
             var answer = MessageBox.Show(
-                L.Ui("Para o celular encontrar e conectar no DroidDeck, o Firewall do Windows precisa liberar as portas {tcp} (TCP) e {udp} (UDP), só para a sua rede local.\n\nLiberar agora? O Windows vai pedir permissão de administrador.",
+                L.Ui("For the phone to find and connect to KZ Companion, Windows Firewall needs to allow ports {tcp} (TCP) and {udp} (UDP), only for your local network.\n\nAllow now? Windows will ask for administrator permission.",
                     ("tcp", Lib.PairingInfo.Port), ("udp", Lib.FirewallSetup.DiscoveryPort)),
                 "KZ Companion", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
             if (answer == DialogResult.Yes) AllowFirewall();
@@ -80,14 +67,13 @@ namespace DroidDeck
         private void AllowFirewall()
         {
             if (Lib.FirewallSetup.AddRules())
-                ntiTray.ShowBalloonTip(3000, "KZ Companion", L.Ui("Firewall liberado para a rede local."), ToolTipIcon.Info);
+                ntiTray.ShowBalloonTip(3000, "KZ Companion", L.Ui("Firewall allowed for the local network."), ToolTipIcon.Info);
             else
                 ntiTray.ShowBalloonTip(5000, "KZ Companion",
-                    L.Ui("O firewall não foi alterado. Você pode tentar de novo pelo menu da bandeja."), ToolTipIcon.Warning);
+                    L.Ui("The firewall was not changed. You can try again from the tray menu."), ToolTipIcon.Warning);
             _firewallItem.Checked = Lib.FirewallSetup.RulesExist();
         }
 
-        /// <summary>Liga/desliga a conexao pelo cabo USB (baixa o adb do Google se faltar).</summary>
         private async void ToggleUsb()
         {
             if (Lib.UsbBridge.Enabled)
@@ -99,11 +85,11 @@ namespace DroidDeck
             if (Lib.UsbBridge.FindAdb() == null)
             {
                 var answer = MessageBox.Show(
-                    L.Ui("Para conectar pelo cabo, o DroidDeck usa o adb, a ferramenta oficial do Google para falar com celulares Android (uns 7 MB).\n\nBaixar agora do site do Google?\n\nNo celular, ligue a \"Depuração USB\" nas opções do desenvolvedor."),
-                    L.Ui("DroidDeck — Conexão USB"), MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                    L.Ui("To connect over the cable, KZ Companion uses adb, Google's official tool for talking to Android phones (about 7 MB).\n\nDownload it now from Google's site?\n\nOn the phone, turn on \"USB debugging\" in the developer options."),
+                    L.Ui("KZ Companion — USB connection"), MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (answer != DialogResult.Yes) return;
                 _usbItem.Enabled = false;
-                _usbItem.Text = L.Ui("Baixando o adb…");
+                _usbItem.Text = L.Ui("Downloading adb…");
                 try
                 {
                     await Lib.UsbBridge.DownloadAdbAsync();
@@ -111,7 +97,7 @@ namespace DroidDeck
                 catch (Exception ex)
                 {
                     Lib.Log.Error($"Falha ao baixar o adb: {ex.Message}");
-                    ntiTray.ShowBalloonTip(5000, "KZ Companion", L.Ui("Não foi possível baixar o adb. Tente de novo mais tarde."), ToolTipIcon.Warning);
+                    ntiTray.ShowBalloonTip(5000, "KZ Companion", L.Ui("Could not download adb. Try again later."), ToolTipIcon.Warning);
                     _usbItem.Enabled = true;
                     UpdateUsbItem();
                     return;
@@ -121,7 +107,7 @@ namespace DroidDeck
             Lib.UsbBridge.Enabled = true;
             UpdateUsbItem();
             ntiTray.ShowBalloonTip(5000, "KZ Companion",
-                L.Ui("Conexão USB ligada. Ligue a depuração USB no celular e aceite o aviso que aparecer nele."), ToolTipIcon.Info);
+                L.Ui("USB connection on. Turn on USB debugging on the phone and accept the prompt that appears on it."), ToolTipIcon.Info);
         }
 
         private void UpdateUsbItem()
@@ -129,17 +115,17 @@ namespace DroidDeck
             if (InvokeRequired) { BeginInvoke(UpdateUsbItem); return; }
             var count = Lib.UsbBridge.Instance?.Devices.Count ?? 0;
             _usbItem.Checked = Lib.UsbBridge.Enabled;
-            _usbItem.Text = !Lib.UsbBridge.Enabled ? L.Ui("Conexão USB (cabo)")
-                : count == 0 ? L.Ui("Conexão USB (cabo): aguardando celular")
-                : count == 1 ? L.Ui("Conexão USB (cabo): 1 celular conectado")
-                : L.Ui("Conexão USB (cabo): {n} celulares conectados", ("n", count));
+            _usbItem.Text = !Lib.UsbBridge.Enabled ? L.Ui("USB connection (cable)")
+                : count == 0 ? L.Ui("USB connection (cable): waiting for phone")
+                : count == 1 ? L.Ui("USB connection (cable): 1 phone connected")
+                : L.Ui("USB connection (cable): {n} phones connected", ("n", count));
         }
 
         private void OnUpdateReady(string version)
         {
-            _updateItem.Text = L.Ui("Reiniciar para atualizar (v{version})", ("version", version));
+            _updateItem.Text = L.Ui("Restart to update (v{version})", ("version", version));
             ntiTray.ShowBalloonTip(5000, "KZ Companion",
-                L.Ui("A versão {version} foi baixada e entra na próxima vez que o DroidDeck abrir. Para atualizar agora, use o menu da bandeja.", ("version", version)), ToolTipIcon.Info);
+                L.Ui("Version {version} was downloaded and takes effect the next time KZ Companion opens. To update now, use the tray menu.", ("version", version)), ToolTipIcon.Info);
         }
 
         private async void OnUpdateClick()
@@ -157,14 +143,14 @@ namespace DroidDeck
             }
 
             _updateItem.Enabled = false;
-            _updateItem.Text = L.Ui("Procurando atualização…");
+            _updateItem.Text = L.Ui("Checking for updates…");
             var version = await updater.CheckAndDownloadAsync();
             _updateItem.Enabled = true;
             if (version == null)
             {
-                _updateItem.Text = L.Ui("Procurar atualização");
+                _updateItem.Text = L.Ui("Check for updates");
                 ntiTray.ShowBalloonTip(3000, "KZ Companion",
-                    L.Ui("Você está na versão mais recente ({version}).", ("version", updater.CurrentVersion)), ToolTipIcon.Info);
+                    L.Ui("You have the latest version ({version}).", ("version", updater.CurrentVersion)), ToolTipIcon.Info);
             }
         }
 
@@ -172,32 +158,31 @@ namespace DroidDeck
         {
             var menu = new ContextMenuStrip();
 
-            var openItem = new ToolStripMenuItem(L.Ui("Abrir o KZ Companion"));
+            var openItem = new ToolStripMenuItem(L.Ui("Open KZ Companion"));
             openItem.Click += (_, _) => OpenWebUi();
 
-            var pairItem = new ToolStripMenuItem(L.Ui("Parear dispositivo (QR)…"));
+            var pairItem = new ToolStripMenuItem(L.Ui("Pair device (QR)…"));
             pairItem.Click += (_, _) =>
             {
                 using var f = new frmPairing();
                 f.ShowDialog();
             };
 
-            _autoStartItem = new ToolStripMenuItem(L.Ui("Iniciar com o Windows"))
+            _autoStartItem = new ToolStripMenuItem(L.Ui("Start with Windows"))
             {
                 CheckOnClick = true,
                 Checked = IsAutoStartEnabled(),
             };
             _autoStartItem.Click += (_, _) => SetAutoStart(_autoStartItem.Checked);
 
-            _firewallItem = new ToolStripMenuItem(L.Ui("Liberar no firewall (rede local)"))
+            _firewallItem = new ToolStripMenuItem(L.Ui("Allow through firewall (local network)"))
             {
                 Checked = Lib.FirewallSetup.RulesExist(),
             };
             _firewallItem.Click += (_, _) => AllowFirewall();
 
-            _usbItem = new ToolStripMenuItem(L.Ui("Conexão USB (cabo)"));
+            _usbItem = new ToolStripMenuItem(L.Ui("USB connection (cable)"));
             _usbItem.Click += (_, _) => ToggleUsb();
-            // O servico sobe junto com o servidor web, as vezes depois da bandeja.
             menu.Opening += (_, _) =>
             {
                 if (Lib.UsbBridge.Instance is { } usb && !_usbHooked)
@@ -208,13 +193,12 @@ namespace DroidDeck
                 UpdateUsbItem();
             };
 
-            // Copia instalada: procura e aplica atualizacoes. Zip/dev: abre a pagina da release.
             var version = Program.Updater.CurrentVersion;
-            var versionItem = new ToolStripMenuItem(version != null ? $"KZ Companion v{version}" : L.Ui("DroidDeck (sem instalador)"))
+            var versionItem = new ToolStripMenuItem(version != null ? $"KZ Companion v{version}" : L.Ui("KZ Companion (no installer)"))
             {
                 Enabled = false,
             };
-            _updateItem = new ToolStripMenuItem(Program.Updater.IsInstalled ? L.Ui("Procurar atualização") : L.Ui("Baixar versão mais recente…"));
+            _updateItem = new ToolStripMenuItem(Program.Updater.IsInstalled ? L.Ui("Check for updates") : L.Ui("Download the latest version…"));
             _updateItem.Click += (_, _) => OnUpdateClick();
 
             var adminItem = new ToolStripMenuItem("Start sensor helper (administrator)…");
@@ -233,7 +217,7 @@ namespace DroidDeck
             { Enabled = !DroidDeck.Services.HardwareSensors.PawnIoInstalled };
             driverItem.Click += (_, _) => InstallPawnIo();
 
-            var exitItem = new ToolStripMenuItem(L.Ui("Encerrar"));
+            var exitItem = new ToolStripMenuItem(L.Ui("Quit"));
             exitItem.Click += (_, _) => { Program.Exiting = true; Application.Exit(); };
 
             menu.Items.Add(openItem);
@@ -253,11 +237,6 @@ namespace DroidDeck
             ntiTray.DoubleClick += (_, _) => OpenWebUi();
         }
 
-        /// <summary>
-        /// Sensores de CPU/SSD/ventoinhas exigem administrador. Em vez de elevar o app inteiro (o que
-        /// impede arrastar arquivos do Explorer para a janela), sobe so um auxiliar elevado que le os
-        /// sensores. Opcional e explicito: o Windows pede a permissao na hora.
-        /// </summary>
         private void StartSensorHelper()
         {
             var answer = MessageBox.Show(
@@ -270,10 +249,6 @@ namespace DroidDeck
                 TrayHint("Permission was not granted. The sensor helper did not start.");
         }
 
-        /// <summary>
-        /// CPU temperatura/potencia pedem o driver PawnIO. Instala pelo winget (pacote
-        /// namazso.PawnIO), so depois de o usuario confirmar; o Windows pede permissao de admin.
-        /// </summary>
         private void InstallPawnIo()
         {
             var answer = MessageBox.Show(
@@ -291,12 +266,11 @@ namespace DroidDeck
                     UseShellExecute = true,
                 });
             }
-            catch (System.ComponentModel.Win32Exception) { /* permissao negada */ }
+            catch (System.ComponentModel.Win32Exception) {  }
         }
 
         private frmWeb? _window;
 
-        /// <summary>Mostra (ou cria) a janela do KZ Companion; nunca abre navegador externo.</summary>
         public void ShowWindow()
         {
             if (_window == null || _window.IsDisposed) _window = new frmWeb();
@@ -322,7 +296,6 @@ namespace DroidDeck
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            // Remove o ícone para não deixar "fantasma" na bandeja.
             ntiTray.Visible = false;
             _updateCts.Cancel();
             base.OnFormClosing(e);
@@ -353,10 +326,6 @@ namespace DroidDeck
             }
         }
 
-        /// <summary>
-        /// Desinstalacao: tira o autostart so se ele aponta para esta copia. Outra copia do
-        /// DroidDeck (um .zip antigo, um build de dev) continua iniciando com o Windows.
-        /// </summary>
         internal static void RemoveAutoStartIfOurs()
         {
             try

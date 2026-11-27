@@ -12,18 +12,11 @@ using Microsoft.Extensions.Hosting;
 
 namespace DroidDeck.Services
 {
-    /// <summary>Um ponto que a tela de tally pode acompanhar: uma cena, uma entrada, "no ar"...</summary>
     public record TallyTarget(string Id, string Source, string Label, string State)
     {
         public const string Program = "program", Preview = "preview", Idle = "idle";
     }
 
-    /// <summary>
-    /// Tally e ON AIR: junta o estado do OBS, vMix, mAirList, RadioDJ, Voicemeeter e de um sinal
-    /// manual numa lista de alvos com "program", "preview" ou "idle". Cada celular escolhe o seu
-    /// alvo. Alvo que some da lista (programa desconectado) aparece como "sem sinal" no app: tela
-    /// de tally nunca pode dizer "fora do ar" so porque perdeu a conexao.
-    /// </summary>
     public class TallyService : BackgroundService
     {
         public const string Event = "ReceiveTallyState";
@@ -46,13 +39,10 @@ namespace DroidDeck.Services
         private DateTime _nextVoicemeeter;
         private string _lastKey = "";
 
-        /// <summary>Ultimo estado conhecido de cada alvo: um alvo que some nao apaga o que se sabia dele.</summary>
         private readonly Dictionary<string, string> _known = new();
 
-        /// <summary>Um alvo mudou de estado (novo alvo e estado anterior). Quem ouve sao as automacoes.</summary>
         public event Action<TallyTarget, string>? TargetChanged;
 
-        /// <summary>Alguem precisa do acompanhamento mesmo sem celular conectado (automacoes).</summary>
         public Func<bool>? WatchRequested { get; set; }
 
         public TallyService(ObsService obs, VmixIntegration vmix, MairlistIntegration mairlist,
@@ -74,32 +64,27 @@ namespace DroidDeck.Services
             _lastKey = "";
         }
 
-        /// <summary>Todos os alvos agora, com o rotulo no idioma atual (L.Language).</summary>
         public List<TallyTarget> Targets()
         {
             var list = new List<TallyTarget>
             {
-                new(ManualId, "manual", L.T("Sinal manual (ON AIR)"), _manual ? TallyTarget.Program : TallyTarget.Idle),
+                new(ManualId, "manual", L.T("Manual signal (ON AIR)"), _manual ? TallyTarget.Program : TallyTarget.Idle),
             };
             if (_obs.Connected)
                 list.AddRange(ObsTargets(_obs.Scenes, _obs.CurrentScene, _obs.PreviewScene, _obs.Streaming, _obs.Recording));
             if (_vmix.Snapshot is { } vmix)
                 list.AddRange(VmixTargets(vmix, _vmix.TallyOf));
             if (_mairlist.OnAir is { } onAir)
-                list.Add(new("mairlist/onair", "mairlist", "mAirList: " + L.T("No ar"), onAir ? TallyTarget.Program : TallyTarget.Idle));
+                list.Add(new("mairlist/onair", "mairlist", "mAirList: " + L.T("Live"), onAir ? TallyTarget.Program : TallyTarget.Idle));
             if (_radioDj.Input is { } input)
-                list.Add(new("radiodj/input", "radiodj", "RadioDJ: " + L.T("Entrada ao vivo"), input ? TallyTarget.Program : TallyTarget.Idle));
+                list.Add(new("radiodj/input", "radiodj", "RadioDJ: " + L.T("Live input"), input ? TallyTarget.Program : TallyTarget.Idle));
             var strips = _stripsOpen;
             for (var i = 0; i < strips.Length; i++)
-                list.Add(new($"voicemeeter/strip:{i + 1}", "voicemeeter", $"Voicemeeter: {L.T("Microfone aberto")} {i + 1}",
+                list.Add(new($"voicemeeter/strip:{i + 1}", "voicemeeter", $"Voicemeeter: {L.T("Open microphone")} {i + 1}",
                     strips[i] ? TallyTarget.Program : TallyTarget.Idle));
             return list;
         }
 
-        /// <summary>
-        /// Estado atual de um alvo; null se ele nao estiver disponivel (programa fechado). Le o
-        /// Voicemeeter na hora: sem celular conectado, o laco nao o acompanha.
-        /// </summary>
         public string? StateOf(string id)
         {
             if (id.StartsWith("voicemeeter/", StringComparison.Ordinal))
@@ -107,11 +92,6 @@ namespace DroidDeck.Services
             return Targets().FirstOrDefault(t => t.Id == id)?.State;
         }
 
-        /// <summary>
-        /// O que mudou desde a ultima leitura. Alvo novo nao conta (nao se sabe de onde veio) e alvo
-        /// que sumiu nao conta: perder a conexao nao quer dizer que saiu do ar. Quando ele volta,
-        /// compara com o ultimo estado conhecido.
-        /// </summary>
         public List<(TallyTarget target, string previous)> DetectChanges(IEnumerable<TallyTarget> targets)
         {
             var changes = new List<(TallyTarget, string)>();
@@ -126,8 +106,8 @@ namespace DroidDeck.Services
 
         public static IEnumerable<TallyTarget> ObsTargets(IEnumerable<string> scenes, string? program, string? preview, bool streaming, bool recording)
         {
-            yield return new("obs/stream", "obs", "OBS: " + L.T("Transmissão"), streaming ? TallyTarget.Program : TallyTarget.Idle);
-            yield return new("obs/record", "obs", "OBS: " + L.T("Gravação"), recording ? TallyTarget.Program : TallyTarget.Idle);
+            yield return new("obs/stream", "obs", "OBS: " + L.T("Streaming"), streaming ? TallyTarget.Program : TallyTarget.Idle);
+            yield return new("obs/record", "obs", "OBS: " + L.T("Recording"), recording ? TallyTarget.Program : TallyTarget.Idle);
             foreach (var scene in scenes)
                 yield return new("obs/scene:" + scene, "obs", "OBS: " + scene,
                     scene == program ? TallyTarget.Program : scene == preview ? TallyTarget.Preview : TallyTarget.Idle);
@@ -135,8 +115,8 @@ namespace DroidDeck.Services
 
         public static IEnumerable<TallyTarget> VmixTargets(VmixSnapshot vmix, Func<int, int> tallyOf)
         {
-            yield return new("vmix/stream", "vmix", "vMix: " + L.T("Transmissão"), vmix.Streaming ? TallyTarget.Program : TallyTarget.Idle);
-            yield return new("vmix/record", "vmix", "vMix: " + L.T("Gravação"), vmix.Recording ? TallyTarget.Program : TallyTarget.Idle);
+            yield return new("vmix/stream", "vmix", "vMix: " + L.T("Streaming"), vmix.Streaming ? TallyTarget.Program : TallyTarget.Idle);
+            yield return new("vmix/record", "vmix", "vMix: " + L.T("Recording"), vmix.Recording ? TallyTarget.Program : TallyTarget.Idle);
             foreach (var input in vmix.Inputs)
                 yield return new("vmix/input:" + input.Key, "vmix", $"vMix: {input.Number}. {input.Title}",
                     tallyOf(input.Number) switch
@@ -163,7 +143,6 @@ namespace DroidDeck.Services
             {
                 try
                 {
-                    // Sem ninguem olhando nao ha para quem mandar; quem conectar recebe o estado na hora.
                     if (DeckHub.ConnectedCount > 0 || WatchRequested?.Invoke() == true)
                     {
                         PollVoicemeeter();
@@ -179,7 +158,6 @@ namespace DroidDeck.Services
                     }
                     else
                     {
-                        // Parado por um tempo: o que se sabia ficou velho e nao serve de comparacao.
                         _known.Clear();
                     }
                 }
@@ -189,7 +167,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Le o mudo de cada entrada: microfone aberto = no ar. Uma entrada a mais recusa e acaba a lista.</summary>
         private void PollVoicemeeter()
         {
             var now = DateTime.UtcNow;
@@ -209,16 +186,11 @@ namespace DroidDeck.Services
             }
             catch (Exception)
             {
-                // Fechado, nao instalado ou passou da ultima entrada.
             }
             return open.ToArray();
         }
     }
 
-    /// <summary>
-    /// Acao "tally": abre a tela de tally (feito pelo app), mostra o estado de um alvo no botao ou
-    /// muda o sinal manual de ON AIR.
-    /// </summary>
     public class TallyProvider : IStatefulActionProvider
     {
         public const string TypeName = "tally";
@@ -234,22 +206,22 @@ namespace DroidDeck.Services
         public ActionSchema Describe() => new()
         {
             Type = TypeName,
-            Title = "Tally e ON AIR",
+            Title = "Tally and ON AIR",
             Icon = "sensors",
-            Category = "Estúdio",
+            Category = "Studio",
             Stateful = true,
             StateEvent = StateEvent,
-            Description = "Tela cheia de tally ou ON AIR, ou o estado de uma cena, entrada ou microfone no botão.",
+            Description = "Full-screen tally or ON AIR, or the state of a scene, input or microphone on the button.",
             Fields =
             {
-                ActionField.Select("operation", "O que fazer",
-                    ("open", "Abrir a tela de tally"),
-                    ("show", "Só mostrar o estado no botão"),
-                    ("manual_toggle", "Sinal manual de ON AIR (alternar)"),
-                    ("manual_on", "Ligar o sinal manual"),
-                    ("manual_off", "Desligar o sinal manual")),
-                ActionField.Dynamic("target", "O que acompanhar", "/api/tally/targets",
-                    "A lista traz só o que está conectado agora. Com o sinal manual e \"só mostrar\", o toque no botão liga e desliga.",
+                ActionField.Select("operation", "What to do",
+                    ("open", "Open the tally screen"),
+                    ("show", "Only show the state on the button"),
+                    ("manual_toggle", "Manual ON AIR signal (toggle)"),
+                    ("manual_on", "Turn the manual signal on"),
+                    ("manual_off", "Turn the manual signal off")),
+                ActionField.Dynamic("target", "What to follow", "/api/tally/targets",
+                    "The list only shows what is connected now. With the manual signal and \"only show\", tapping the button turns it on and off.",
                     allowCustom: true)
                     .When("operation", "open", "show"),
             },
@@ -262,7 +234,6 @@ namespace DroidDeck.Services
                 case "manual_toggle":
                     _tally.SetManual(!_tally.Manual);
                     break;
-                // O botao mostra o sinal manual: tocar nele muda. Os outros alvos so se observam.
                 case "show" when c.Get("target") == TallyService.ManualId:
                     _tally.SetManual(!_tally.Manual);
                     break;

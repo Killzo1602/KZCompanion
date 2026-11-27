@@ -11,7 +11,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// PC de mentira: responde as listas e grava cada POST (caminho + query).
 class _Pc implements HttpClientAdapter {
   _Pc({this.running = const []});
 
@@ -19,7 +18,6 @@ class _Pc implements HttpClientAdapter {
   final posts = <String>[];
   int runningGets = 0;
 
-  /// Resposta das acoes: status e corpo.
   int actionStatus = 200;
   Map<String, dynamic> actionBody = {'ok': true, 'closed': true};
 
@@ -55,7 +53,6 @@ class _Pc implements HttpClientAdapter {
         'inputMuted': false,
         'deafened': false,
         'sessions': [
-          // Duas sessoes do mesmo .exe (groupKey = id do app) e uma de outro programa com o MESMO nome.
           {'id': 's1', 'groupKey': 'aaaaaaaaaaaa', 'name': 'Discord', 'volume': 80, 'muted': false, 'active': true, 'system': false},
           {'id': 's2', 'groupKey': 'aaaaaaaaaaaa', 'name': 'Discord', 'volume': 40, 'muted': false, 'active': false, 'system': false},
           {'id': 's3', 'groupKey': 'cccccccccccc', 'name': 'Discord', 'volume': 10, 'muted': false, 'active': false, 'system': false},
@@ -131,7 +128,7 @@ void main() {
     expect(b.windows.last.minimized, isTrue);
   });
 
-  testWidgets('shows running apps above Favorites, favorites still launch', (tester) async {
+  testWidgets('shows running apps below Favorites, favorites still launch', (tester) async {
     final (c, pc, _) = await _setup(tester, _Pc(running: [_app('aaaaaaaaaaaa', 'Discord', title: 'General | Server', fg: true), _app('bbbbbbbbbbbb', 'Firefox')]));
     await _pump(tester, c);
     expect(tester.takeException(), isNull);
@@ -140,8 +137,7 @@ void main() {
     expect(find.text('Discord'), findsOneWidget);
     expect(find.text('General | Server'), findsOneWidget);
     expect(find.text('Firefox'), findsOneWidget);
-    // Running antes de Favorites, na ordem da tela.
-    expect(tester.getTopLeft(find.text('RUNNING NOW')).dy < tester.getTopLeft(find.text('FAVORITES')).dy, isTrue);
+    expect(tester.getTopLeft(find.text('RUNNING NOW')).dy > tester.getTopLeft(find.text('FAVORITES')).dy, isTrue);
 
     await tester.tap(find.text('Fav One'));
     await tester.pump();
@@ -251,20 +247,18 @@ void main() {
 
   testWidgets('audio is associated by app identity (groupKey), not by name', (tester) async {
     final (c, pc, _) = await _setup(tester, _Pc(running: [
-      _app('aaaaaaaaaaaa', 'Discord'), // 2 sessoes
-      _app('dddddddddddd', 'Discord Canary'), // nenhuma
+      _app('aaaaaaaaaaaa', 'Discord'),
+      _app('dddddddddddd', 'Discord Canary'),
     ]));
     await _pump(tester, c);
-    // So o app com sessoes tem slider; o maior volume do grupo (80) aparece.
     expect(find.byType(Slider), findsOneWidget);
     expect(find.text('80'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Mute'));
     await tester.pump();
     await _settle(tester);
-    // O mudo foi para as DUAS sessoes do .exe e nao para a de mesmo nome de outro programa.
     final audioPosts = pc.posts.where((p) => p.contains('audio')).toList();
-    expect(audioPosts, isEmpty); // PUT, nao POST
+    expect(audioPosts, isEmpty);
     final grp = c.audio.state.value!.sessions.where((s) => s.groupKey == 'aaaaaaaaaaaa');
     expect(grp.every((s) => s.muted), isTrue);
     expect(c.audio.state.value!.sessions.firstWhere((s) => s.id == 's3').muted, isFalse);
@@ -281,6 +275,8 @@ void main() {
     await _pump(tester, c);
     expect(find.text('Mail'), findsNothing);
     await tester.tap(find.byTooltip('2 windows'));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Mail'));
     await tester.pump();
     await tester.tap(find.text('Mail'));
     await tester.pump();
@@ -312,7 +308,7 @@ void main() {
     await tester.pump();
     expect(find.text('RUNNING NOW'), findsNothing);
     expect(c.runningApps.active, isFalse);
-    expect(find.text('Fav One'), findsOneWidget); // Favoritos continuam
+    expect(find.text('Fav One'), findsOneWidget);
     c.dispose();
   });
 

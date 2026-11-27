@@ -6,14 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Watchdog de conexão do OBS. Enquanto o backend roda, verifica a cada poucos
-    /// segundos: se o OBS já foi configurado (obs.json existe) e não estamos conectados,
-    /// tenta conectar. Cobre os casos de o OBS abrir DEPOIS do backend (autostart) ou
-    /// reiniciar no meio da sessão — sem precisar tocar em "Conectar" toda vez.
-    /// Tentativas que falham (OBS fechado) são silenciosas (log Debug). Espelha a ideia
-    /// do DiscordAutoConnect, mas reconecta continuamente em vez de só no boot.
-    /// </summary>
     public class ObsAutoConnect : IHostedService
     {
         private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
@@ -37,7 +29,6 @@ namespace DroidDeck.Services
 
         private async Task WatchdogAsync(CancellationToken ct)
         {
-            // Pequeno atraso pra não competir com o resto do startup.
             try { await Task.Delay(2000, ct); } catch { return; }
 
             while (!ct.IsCancellationRequested)
@@ -52,7 +43,6 @@ namespace DroidDeck.Services
                 }
                 catch (Exception ex)
                 {
-                    // OBS fechado / handshake falhou: tenta de novo no próximo ciclo.
                     _logger.LogDebug("OBS auto-connect: {Msg}", ex.Message);
                 }
 

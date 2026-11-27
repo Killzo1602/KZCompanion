@@ -12,10 +12,6 @@ using Xunit;
 
 namespace DroidDeck.Tests
 {
-    /// <summary>
-    /// O app inverte o botao na hora do toque. Se a acao falha no PC, o executor reenvia o
-    /// estado real para o botao voltar ao que e verdade.
-    /// </summary>
     public class ActionExecutorStateTests
     {
         private class Stateful : IStatefulActionProvider

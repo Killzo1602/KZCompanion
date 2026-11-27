@@ -6,10 +6,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Actions.Providers
 {
-    /// <summary>
-    /// Abre um jogo da Steam pelo appid (steam://rungameid/...). Nao e privilegiada: so
-    /// aceita um numero, entao quem aperta nao escolhe o que roda alem de "um jogo instalado".
-    /// </summary>
     public class SteamProvider : IActionProvider
     {
         private readonly ILogger<SteamProvider> _logger;
@@ -21,13 +17,13 @@ namespace DroidDeck.Actions.Providers
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Jogo da Steam",
+            Title = "Steam game",
             Icon = "sports_esports",
-            Category = "Sistema",
+            Category = "System",
             Editor = "steam",
             Fields =
             {
-                ActionField.Dynamic("appId", "Jogo", "/api/steam/games"),
+                ActionField.Dynamic("appId", "Game", "/api/steam/games"),
             },
         };
 

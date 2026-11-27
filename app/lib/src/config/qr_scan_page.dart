@@ -2,21 +2,16 @@ import 'package:droiddeck/core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-/// Tela genérica de leitura de QR. Retorna (via Navigator.pop) a string crua do
-/// primeiro QR cujo conteúdo começa com um dos [acceptPrefixes]. Usada tanto pro
-/// pareamento (`droiddeck://...`) quanto pra ler o QR do OBS (`obsws://...`).
 class QrScanPage extends StatefulWidget {
-  /// Prefixos aceitos (case-insensitive). Padrão: QR de pareamento.
   final List<String> acceptPrefixes;
-  /// Título e dica em português; a tela traduz com [tr].
   final String title;
   final String hint;
 
   const QrScanPage({
     super.key,
     this.acceptPrefixes = const ['droiddeck://'],
-    this.title = 'Parear — aponte para o QR',
-    this.hint = 'Abra "Parear dispositivo (QR)" na bandeja do PC',
+    this.title = 'Pair — point at the QR code',
+    this.hint = 'Open "Pair device (QR)" from the PC tray icon',
   });
 
   @override
@@ -49,7 +44,6 @@ class _QrScanPageState extends State<QrScanPage> {
         alignment: Alignment.center,
         children: [
           MobileScanner(onDetect: _onDetect),
-          // Moldura simples de mira
           Container(
             width: 240,
             height: 240,

@@ -17,7 +17,6 @@ namespace DroidDeck.Tests
             var mockEnum = new Mock<IAudioDeviceEnumerator>();
             var mockLogger = new Mock<ILogger<MixerService>>();
 
-            // Arrange: return a single fake device
             var fakeDevice = new Mock<IAudioDevice>();
             fakeDevice.SetupGet(d => d.Id).Returns("device-1");
             fakeDevice.SetupGet(d => d.FriendlyName).Returns("Device 1 (Test)");
@@ -32,10 +31,8 @@ namespace DroidDeck.Tests
 
             var svc = new MixerService(mockLogger.Object, mockEnum.Object);
 
-            // Act
             var list = svc.FindAllOutputs();
 
-            // Assert
             Assert.NotNull(list);
             Assert.Single(list);
             Assert.Equal("device-1", list[0].Id);

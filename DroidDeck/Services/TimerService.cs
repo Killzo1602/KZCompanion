@@ -13,17 +13,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Timers, cronometros, pomodoros e contadores dos botoes do deck.
-    ///
-    /// O estado mora no PC para que todos os celulares (e o configurador) vejam o mesmo
-    /// relogio, e para que o fim de uma contagem seja detectado mesmo com a tela do celular
-    /// apagada. Os clientes recebem o tempo restante/decorrido no instante do envio e contam
-    /// sozinhos a partir dai: o servidor so transmite quando algo muda, nao a cada segundo.
-    ///
-    /// Contadores sobrevivem a reinicios (counters.json); timers nao -- um timer que estava
-    /// rodando quando o PC desligou nao tem como saber quanto tempo passou de verdade.
-    /// </summary>
     public class TimerService : BackgroundService
     {
         public const string ModeCountdown = "countdown";
@@ -36,10 +25,8 @@ namespace DroidDeck.Services
         private readonly object _lock = new();
         private readonly Dictionary<string, TimerEntry> _timers = new();
 
-        /// <summary>Relogio injetavel (testes).</summary>
         public Func<DateTime> Now { get; set; } = () => DateTime.UtcNow;
 
-        /// <summary>Chamado quando uma contagem termina (beep no PC). Trocavel nos testes.</summary>
         public Action<TimerEntry> OnFinished { get; set; } = _ =>
         {
             try { System.Media.SystemSounds.Exclamation.Play(); } catch { }
@@ -59,19 +46,15 @@ namespace DroidDeck.Services
             public bool Running { get; set; }
             public bool Finished { get; set; }
 
-            /// <summary>Duracao total da fase atual (countdown/pomodoro).</summary>
             public TimeSpan Duration { get; set; }
 
-            /// <summary>Tempo acumulado ate o ultimo pause (ou ate StartedAt, se rodando).</summary>
             public TimeSpan Accumulated { get; set; }
             public DateTime? StartedAt { get; set; }
 
             public long Count { get; set; }
 
-            /// <summary>Pomodoro: "work" ou "break".</summary>
             public string Phase { get; set; } = "work";
 
-            /// <summary>Pomodoro: quantos ciclos de foco ja terminaram.</summary>
             public int Cycles { get; set; }
 
             public TimeSpan WorkDuration { get; set; } = TimeSpan.FromMinutes(25);
@@ -81,13 +64,6 @@ namespace DroidDeck.Services
                 Accumulated + (Running && StartedAt.HasValue ? now - StartedAt.Value : TimeSpan.Zero);
         }
 
-        // ---- Acoes ----
-
-        /// <summary>
-        /// Aplica uma operacao no timer <paramref name="id"/>. A configuracao (modo, duracoes)
-        /// vem dos parametros do botao a cada toque, entao editar o botao vale no proximo toque
-        /// sem precisar apagar o estado antigo.
-        /// </summary>
         public void Apply(string id, string operation, IReadOnlyDictionary<string, string> p)
         {
             if (string.IsNullOrWhiteSpace(id)) return;
@@ -116,7 +92,7 @@ namespace DroidDeck.Services
                     case "skip":
                         if (t.Mode == ModePomodoro) NextPhase(t, now, startRunning: t.Running);
                         break;
-                    default: // toggle
+                    default:
                         Toggle(t, now, step);
                         break;
                 }
@@ -144,7 +120,6 @@ namespace DroidDeck.Services
             var mode = p.TryGetValue("mode", out var m) && m is { Length: > 0 } ? m.ToLowerInvariant() : ModeCountdown;
             if (mode != t.Mode)
             {
-                // Trocou o modo do botao: comeca do zero no modo novo.
                 t.Mode = mode;
                 Reset(t);
                 t.Count = 0;
@@ -174,7 +149,6 @@ namespace DroidDeck.Services
                 return;
             }
 
-            // Contagem que ja terminou: o toque zera, o seguinte comeca de novo.
             if (t.Finished)
             {
                 Reset(t);
@@ -219,8 +193,6 @@ namespace DroidDeck.Services
             t.StartedAt = startRunning ? now : null;
         }
 
-        // ---- Laco: detecta contagens que chegaram ao fim ----
-
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             while (!stoppingToken.IsCancellationRequested)
@@ -237,7 +209,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>Avanca timers vencidos. Devolve true se algum mudou.</summary>
         public bool Tick()
         {
             var now = Now();
@@ -251,8 +222,6 @@ namespace DroidDeck.Services
 
                     if (t.Mode == ModePomodoro)
                     {
-                        // A fase seguinte comeca sozinha, contando do instante em que a
-                        // anterior terminou (e nao de agora), para nao acumular atraso.
                         var endedAt = t.StartedAt!.Value + (t.Duration - t.Accumulated);
                         NextPhase(t, endedAt, startRunning: true);
                     }
@@ -274,8 +243,6 @@ namespace DroidDeck.Services
             }
             return finished.Count > 0;
         }
-
-        // ---- Estado para os clientes ----
 
         public Dictionary<string, object> GetStatePayload()
         {
@@ -301,8 +268,6 @@ namespace DroidDeck.Services
             try { await _hub.Clients.All.SendAsync("ReceiveTimerState", GetStatePayload()); }
             catch { }
         }
-
-        // ---- Contadores persistentes ----
 
         private static string CountersPath => Path.Combine(AppPaths.RoamingDir, "counters.json");
 

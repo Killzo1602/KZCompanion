@@ -12,10 +12,6 @@ using Xunit;
 
 namespace DroidDeck.Tests
 {
-    /// <summary>
-    /// Arquivos montados aqui seguindo os formatos do app da Elgato (sem um .streamDeckProfile
-    /// real no repositorio): 1.0 com pastas aninhadas e 2.0 com paginas em base32.
-    /// </summary>
     public class StreamDeckImportTests
     {
         private static MemoryStream Zip(params (string path, string content)[] files)
@@ -35,7 +31,7 @@ namespace DroidDeck.Tests
 
         private static string Hotkey(int vk, bool ctrl = false, bool shift = false) => $$$"""
             {"Name":"Hotkey","UUID":"com.elgato.streamdeck.system.hotkey","State":0,
-             "States":[{"Title":"Copiar"}],
+             "States":[{"Title":"Copy"}],
              "Settings":{"Hotkeys":[{"KeyCmd":false,"KeyCtrl":{{{ctrl.ToString().ToLower()}}},"KeyOption":false,"KeyShift":{{{shift.ToString().ToLower()}}},"VKeyCode":{{{vk}}}},
                                     {"KeyCmd":false,"KeyCtrl":false,"KeyOption":false,"KeyShift":false,"VKeyCode":-1}]}}
             """;
@@ -72,7 +68,7 @@ namespace DroidDeck.Tests
             Assert.Equal(8, main.Columns);
 
             var copy = main.Buttons.Single(b => b.Row == 0 && b.Column == 0);
-            Assert.Equal("Copiar", copy.Label);
+            Assert.Equal("Copy", copy.Label);
             Assert.Equal("hotkey", copy.Action!.Type);
             Assert.Equal("^c", copy.Action.Parameters["keys"]);
 
@@ -91,7 +87,7 @@ namespace DroidDeck.Tests
             var mute = main.Buttons.Single(b => b.Row == 1);
             Assert.Equal("discord", mute.Action!.Type);
             Assert.Equal("Mudo", mute.ActiveLabel);
-            Assert.False(mute.Toggle); // o Discord tem estado proprio
+            Assert.False(mute.Toggle);
 
             var sub = result.Profiles[1];
             Assert.Equal("back", sub.Buttons.Single(b => b.Column == 0).Action!.Type);
@@ -106,7 +102,6 @@ namespace DroidDeck.Tests
             var folder = Guid.Parse("00112233-4455-6677-8899-aabbccddeeff");
             string Folder(Guid g)
             {
-                // Mesmo esquema do app da Elgato: os 16 bytes em base32 (0-9A-V) + "Z".
                 var bytes = Convert.FromHexString(g.ToString("N"));
                 const string alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUV";
                 var sb = new StringBuilder();
@@ -126,7 +121,6 @@ namespace DroidDeck.Tests
             string Page(string actions) => """{"Controllers":[{"Type":"Keypad","Actions":{""" + actions + "}}]}";
             using var zip = Zip(
                 ("X.sdProfile/manifest.json", profile),
-                // Pagina 2 vem antes no zip; a ordem certa vem do manifesto do perfil.
                 ($"X.sdProfile/Profiles/{Folder(page2)}/manifest.json", Page($$$"""
                     "0,0": {"Name":"Website","UUID":"com.elgato.streamdeck.system.website","States":[{"Title":"Site"}],"Settings":{"path":"https://example.com"}}
                     """)),

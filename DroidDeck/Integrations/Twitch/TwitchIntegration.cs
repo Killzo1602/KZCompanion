@@ -13,11 +13,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Twitch (Helix) com o app do proprio usuario, por "device code": o DroidDeck mostra um
-    /// codigo, o usuario confirma em twitch.tv/activate e pronto -- sem segredo nem endereco
-    /// de retorno. Ao vivo e espectadores sao consultados a cada 30 s.
-    /// </summary>
     public class TwitchIntegration : AccountIntegration
     {
         public const string Event = "ReceiveTwitchState";
@@ -79,7 +74,7 @@ namespace DroidDeck.Integrations
         public override async Task<IntegrationStatus> ConfigureAsync(Dictionary<string, string> fields)
         {
             var clientId = (fields.GetValueOrDefault("clientId") ?? ClientId ?? "").Trim();
-            if (clientId.Length < 10) throw new InvalidOperationException("Cole o Client ID do app que você criou no console da Twitch.");
+            if (clientId.Length < 10) throw new InvalidOperationException("Paste the Client ID of the app you created in the Twitch console.");
             if (clientId != ClientId) Clear();
             Set(("clientId", clientId));
             _error = null;
@@ -137,7 +132,7 @@ namespace DroidDeck.Integrations
                 }
                 catch (Exception ex)
                 {
-                    _error = ex.Message.Contains("expired") ? "O código expirou. Tente de novo." : ex.Message;
+                    _error = ex.Message.Contains("expired") ? "The code expired. Try again." : ex.Message;
                     break;
                 }
             }
@@ -145,10 +140,9 @@ namespace DroidDeck.Integrations
             _verificationUri = null;
         }
 
-        /// <summary>Descobre a conta dona do token.</summary>
         private async Task ValidateAsync()
         {
-            var token = await _tokens.GetAccessTokenAsync() ?? throw new InvalidOperationException("Sem token.");
+            var token = await _tokens.GetAccessTokenAsync() ?? throw new InvalidOperationException("No token.");
             var client = _http.CreateClient();
             using var request = new HttpRequestMessage(HttpMethod.Get, "https://id.twitch.tv/oauth2/validate");
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("OAuth", token);

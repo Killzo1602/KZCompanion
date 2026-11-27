@@ -3,17 +3,11 @@ using QRCoder;
 
 namespace DroidDeck.Lib
 {
-    /// <summary>
-    /// Monta os dados de pareamento (URI + QR) compartilhados pela janela de bandeja
-    /// e pelo modo de diagnóstico --print-pairing.
-    /// </summary>
     public static class PairingInfo
     {
-        /// <summary>Porta do servidor local. KZCOMPANION_PORT troca (testes; ou conflito com outro programa).</summary>
         public static int Port { get; } =
             int.TryParse(Environment.GetEnvironmentVariable("KZCOMPANION_PORT"), out var p) && p is > 1023 and < 65536 ? p : 4787;
 
-        /// <summary>URI escaneada pelo app: droiddeck://pair?ip=..&port=..&key=..</summary>
         public static string BuildUri()
         {
             var ip = NetworkInfo.GetLanIp();
@@ -21,10 +15,6 @@ namespace DroidDeck.Lib
             return $"droiddeck://pair?ip={ip}&port={Port}&key={key}";
         }
 
-        /// <summary>
-        /// Endereco do deck no navegador (iPhone, tablet, outro PC), ja com a chave: a camera
-        /// abre direto e a pagina guarda a chave e a tira da barra de endereco.
-        /// </summary>
         public static string BuildBrowserUrl()
         {
             var ip = NetworkInfo.GetLanIp();

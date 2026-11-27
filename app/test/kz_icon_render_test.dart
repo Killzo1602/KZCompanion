@@ -1,4 +1,3 @@
-// Manual: renders real extracted icons (KZ_ICON_JSON = GET /api/apps) at the Huawei's density.
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -36,7 +35,7 @@ void main() {
       ),
     ));
     for (var i = 0; i < 5; i++) {
-      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 150))); // decodifica as imagens
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 150)));
       await tester.pump();
     }
     expect(tester.takeException(), isNull);

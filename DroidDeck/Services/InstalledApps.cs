@@ -16,29 +16,18 @@ using Microsoft.Win32;
 
 namespace DroidDeck.Services
 {
-    /// <summary>Um aplicativo instalado que o usuario pode adicionar pelo seletor.</summary>
     public sealed class InstalledItem
     {
         public string Key { get; init; } = "";
         public string Name { get; init; } = "";
-        /// <summary>"file" (.lnk/.exe), "packaged" (app da Loja, AppUserModelID), "steam" (App ID) ou "battlenet" (codigo do jogo).</summary>
         public string Kind { get; init; } = "file";
-        /// <summary>Caminho do .lnk/.exe, ou o AppUserModelID quando Kind = packaged. Nunca vem do cliente.</summary>
         public string Path { get; init; } = "";
         public string Identity { get; init; } = "";
         public string Source { get; init; } = "";
         public string Detail { get; set; } = "";
-        /// <summary>Preenchido para jogos (Steam/Battle.net).</summary>
         public GameInfo? Game { get; init; }
     }
 
-    /// <summary>
-    /// Enumera o que esta instalado a partir das fontes do Windows: atalhos do Menu Iniciar (usuario e
-    /// sistema), "App Paths" do registro e apps empacotados (AppsFolder, com AppUserModelID). Cada
-    /// item tem uma identidade canonica (alvo + argumentos do atalho, ou AUMID): o mesmo programa
-    /// encontrado por varias fontes aparece uma vez; programas diferentes com o mesmo NOME continuam
-    /// separados. O seletor so pode adicionar por chave desta lista: o caminho nunca vem do cliente.
-    /// </summary>
     public sealed class InstalledApps
     {
         private static readonly Regex Aumid = new(@"^[A-Za-z0-9][A-Za-z0-9.\-]*_[a-z0-9]{13}![A-Za-z0-9._\-]+$", RegexOptions.Compiled);
@@ -87,8 +76,6 @@ namespace DroidDeck.Services
             _ => AppLibrary.ExtractIconPng(item.Path),
         };
 
-        // ---- enumeracao ----
-
         private static string Key(string identity) =>
             Convert.ToHexString(SHA1.HashData(Encoding.UTF8.GetBytes(identity)))[..12].ToLowerInvariant();
 
@@ -96,7 +83,6 @@ namespace DroidDeck.Services
         {
             var byIdentity = new Dictionary<string, InstalledItem>();
 
-            // 1) Menu Iniciar: varias fontes para o mesmo programa -> uma entrada (a sem argumentos, caminho mais curto)
             var candidates = new List<(string Name, string Lnk, string Identity, bool HasArgs)>();
             foreach (var root in new[]
             {
@@ -113,7 +99,6 @@ namespace DroidDeck.Services
                     if (name.Contains("uninstall", StringComparison.OrdinalIgnoreCase) ||
                         name.Contains("desinstal", StringComparison.OrdinalIgnoreCase)) continue;
                     var (target, args) = AppLibrary.ResolveShortcut(f);
-                    // So atalhos para programas (.exe): pastas, links e paginas de ajuda ficam de fora.
                     if (string.IsNullOrEmpty(target) || !target.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || !File.Exists(target)) continue;
                     if (System.IO.Path.GetFileName(target).Contains("unins", StringComparison.OrdinalIgnoreCase)) continue;
                     candidates.Add((name, f, AppLibrary.IdentityOf(target, args), !string.IsNullOrWhiteSpace(args)));
@@ -129,7 +114,6 @@ namespace DroidDeck.Services
                 };
             }
 
-            // 2) App Paths (programas registrados, abrem pelo nome do exe) que o Menu Iniciar nao cobre
             foreach (var (hive, view) in new[] { (RegistryHive.LocalMachine, RegistryView.Registry64), (RegistryHive.LocalMachine, RegistryView.Registry32), (RegistryHive.CurrentUser, RegistryView.Default) })
             {
                 try
@@ -155,18 +139,14 @@ namespace DroidDeck.Services
                 catch { }
             }
 
-            // 3) Apps da Loja / empacotados: sem caminho de arquivo; abrem pelo AppUserModelID
             foreach (var (name, id) in EnumeratePackaged())
             {
                 var identity = "pkg:" + id.ToLowerInvariant();
                 byIdentity[identity] = new InstalledItem { Key = Key(identity), Name = name, Kind = "packaged", Path = id, Identity = identity, Source = "Microsoft Store" };
             }
 
-            // 4) Jogos: Steam (manifestos de todas as bibliotecas) e Battle.net (product.db). Abrem pelo launcher.
             foreach (var g in SteamGames.Enumerate().Concat(BattleNetGames.Enumerate()))
             {
-                // Atalhos/programas registrados que apontam para DENTRO da pasta do jogo sao o mesmo jogo:
-                // fica so a entrada do launcher (identidade pelo caminho, nunca pelo nome).
                 var prefix = g.InstallDir.TrimEnd('\\').ToLowerInvariant() + "\\";
                 foreach (var dup in byIdentity.Where(kv => kv.Value.Kind == "file" && kv.Key.StartsWith(prefix, StringComparison.Ordinal)).Select(kv => kv.Key).ToList())
                     byIdentity.Remove(dup);
@@ -179,13 +159,11 @@ namespace DroidDeck.Services
             }
 
             var list = byIdentity.Values.ToList();
-            // Mesmo nome, programas diferentes: continuam separados; o detalhe os distingue na lista.
             foreach (var g in list.GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1))
                 foreach (var i in g) if (i.Detail.Length == 0) i.Detail = i.Source;
             return list;
         }
 
-        /// <summary>Apps empacotados (AppsFolder). Roda em thread STA (Shell.Application).</summary>
         private static List<(string Name, string Id)> EnumeratePackaged()
         {
             var result = new List<(string, string)>();
@@ -213,8 +191,6 @@ namespace DroidDeck.Services
             return result;
         }
 
-        // ---- icone de app empacotado (IShellItemImageFactory, com alfa) ----
-
         public static byte[]? ExtractPackagedIconPng(string aumid)
         {
             if (!IsValidAumid(aumid)) return null;
@@ -223,7 +199,7 @@ namespace DroidDeck.Services
             {
                 var iid = typeof(IShellItemImageFactory).GUID;
                 SHCreateItemFromParsingName("shell:AppsFolder\\" + aumid, IntPtr.Zero, ref iid, out var factory);
-                if (factory.GetImage(new SIZE { cx = 256, cy = 256 }, 0x4 /*ICONONLY: o icone de verdade (256 px); sem a flag volta um 44x44 pequeno*/, out hbm) != 0 || hbm == IntPtr.Zero) return null;
+                if (factory.GetImage(new SIZE { cx = 256, cy = 256 }, 0x4  , out hbm) != 0 || hbm == IntPtr.Zero) return null;
                 using var bmp = ArgbFromHBitmap(hbm);
                 return bmp == null ? null : AppLibrary.FitToPng(bmp);
             }

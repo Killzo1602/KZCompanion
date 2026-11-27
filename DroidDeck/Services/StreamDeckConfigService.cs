@@ -40,7 +40,6 @@ namespace DroidDeck.Services
             LoadLayout();
         }
 
-        // ---- Grade física do deck (definida pelo celular, usada pelo configurador) ----
         public DeviceLayout GetLayout()
         {
             lock (_lock)
@@ -109,10 +108,6 @@ namespace DroidDeck.Services
             return GetProfiles().FirstOrDefault(p => p.Id == id);
         }
 
-        // SEGURANÇA: o Id vem do corpo JSON do cliente e é usado para compor um caminho de
-        // arquivo. Sem validação, "..\\..\\..\\algo" permitiria escrever/apagar fora da pasta
-        // de perfis (path traversal). Ids legítimos são GUID (backend) ou timestamp numérico
-        // (app) — ambos casam com este charset. Rejeita separadores, "." e vazio.
         public static bool IsValidProfileId(string? id)
         {
             if (string.IsNullOrEmpty(id) || id.Length > 128) return false;
@@ -136,13 +131,10 @@ namespace DroidDeck.Services
                 {
                     var filePath = Path.Combine(_profilesDirectory, $"{profile.Id}.json");
                     var json = JsonSerializer.Serialize(profile, _jsonOptions);
-                    // Grava ao lado e troca: uma queda no meio nao deixa o perfil truncado.
                     var tmp = filePath + ".tmp";
                     File.WriteAllText(tmp, json);
                     MoveWithRetry(tmp, filePath);
 
-                    // Substitui no mesmo lugar. Remover e adicionar no fim mudava a ordem dos
-                    // perfis a cada edicao, e o celular abria em outra pagina do deck.
                     var index = _cache.FindIndex(p => p.Id == profile.Id);
                     if (index >= 0)
                         _cache[index] = profile;
@@ -156,10 +148,6 @@ namespace DroidDeck.Services
             }
         }
 
-        /// <summary>
-        /// No Windows, trocar um arquivo que alguem esta lendo (antivirus, backup) falha na hora. A
-        /// leitura dura pouco: sem tentar de novo, a edicao do perfil se perdia.
-        /// </summary>
         private static void MoveWithRetry(string from, string to)
         {
             const int attempts = 5;
@@ -179,12 +167,6 @@ namespace DroidDeck.Services
 
         public enum CopyButtonResult { Ok, NotFound, Occupied, SamePlace }
 
-        /// <summary>
-        /// Copia (ou move) um botao salvo para a casa (row, column) de outro perfil -- ou do
-        /// mesmo, para duplicar. Le o botao do perfil gravado: o cliente nao manda o conteudo,
-        /// entao copiar um atalho pelo celular nao abre brecha na ActionPolicy. Mover mantem
-        /// o id (o liga/desliga do botao vai junto); a copia ganha um id novo.
-        /// </summary>
         public CopyButtonResult CopyButton(string fromProfileId, string buttonId, string toProfileId, int row, int column, bool move)
         {
             lock (_lock)
@@ -198,7 +180,6 @@ namespace DroidDeck.Services
                 if (to.Buttons.Any(b => b.Row == row && b.Column == column))
                     return CopyButtonResult.Occupied;
 
-                // Copias por JSON: o cache devolve os proprios objetos.
                 var target = Clone(to);
                 var copy = Clone(button);
                 copy.Id = move ? button.Id : Guid.NewGuid().ToString();
@@ -284,11 +265,6 @@ namespace DroidDeck.Services
 
         public const string KeyboardProfileId = "keyboard_profile";
 
-        /// <summary>
-        /// Perfil "Teclado" de exemplo, com duas pastas (F1-F12 e "Mais"). Cada pagina tem
-        /// 3x5, a grade padrao: botao fora da grade do celular some, entao um perfil maior
-        /// perdia as setas num celular de grade pequena.
-        /// </summary>
         public static List<DeckProfile> CreateKeyboardProfiles()
         {
             const string fkeysId = "keyboard_fkeys", moreId = "keyboard_more";
@@ -325,7 +301,7 @@ namespace DroidDeck.Services
             {
                 Row = row,
                 Column = col,
-                Label = L.T("Voltar"),
+                Label = L.T("Back"),
                 IconName = "arrow_back",
                 BackgroundColor = "#303040",
                 Action = new DeckAction { Type = "back" },
@@ -334,7 +310,7 @@ namespace DroidDeck.Services
             var main = new DeckProfile
             {
                 Id = KeyboardProfileId,
-                Name = L.T("Teclado"),
+                Name = L.T("Keyboard"),
                 Rows = 3,
                 Columns = 5,
                 Buttons =
@@ -344,7 +320,6 @@ namespace DroidDeck.Services
                     Key(0, 2, "", "UP", icon: "arrow_upward", bg: "#252538"),
                     Key(0, 3, "", "BACKSPACE", icon: "backspace"),
                     Key(0, 4, "", "ENTER", icon: "keyboard_return", bg: "#203025"),
-                    // Modificadores: travam ate a proxima tecla (Shift + seta seleciona).
                     Key(1, 0, "SHIFT", "SHIFT", "oneshot", bg: "#2A2A38"),
                     Key(1, 1, "", "LEFT", icon: "arrow_back", bg: "#252538"),
                     Key(1, 2, "", "DOWN", icon: "arrow_downward", bg: "#252538"),
@@ -354,11 +329,11 @@ namespace DroidDeck.Services
                     Key(2, 1, "ALT", "ALT", "oneshot", bg: "#2A2A38"),
                     Key(2, 2, "WIN", "WIN", "oneshot", bg: "#2A2A38"),
                     Folder(2, 3, "F1–F12", fkeysId),
-                    Folder(2, 4, L.T("Mais"), moreId),
+                    Folder(2, 4, L.T("More"), moreId),
                 },
             };
 
-            var fkeys = new DeckProfile { Id = fkeysId, Name = L.T("Teclado") + " · F1–F12", Rows = 3, Columns = 5 };
+            var fkeys = new DeckProfile { Id = fkeysId, Name = L.T("Keyboard") + " · F1–F12", Rows = 3, Columns = 5 };
             for (int i = 0; i < 12; i++)
                 fkeys.Buttons.Add(Key(i / 5, i % 5, $"F{i + 1}", $"F{i + 1}", bg: "#202028"));
             fkeys.Buttons.Add(Back(2, 4));
@@ -366,21 +341,21 @@ namespace DroidDeck.Services
             var more = new DeckProfile
             {
                 Id = moreId,
-                Name = L.T("Teclado") + " · " + L.T("Mais"),
+                Name = L.T("Keyboard") + " · " + L.T("More"),
                 Rows = 3,
                 Columns = 5,
                 Buttons =
                 {
-                    Shortcut(0, 0, "Copiar", "^c", "content_copy"),
-                    Shortcut(0, 1, "Colar", "^v", "content_paste"),
-                    Shortcut(0, 2, "Recortar", "^x", "content_cut"),
-                    Shortcut(0, 3, "Desfazer", "^z", "undo"),
-                    Shortcut(0, 4, "Selecionar tudo", "^a", "select_all"),
+                    Shortcut(0, 0, "Copy", "^c", "content_copy"),
+                    Shortcut(0, 1, "Paste", "^v", "content_paste"),
+                    Shortcut(0, 2, "Cut", "^x", "content_cut"),
+                    Shortcut(0, 3, "Undo", "^z", "undo"),
+                    Shortcut(0, 4, "Select all", "^a", "select_all"),
                     Key(1, 0, "HOME", "HOME"),
                     Key(1, 1, "END", "END"),
                     Key(1, 2, "PG UP", "PGUP"),
                     Key(1, 3, "PG DN", "PGDN"),
-                    Shortcut(1, 4, "Fechar janela", "%{F4}", "close"),
+                    Shortcut(1, 4, "Close window", "%{F4}", "close"),
                     Key(2, 0, "INS", "INSERT"),
                     Key(2, 1, "DEL", "DELETE", bg: "#352020"),
                     Back(2, 4),

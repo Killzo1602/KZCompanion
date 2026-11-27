@@ -8,16 +8,11 @@ using DroidDeck.Actions;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Acao "keylight": Elgato Key Light, Key Light Air e Light Strip pela API HTTP local da
-    /// luz (porta 9123). Cada botao leva o IP da luz; nao ha conta nem configuracao.
-    /// </summary>
     public class KeyLightProvider : IActionProvider
     {
         public const string TypeName = "keylight";
         public const int DefaultPort = 9123;
 
-        /// <summary>Faixa da temperatura nas luzes Elgato (em Kelvin).</summary>
         public const int MinKelvin = 2900, MaxKelvin = 7000;
 
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
@@ -33,25 +28,25 @@ namespace DroidDeck.Integrations
             Type = TypeName,
             Title = "Elgato Key Light",
             Icon = "wb_incandescent",
-            Category = "Casa",
-            Description = "Liga, desliga, brilho e temperatura de cor das luzes Elgato (Key Light, Light Strip) pela rede local.",
+            Category = "Home",
+            Description = "On, off, brightness and color temperature of Elgato lights (Key Light, Light Strip) over the local network.",
             Fields =
             {
-                ActionField.Text("host", "IP da luz", "192.168.0.50",
-                    "Aparece no Elgato Control Center, nas configurações da luz. Porta diferente: 192.168.0.50:9123.", required: true),
-                ActionField.Select("operation", "O que fazer",
-                    ("toggle", "Liga/desliga"),
-                    ("on", "Ligar"),
-                    ("off", "Desligar"),
-                    ("brightness", "Definir o brilho"),
-                    ("brightness_step", "Brilho (+/-)"),
-                    ("temperature", "Definir a temperatura"),
-                    ("temperature_step", "Temperatura (+/-)")),
-                ActionField.Number("brightness", "Brilho", 50, 1, 100, "%").When("operation", "brightness"),
-                ActionField.Number("step", "Passo do brilho", 10, -100, 100, "%").When("operation", "brightness_step"),
-                ActionField.Number("kelvin", "Temperatura", 4500, MinKelvin, MaxKelvin, "K").When("operation", "temperature"),
-                ActionField.Number("kelvinStep", "Passo da temperatura", 300, -4000, 4000, "K",
-                    "Positivo deixa a luz mais fria (azulada).").When("operation", "temperature_step"),
+                ActionField.Text("host", "Light IP", "192.168.0.50",
+                    "Shown in Elgato Control Center, in the light's settings. Different port: 192.168.0.50:9123.", required: true),
+                ActionField.Select("operation", "What to do",
+                    ("toggle", "Toggle on/off"),
+                    ("on", "Turn on"),
+                    ("off", "Turn off"),
+                    ("brightness", "Set brightness"),
+                    ("brightness_step", "Brightness (+/-)"),
+                    ("temperature", "Set temperature"),
+                    ("temperature_step", "Temperature (+/-)")),
+                ActionField.Number("brightness", "Brightness", 50, 1, 100, "%").When("operation", "brightness"),
+                ActionField.Number("step", "Brightness step", 10, -100, 100, "%").When("operation", "brightness_step"),
+                ActionField.Number("kelvin", "Temperature", 4500, MinKelvin, MaxKelvin, "K").When("operation", "temperature"),
+                ActionField.Number("kelvinStep", "Temperature step", 300, -4000, 4000, "K",
+                    "Positive makes the light cooler (bluer).").When("operation", "temperature_step"),
             },
         };
 
@@ -62,7 +57,6 @@ namespace DroidDeck.Integrations
             var client = _http.CreateClient();
             client.Timeout = Timeout;
 
-            // Ligar/desligar/definir nao precisam do estado atual; o resto le antes.
             JsonObject? current = null;
             if (op is "toggle" or "brightness_step" or "temperature_step")
                 current = JsonNode.Parse(await client.GetStringAsync(url)) as JsonObject;
@@ -74,22 +68,17 @@ namespace DroidDeck.Integrations
             response.EnsureSuccessStatusCode();
         }
 
-        /// <summary>http://ip:9123/elgato/lights a partir do que o usuario digitou ("ip" ou "ip:porta").</summary>
         public static Uri LightsUrl(string host)
         {
             var h = host.Trim();
             if (h.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) h = h[7..];
             h = h.TrimEnd('/');
             if (h.Length == 0 || !Uri.TryCreate("http://" + h, UriKind.Absolute, out var parsed) || parsed.PathAndQuery != "/")
-                throw new InvalidOperationException("IP da luz inválido.");
+                throw new InvalidOperationException("Invalid light IP.");
             var port = parsed.IsDefaultPort && !h.EndsWith(":80") ? DefaultPort : parsed.Port;
             return new UriBuilder("http", parsed.Host, port, "/elgato/lights").Uri;
         }
 
-        /// <summary>
-        /// Corpo do PUT. A API aceita so os campos que mudam; com varias luzes no mesmo
-        /// aparelho (Light Strip), muda todas. <paramref name="current"/> e o GET (para alternar e somar).
-        /// </summary>
         public static JsonObject BuildPayload(string op, JsonObject? current, int brightness, int step, int kelvin, int kelvinStep)
         {
             var lights = current?["lights"] as JsonArray;
@@ -125,7 +114,7 @@ namespace DroidDeck.Integrations
                         light["temperature"] = ToElgato(ToKelvin(Int(now, "temperature", ToElgato(4500))) + kelvinStep);
                         break;
                     default:
-                        throw new InvalidOperationException("Operação desconhecida.");
+                        throw new InvalidOperationException("Unknown operation.");
                 }
                 array.Add(light);
             }
@@ -135,7 +124,6 @@ namespace DroidDeck.Integrations
         private static int Int(JsonObject? o, string key, int fallback) =>
             o?[key] is JsonValue v && v.TryGetValue<int>(out var n) ? n : fallback;
 
-        /// <summary>A luz guarda a temperatura em "mired" (143 = 7000 K, 344 = 2900 K).</summary>
         public static int ToElgato(int kelvin) =>
             Math.Clamp((int)Math.Round(1_000_000.0 / Math.Clamp(kelvin, MinKelvin, MaxKelvin)), 143, 344);
 

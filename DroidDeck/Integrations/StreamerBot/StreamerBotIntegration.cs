@@ -16,11 +16,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Streamer.bot pelo servidor WebSocket dele (Servers/Clients → WebSocket Server, padrao
-    /// ws://127.0.0.1:8080/). Os botoes disparam acoes do Streamer.bot (DoAction), com argumentos.
-    /// Se o servidor tiver senha, o aperto de mao e o mesmo do obs-websocket (SHA-256 com sal).
-    /// </summary>
     public class StreamerBotIntegration : AccountIntegration
     {
         public const string Event = "ReceiveStreamerBotState";
@@ -53,14 +48,13 @@ namespace DroidDeck.Integrations
 
         public override object GetState() => new { connected = _connected };
 
-        /// <summary>"127.0.0.1:8080" ou "ws://..." para uma URL ws:// valida.</summary>
         public static Uri ParseUrl(string? value)
         {
             var s = (value ?? "").Trim();
             if (s.Length == 0) s = DefaultUrl;
             if (!s.Contains("://")) s = "ws://" + s;
             if (!Uri.TryCreate(s, UriKind.Absolute, out var uri) || (uri.Scheme != "ws" && uri.Scheme != "wss"))
-                throw new InvalidOperationException("Endereço inválido. Ex.: ws://127.0.0.1:8080/");
+                throw new InvalidOperationException("Invalid address. E.g.: ws://127.0.0.1:8080/");
             return uri;
         }
 
@@ -109,7 +103,7 @@ namespace DroidDeck.Integrations
                     if (!_reconnect.IsCancellationRequested)
                     {
                         _error = ex is WebSocketException or TimeoutException
-                            ? "Não foi possível conectar ao Streamer.bot. Ligue o WebSocket Server dele (Servers/Clients)."
+                            ? "Couldn't connect to Streamer.bot. Turn on its WebSocket Server (Servers/Clients)."
                             : ex.Message;
                         Logger.LogInformation("Streamer.bot: {Error}", ex.Message);
                     }
@@ -137,9 +131,6 @@ namespace DroidDeck.Integrations
                 await socket.ConnectAsync(ParseUrl(Url), connect.Token);
             }
 
-            // Versoes novas mandam "Hello" logo ao conectar (com o desafio, se houver senha);
-            // as antigas nao mandam nada. Cancelar uma leitura derruba o WebSocket, entao o
-            // Hello vem pelo laco de leitura, com prazo.
             var helloTcs = new TaskCompletionSource<JsonNode>(TaskCreationOptions.RunContinuationsAsynchronously);
             var run = socket.RunAsync(m =>
             {
@@ -149,7 +140,7 @@ namespace DroidDeck.Integrations
             if (first == run)
             {
                 await run;
-                throw new WebSocketException("O Streamer.bot fechou a conexão.");
+                throw new WebSocketException("Streamer.bot closed the connection.");
             }
             ct.ThrowIfCancellationRequested();
             var hello = helloTcs.Task.IsCompletedSuccessfully ? helloTcs.Task.Result : null;
@@ -157,7 +148,7 @@ namespace DroidDeck.Integrations
 
             if (hello?["authentication"] is JsonObject auth)
             {
-                var password = Get("password") ?? throw new InvalidOperationException("O Streamer.bot pede senha. Preencha a senha do WebSocket Server.");
+                var password = Get("password") ?? throw new InvalidOperationException("Streamer.bot asks for a password. Fill in the WebSocket Server password.");
                 var id = NextId();
                 var reply = await socket.RequestAsync(id, new JsonObject
                 {
@@ -166,7 +157,7 @@ namespace DroidDeck.Integrations
                     ["authentication"] = AuthResponse(password, auth["salt"]?.GetValue<string>() ?? "", auth["challenge"]?.GetValue<string>() ?? ""),
                 }, TimeSpan.FromSeconds(5), ct);
                 if (reply["status"]?.GetValue<string>() != "ok")
-                    throw new InvalidOperationException("Senha recusada pelo Streamer.bot.");
+                    throw new InvalidOperationException("Streamer.bot rejected the password.");
             }
 
             _connected = true;
@@ -177,21 +168,16 @@ namespace DroidDeck.Integrations
 
         private string NextId() => "dd" + Interlocked.Increment(ref _nextId);
 
-        /// <summary>base64(sha256(base64(sha256(senha + sal)) + desafio)), como no obs-websocket.</summary>
         public static string AuthResponse(string password, string salt, string challenge)
         {
             var secret = Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(password + salt)));
             return Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(secret + challenge)));
         }
 
-        /// <summary>
-        /// Pedido DoAction. Um GUID vai como id; qualquer outro texto, como nome da acao.
-        /// Argumentos: JSON ({"chave": "valor"}) ou uma linha "chave=valor" por argumento.
-        /// </summary>
         public static JsonObject BuildDoAction(string id, string action, string args)
         {
             var a = action.Trim();
-            if (a.Length == 0) throw new InvalidOperationException("Escolha uma ação do Streamer.bot.");
+            if (a.Length == 0) throw new InvalidOperationException("Choose a Streamer.bot action.");
             var target = Guid.TryParse(a, out _) ? new JsonObject { ["id"] = a } : new JsonObject { ["name"] = a };
             var request = new JsonObject { ["request"] = "DoAction", ["id"] = id, ["action"] = target };
             if (ParseArgs(args) is { Count: > 0 } parsed) request["args"] = parsed;
@@ -205,7 +191,7 @@ namespace DroidDeck.Integrations
             if (text.StartsWith('{'))
             {
                 try { return JsonNode.Parse(text) as JsonObject ?? throw new FormatException(); }
-                catch (Exception) { throw new InvalidOperationException("Argumentos em JSON inválidos."); }
+                catch (Exception) { throw new InvalidOperationException("Invalid JSON arguments."); }
             }
             var result = new JsonObject();
             foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -220,19 +206,17 @@ namespace DroidDeck.Integrations
         private async Task<JsonNode> RequestAsync(Func<string, JsonObject> build)
         {
             var socket = _socket;
-            if (!_connected || socket == null) throw new InvalidOperationException("Streamer.bot desconectado.");
+            if (!_connected || socket == null) throw new InvalidOperationException("Streamer.bot disconnected.");
             var id = NextId();
             JsonNode reply;
             try { reply = await socket.RequestAsync(id, build(id), TimeSpan.FromSeconds(8)); }
-            catch (TimeoutException) { throw new TimeoutException("O Streamer.bot não respondeu."); }
+            catch (TimeoutException) { throw new TimeoutException("Streamer.bot didn't respond."); }
             if (reply["status"]?.GetValue<string>() is { } status && status != "ok")
-                throw new InvalidOperationException(reply["error"]?.GetValue<string>() ?? "O Streamer.bot recusou.");
+                throw new InvalidOperationException(reply["error"]?.GetValue<string>() ?? "Streamer.bot refused.");
             return reply;
         }
 
         public Task DoActionAsync(string action, string args) => RequestAsync(id => BuildDoAction(id, action, args));
-
-        // ---- Listas do editor ----
 
         public override async Task<List<FieldOption>> OptionsAsync(string list, IQueryCollection query)
         {
@@ -241,7 +225,6 @@ namespace DroidDeck.Integrations
             return ParseActions(reply);
         }
 
-        /// <summary>Acoes ativas, agrupadas pelo grupo do Streamer.bot ("Grupo / Acao").</summary>
         public static List<FieldOption> ParseActions(JsonNode reply) =>
             (reply["actions"] as JsonArray ?? new JsonArray())
                 .Where(a => a?["enabled"]?.GetValue<bool>() != false && a?["id"] != null)

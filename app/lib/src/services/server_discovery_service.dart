@@ -20,7 +20,6 @@ class ServerDiscoveryService {
 
     if (wifiIP != null) {
       try {
-        // Assume /24 subnet (Standard for Home WiFi)
         final lastDot = wifiIP.lastIndexOf('.');
         if (lastDot != -1) {
           String broadcast = '${wifiIP.substring(0, lastDot)}.255';
@@ -33,9 +32,6 @@ class ServerDiscoveryService {
         debugPrint('Discovery: Error calculating broadcast: $e');
       }
     }
-
-    // fallback to generic 192.168.x.255 if nothing found?
-    // Usually 255.255.255.255 covers it if routed, but calculated is better.
 
     for (var target in targets) {
       try {
@@ -60,13 +56,10 @@ class ServerDiscoveryService {
             final json = jsonDecode(response) as Map<String, dynamic>;
             if (json.containsKey('ip') && !responseCompleter.isCompleted) {
               responseCompleter.complete(json['ip'] as String);
-              // So fecha ao achar de verdade. Antes fechava no 1o datagrama mesmo
-              // malformado/de outro servico, impedindo ler as respostas seguintes.
               socket.close();
             }
           } catch (e) {
             debugPrint('Discovery: Error parsing response: $e');
-            // Nao fecha: continua ouvindo ate o timeout (pode vir outro pacote valido).
           }
         }
       }

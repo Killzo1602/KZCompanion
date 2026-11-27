@@ -7,11 +7,6 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DroidDeck.Controllers
 {
-    /// <summary>
-    /// Aplicativos abertos no PC (secao "Running now" da tela Apps). Tudo e por id de aplicativo
-    /// (hash do .exe) e id de janela (HWND + processo): o servidor reenumera e confere a identidade
-    /// antes de cada acao. Nunca recebe caminho, titulo ou PID do cliente.
-    /// </summary>
     [Route("api/running-apps")]
     [ApiController]
     [Authorize]
@@ -45,7 +40,6 @@ namespace DroidDeck.Controllers
         public IActionResult Minimize(string id, [FromQuery] string? windowId = null) =>
             !Valid(id, windowId) ? BadRequest(new { error = "invalid_id" }) : Map(_apps.Minimize(id, windowId));
 
-        /// <summary>Fecha pedindo ao app (WM_CLOSE). Exige confirm=true: o celular pergunta antes.</summary>
         [HttpPost("{id}/close")]
         public async Task<IActionResult> Close(string id, [FromQuery] string? windowId = null, [FromQuery] bool confirm = false)
         {

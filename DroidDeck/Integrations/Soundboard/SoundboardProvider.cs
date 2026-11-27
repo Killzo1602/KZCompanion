@@ -36,13 +36,11 @@ namespace DroidDeck.Actions.Providers
 
             if (c.Get("source", "myinstants").ToLowerInvariant() == "discord")
             {
-                // Toca um som da soundboard NATIVA do Discord no canal de voz atual (sem cabo).
                 var guildId = c.Get("guildId");
                 await _discord.PlaySoundboardSoundAsync(c.Get("soundId"), guildId.Length > 0 ? guildId : null);
                 return;
             }
 
-            // MyInstants: toca o mp3 no dispositivo de saída configurado.
             var title = c.Get("title");
             await _soundboard.PlayAsync(c.Get("id"), c.Get("url"), title.Length > 0 ? title : null);
         }

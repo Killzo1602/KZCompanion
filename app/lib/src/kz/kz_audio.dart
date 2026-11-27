@@ -18,7 +18,6 @@ class AudioSession {
   });
 
   final String id;
-  /// Identidade do aplicativo (hash do .exe no PC): sessoes do mesmo programa se agrupam por ela.
   final String groupKey;
 
   AudioSession copyWith({int? volume, bool? muted}) => AudioSession(
@@ -58,9 +57,9 @@ class AudioState {
   });
 
   final String outputName;
-  final int? volume; // null = o PC nao tem dispositivo de saida
+  final int? volume;
   final bool muted;
-  final bool? inputMuted; // null = sem microfone
+  final bool? inputMuted;
   final bool deafened;
   final List<AudioSession> sessions;
 
@@ -77,9 +76,6 @@ class AudioState {
       );
 }
 
-/// Espelho do audio do Windows (que e a fonte da verdade). Chega por push a cada mudanca no PC;
-/// comandos do celular so aplicam no PC e o estado confirmado volta pelo mesmo push. Itens que o
-/// usuario esta arrastando (ou acabou de soltar) ignoram o push por um instante, sem loop.
 class AudioStore {
   AudioStore({DroidDeckClient? client, SignalRService? signalR})
       : client = client ?? Injector.get<DroidDeckClient>(),
@@ -101,19 +97,17 @@ class AudioStore {
 
   final state = signal<AudioState?>(null);
 
-  /// null = ainda nao sabe; false = o app do PC e antigo (sem /api/audio): a tela avisa em vez de ficar muda.
   final supported = signal<bool?>(null);
   final lastError = signal<String?>(null);
   final icons = signal<Map<String, Uint8List>>({});
 
   final _disposers = <void Function()>[];
-  final _lockUntil = <String, DateTime>{}; // "master" ou id da sessao
+  final _lockUntil = <String, DateTime>{};
   final _lastSend = <String, DateTime>{};
   Timer? _refreshDebounce;
 
   bool get online => signalR.linkState.value == 'online';
 
-  /// Busca o estado completo (com icones). Chamado ao conectar, ao voltar ao app e se aparecer sessao desconhecida.
   Future<void> refresh() async {
     try {
       final j = await client.getAudio();
@@ -133,7 +127,7 @@ class AudioStore {
     } on DioException catch (e) {
       final code = e.response?.statusCode;
       if (code == 404) {
-        supported.value = false; // PC com versao antiga do KZ Companion
+        supported.value = false;
         signalR.diag('audio: PC app has no /api/audio (404): outdated');
       } else {
         lastError.value = friendlyError(e);
@@ -150,7 +144,6 @@ class AudioStore {
     final prev = state.value;
     final now = DateTime.now();
 
-    // Sessoes que o usuario esta mexendo agora mantem o valor local ate o PC confirmar.
     if (prev != null) {
       next = AudioState(
         outputName: next.outputName,
@@ -169,7 +162,6 @@ class AudioStore {
     }
     state.value = next;
 
-    // Sessao nova sem icone: pede o estado completo uma vez (o push nao leva icones).
     if (fromPush && next.sessions.any((s) => !s.system && !icons.value.containsKey(s.id))) {
       _refreshDebounce?.cancel();
       _refreshDebounce = Timer(const Duration(milliseconds: 400), refresh);
@@ -192,8 +184,6 @@ class AudioStore {
     return false;
   }
 
-  // ---- comandos (otimistas: a tela responde ja; o PC confirma pelo push) ----
-
   void setMasterVolume(int v, {bool commit = false}) {
     final s = state.value;
     if (s == null) return;
@@ -208,7 +198,6 @@ class AudioStore {
     if (commit || !_throttled('master')) _send(() => client.setAudioMaster(volume: v));
   }
 
-  /// Mudo do ALTO-FALANTE (Windows). So a tela Controls usa; o botao Mute do painel e do microfone.
   void toggleMasterMute() {
     final s = state.value;
     if (s == null) return;
@@ -224,22 +213,18 @@ class AudioStore {
     _send(() => client.setAudioMaster(mute: m));
   }
 
-  /// Mudo do MICROFONE padrao do Windows: so ele. Nao mexe na saida nem no volume.
-  /// O estado mostrado e o que o PC confirma (resposta do comando), nao um palpite.
   void toggleMicMute() {
     final s = state.value;
     if (s == null || s.inputMuted == null) return;
     _send(() async => _applyConfirmed(await client.setAudioMic(!s.inputMuted!)));
   }
 
-  /// Deafen/undeafen: o PC decide (e restaura o mudo anterior); a tela so reflete a resposta.
   void toggleDeafen() {
     final s = state.value;
     if (s == null) return;
     _send(() async => _applyConfirmed(await client.setDeafen(!s.deafened)));
   }
 
-  /// Resposta de um comando: estado confirmado pelo Windows, aplicado sem travas locais.
   void _applyConfirmed(Map<String, dynamic> j) {
     _lockUntil.remove('master');
     _apply(j, fromPush: false);
@@ -260,7 +245,6 @@ class AudioStore {
     _send(() => client.setAudioSession(id, mute: m));
   }
 
-  /// Grupos abertos no mixer (por groupKey); fica aqui para sobreviver a reconstrucoes.
   final expanded = signal<Set<String>>({});
 
   void toggleExpanded(String groupKey) {
@@ -269,7 +253,6 @@ class AudioStore {
     expanded.value = next;
   }
 
-  /// Slider principal do grupo: aplica o MESMO volume em cada sessao (so quando o usuario o move).
   void setGroupVolume(String groupKey, List<String> ids, int v, {bool commit = false}) {
     final s = state.value;
     if (s == null) return;
@@ -287,7 +270,6 @@ class AudioStore {
     if (commit || !_throttled('g:$groupKey')) _send(() => client.setAudioSessions(ids, volume: v));
   }
 
-  /// Mudo principal do grupo: se alguma sessao esta sem mudo, muta todas; se todas ja estao, desmuta todas.
   void toggleGroupMute(List<AudioSession> members) {
     final mute = !members.every((m) => m.muted);
     final ids = [for (final m in members) m.id];
@@ -324,7 +306,6 @@ class AudioStore {
     try {
       await call();
     } on DioException catch (e) {
-      // 404 = a sessao fechou enquanto o dedo estava no slider: so atualiza a lista.
       final code = e.response?.statusCode;
       signalR.diag('audio command failed: ${code ?? e.type.name}');
       if (code == 404) {

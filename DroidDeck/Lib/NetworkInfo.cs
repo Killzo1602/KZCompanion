@@ -8,12 +8,6 @@ namespace DroidDeck.Lib
 {
     public static class NetworkInfo
     {
-        /// <summary>
-        /// IP deste PC na interface que alcança <paramref name="remote"/>. "Conectar" um
-        /// socket UDP só consulta a tabela de rotas, não envia nada. Responder o discovery com
-        /// isto acerta a placa certa em PC com várias interfaces (VPN, WSL, Hyper-V), não
-        /// depende de rota para a internet e acompanha troca de IP pelo DHCP.
-        /// </summary>
         public static string GetLocalIpFor(IPAddress remote)
         {
             try
@@ -26,15 +20,10 @@ namespace DroidDeck.Lib
             }
             catch
             {
-                // sem rota para o remetente: cai no IP genérico da LAN
             }
             return GetLanIp();
         }
 
-        /// <summary>
-        /// IP da LAN para o QR de pareamento: a interface da rota padrão; sem internet (sem
-        /// rota padrão), a melhor interface ativa com IPv4 privado.
-        /// </summary>
         public static string GetLanIp()
         {
             try
@@ -46,7 +35,6 @@ namespace DroidDeck.Lib
             }
             catch
             {
-                // sem rota padrão (PC offline): procura nas interfaces
             }
             return FindLanIpFromInterfaces() ?? "127.0.0.1";
         }
@@ -60,8 +48,8 @@ namespace DroidDeck.Lib
                 let props = nic.GetIPProperties()
                 from addr in props.UnicastAddresses
                 where addr.Address.AddressFamily == AddressFamily.InterNetwork && IsPrivate(addr.Address)
-                orderby IsVirtual(nic) ascending,                      // placa física primeiro
-                        props.GatewayAddresses.Count > 0 descending    // depois a que tem gateway
+                orderby IsVirtual(nic) ascending,
+                        props.GatewayAddresses.Count > 0 descending
                 select addr.Address.ToString();
             return candidates.FirstOrDefault();
         }

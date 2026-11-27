@@ -10,14 +10,8 @@ using Microsoft.Win32;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Jogos instalados na Steam: le as bibliotecas (libraryfolders.vdf) e os manifestos
-    /// (appmanifest_*.acf), e monta um icone quadrado a partir da capa que a Steam guarda
-    /// em appcache/librarycache. Nada disso exige login nem rede.
-    /// </summary>
     public class SteamLibrary
     {
-        /// <summary>Ferramentas que a Steam instala como "apps" e nao sao jogos.</summary>
         private static readonly HashSet<string> NotGames = new() { "228980", "1070560", "1391110", "1628350", "1493710" };
 
         private static readonly Regex PathRx = new("\"path\"\\s+\"([^\"]+)\"", RegexOptions.Compiled);
@@ -81,11 +75,6 @@ namespace DroidDeck.Services
             return games.Values.OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList();
         }
 
-        /// <summary>
-        /// Icone quadrado (PNG em base64) para o botao: o miolo da capa vertical, ou a capa
-        /// horizontal se a vertical nao estiver no cache. Null se a Steam ainda nao baixou
-        /// nenhuma imagem do jogo.
-        /// </summary>
         public string? IconBase64(string appId, int size = 192)
         {
             if (!Regex.IsMatch(appId, @"^\d+$")) return null;
@@ -106,8 +95,6 @@ namespace DroidDeck.Services
             try
             {
                 using var source = Image.FromFile(file);
-                // Recorte quadrado no centro; numa capa vertical, um pouco acima do meio,
-                // onde costuma ficar o personagem/arte principal.
                 var side = Math.Min(source.Width, source.Height);
                 var x = (source.Width - side) / 2;
                 var y = source.Height > source.Width ? (source.Height - side) / 3 : (source.Height - side) / 2;

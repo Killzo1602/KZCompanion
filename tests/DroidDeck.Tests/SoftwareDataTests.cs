@@ -14,7 +14,6 @@ namespace DroidDeck.Tests
             var context = new ValidationContext(data);
             var results = new List<ValidationResult>();
 
-            // The class has [Required] on Name
             bool isValid = Validator.TryValidateObject(data, context, results, true);
             Assert.False(isValid);
         }

@@ -19,10 +19,6 @@ namespace DroidDeck.Services
                 SetForegroundWindow(h);
         }
 
-        /// <summary>
-        /// Sintaxe do SendKeys (^ Ctrl, + Shift, % Alt, {ENTER}...) mais # = Win, enviada
-        /// com SendInput. Sintaxe invalida lanca FormatException antes de apertar qualquer tecla.
-        /// </summary>
         public void SendKeys(string keys)
         {
             if (string.IsNullOrEmpty(keys)) return;
@@ -35,7 +31,7 @@ namespace DroidDeck.Services
             {
                 FileName = path,
                 Arguments = arguments ?? "",
-                UseShellExecute = true // Allows opening URLs and documents
+                UseShellExecute = true
             };
             System.Diagnostics.Process.Start(startInfo);
         }

@@ -12,7 +12,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Sem rede: responde na hora com dados de exemplo (sem timers de timeout do Dio pendentes).
 class _FakePc implements HttpClientAdapter {
   _FakePc(this.sessions);
   final int sessions;
@@ -71,10 +70,10 @@ Future<void> _pumpAt(WidgetTester tester, Size physical, double dpr, {required S
         home: Scaffold(
           body: SafeArea(
             child: Row(children: [
-              const SizedBox(width: 73), // faixa de navegacao
+              const SizedBox(width: 73),
               Expanded(
                 child: Column(children: [
-                  const SizedBox(height: 30), // cabecalho compacto
+                  const SizedBox(height: 30),
                   Expanded(child: KzBackdrop(child: DashboardPage(c: c, onOpenApps: () {}))),
                 ]),
               ),
@@ -112,7 +111,6 @@ void main() {
   });
 }
 
-/// As opções de Aparência do painel nunca podem quebrar o layout no Mate 20 Lite deitado.
 void appearanceVariants() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(KzPrefs.resetDashboard);

@@ -4,7 +4,6 @@ using DroidDeck.Actions;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>Acao "govee": liga/desliga, brilho, cor e temperatura pela API LAN da Govee.</summary>
     public class GoveeProvider : IActionProvider
     {
         public const string TypeName = "govee";
@@ -20,22 +19,22 @@ namespace DroidDeck.Integrations
             Type = TypeName,
             Title = "Govee",
             Icon = "light_mode",
-            Category = "Casa",
-            Description = "Lâmpadas e fitas Govee pela rede local (precisa do Controle LAN ligado no app Govee Home).",
+            Category = "Home",
+            Description = "Govee bulbs and strips over the local network (needs LAN Control enabled in the Govee Home app).",
             Fields =
             {
-                ActionField.Dynamic("ip", "Aparelho", "/api/govee/devices",
-                    "Procura na rede ao abrir. Se não aparecer, digite o IP do aparelho.", allowCustom: true),
-                ActionField.Select("operation", "O que fazer",
-                    ("toggle", "Liga/desliga"),
-                    ("on", "Ligar"),
-                    ("off", "Desligar"),
-                    ("brightness", "Definir o brilho"),
-                    ("color", "Definir a cor"),
-                    ("temperature", "Definir a temperatura (branco)")),
-                ActionField.Number("brightness", "Brilho", 100, 1, 100, "%").When("operation", "brightness"),
-                ActionField.Text("color", "Cor", "#FF8000", "No formato #RRGGBB.").WithDefault("#FF8000").When("operation", "color"),
-                ActionField.Number("kelvin", "Temperatura", 4000, 2000, 9000, "K").When("operation", "temperature"),
+                ActionField.Dynamic("ip", "Device", "/api/govee/devices",
+                    "Searches the network when opened. If it doesn't show up, type the device IP.", allowCustom: true),
+                ActionField.Select("operation", "What to do",
+                    ("toggle", "Toggle on/off"),
+                    ("on", "Turn on"),
+                    ("off", "Turn off"),
+                    ("brightness", "Set brightness"),
+                    ("color", "Set color"),
+                    ("temperature", "Set temperature (white)")),
+                ActionField.Number("brightness", "Brightness", 100, 1, 100, "%").When("operation", "brightness"),
+                ActionField.Text("color", "Color", "#FF8000", "In #RRGGBB format.").WithDefault("#FF8000").When("operation", "color"),
+                ActionField.Number("kelvin", "Temperature", 4000, 2000, 9000, "K").When("operation", "temperature"),
             },
         };
 
@@ -52,7 +51,7 @@ namespace DroidDeck.Integrations
                     break;
                 case "toggle":
                     var on = await _lan.IsOnAsync(ip, TimeSpan.FromSeconds(2))
-                        ?? throw new InvalidOperationException("O aparelho Govee não respondeu. Confira o IP e o Controle LAN no app Govee Home.");
+                        ?? throw new InvalidOperationException("The Govee device didn't respond. Check the IP and LAN Control in the Govee Home app.");
                     await _lan.SendAsync(ip, GoveeLan.Turn(!on));
                     break;
                 case "brightness":
@@ -66,7 +65,7 @@ namespace DroidDeck.Integrations
                     await _lan.SendAsync(ip, GoveeLan.Color(0, 0, 0, ctx.Int("kelvin", 4000)));
                     break;
                 default:
-                    throw new InvalidOperationException("Operação desconhecida.");
+                    throw new InvalidOperationException("Unknown operation.");
             }
         }
     }

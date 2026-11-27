@@ -10,12 +10,6 @@ using System.Threading.Tasks;
 
 namespace DroidDeck.Actions.Providers
 {
-    /// <summary>
-    /// Manda uma mensagem pela rede: OSC (mesas X32/M32, QLab...), UDP ou TCP.
-    ///
-    /// Privilegiada, como a requisicao HTTP (ActionPolicy): a mensagem sai do PC, com o acesso de
-    /// rede dele. Por isso so nasce no configurador do PC.
-    /// </summary>
     public class NetworkProvider : IActionProvider
     {
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(5);
@@ -25,27 +19,27 @@ namespace DroidDeck.Actions.Providers
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Rede (OSC, TCP, UDP)",
+            Title = "Network (OSC, TCP, UDP)",
             Icon = "lan",
-            Category = "Utilidades",
-            Description = "Manda uma mensagem OSC, UDP ou TCP a partir do PC: mesas de som, QLab e outros aparelhos da rede.",
+            Category = "Utilities",
+            Description = "Sends an OSC, UDP or TCP message from the PC: mixing consoles, QLab and other devices on the network.",
             Fields =
             {
-                ActionField.Select("protocol", "Protocolo", ("osc", "OSC"), ("udp", "UDP"), ("tcp", "TCP")),
-                ActionField.Text("host", "Endereço", "192.168.0.50", required: true),
-                ActionField.Number("port", "Porta", 8000, 1, 65535),
-                ActionField.Text("path", "Caminho OSC", "/ch/01/mix/on", required: true).When("protocol", "osc"),
-                ActionField.Multiline("args", "Argumentos (opcional)", "i:1",
-                    "Um por linha: i:1 (inteiro), f:0.5 (decimal), s:texto, T ou F. Sem prefixo, o tipo é deduzido.")
+                ActionField.Select("protocol", "Protocol", ("osc", "OSC"), ("udp", "UDP"), ("tcp", "TCP")),
+                ActionField.Text("host", "Address", "192.168.0.50", required: true),
+                ActionField.Number("port", "Port", 8000, 1, 65535),
+                ActionField.Text("path", "OSC path", "/ch/01/mix/on", required: true).When("protocol", "osc"),
+                ActionField.Multiline("args", "Arguments (optional)", "i:1",
+                    "One per line: i:1 (integer), f:0.5 (decimal), s:text, T or F. With no prefix, the type is inferred.")
                     .When("protocol", "osc"),
-                ActionField.Multiline("message", "Mensagem", "PLAY").When("protocol", "udp", "tcp"),
-                ActionField.Select("encoding", "Formato",
-                    ("text", "Texto"),
+                ActionField.Multiline("message", "Message", "PLAY").When("protocol", "udp", "tcp"),
+                ActionField.Select("encoding", "Format",
+                    ("text", "Text"),
                     ("hex", "Hexadecimal"))
                     .When("protocol", "udp", "tcp"),
-                ActionField.Select("ending", "Fim da mensagem",
-                    ("none", "Nada"),
-                    ("lf", "Nova linha (LF)"),
+                ActionField.Select("ending", "Message ending",
+                    ("none", "Nothing"),
+                    ("lf", "New line (LF)"),
                     ("crlf", "CR + LF"),
                     ("cr", "CR"))
                     .When("encoding", "text")
@@ -79,7 +73,6 @@ namespace DroidDeck.Actions.Providers
             }
         }
 
-        /// <summary>Corpo de uma mensagem UDP/TCP: texto (com o fim de linha escolhido) ou hexadecimal.</summary>
         public static byte[] BuildPayload(string message, string encoding, string ending)
         {
             if (string.Equals(encoding, "hex", StringComparison.OrdinalIgnoreCase))
@@ -99,10 +92,8 @@ namespace DroidDeck.Actions.Providers
         }
     }
 
-    /// <summary>Mensagem OSC 1.0: caminho, tipos e argumentos, tudo alinhado em 4 bytes.</summary>
     public static class OscMessage
     {
-        /// <summary>Um argumento: int, float, string ou bool (T/F, sem corpo).</summary>
         public static List<object> ParseArgs(string args)
         {
             var result = new List<object>();
@@ -176,7 +167,6 @@ namespace DroidDeck.Actions.Providers
             return ms.ToArray();
         }
 
-        /// <summary>Texto terminado em zero, completado com zeros ate um multiplo de 4.</summary>
         private static void WriteString(Stream output, string value)
         {
             var bytes = Encoding.UTF8.GetBytes(value);

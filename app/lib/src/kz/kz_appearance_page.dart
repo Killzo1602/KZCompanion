@@ -1,12 +1,10 @@
 import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/kz/kz_appearance.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
+import 'package:droiddeck/src/kz/kz_ring.dart';
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
-/// Aparência do KZ Companion. Tema, modo e cor de destaque valem em qualquer tela (inclusive
-/// no configurador do PC); as opções do painel (fundo, espaçamento, cantos, seções) ficam
-/// no celular, então só aparecem no app.
 class KzAppearancePage extends StatelessWidget {
   const KzAppearancePage({super.key});
 
@@ -86,6 +84,7 @@ class _ThemeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return KzCard(
       title: 'Theme',
+      accent: KzColors.ram,
       icon: Icons.palette_outlined,
       child: Watch((context) {
         final s = _ctrl.settings.value;
@@ -150,6 +149,7 @@ class _DashboardCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return KzCard(
       title: 'Dashboard',
+      accent: KzColors.audio,
       icon: Icons.dashboard_customize_outlined,
       child: Watch((context) {
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -174,6 +174,8 @@ class _DashboardCard extends StatelessWidget {
             selected: {KzPrefs.corners.value},
             onSelectionChanged: (v) => KzPrefs.setCorners(v.first),
           ),
+          const _Label('Navigation'),
+          _switch('Side bar instead of page dots', KzPrefs.sideBar.value, KzPrefs.setSideBar),
           const _Label('Sections'),
           _switch('CPU / GPU / RAM', KzPrefs.showStats.value, KzPrefs.setShowStats),
           _switch('Favorites', KzPrefs.showFavorites.value, KzPrefs.setShowFavorites),
@@ -208,6 +210,7 @@ class _DisplayCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return KzCard(
       title: 'Display',
+      accent: KzColors.cpu,
       icon: Icons.stay_current_landscape_rounded,
       padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
       child: Column(children: [

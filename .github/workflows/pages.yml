@@ -1,9 +1,5 @@
 name: Pages
 
-# Publica o site (landing one-page na raiz) + a documentação MkDocs (EN/PT em /docs/)
-# no GitHub Pages. Roda a cada push em main que mexa em website/ ou manualmente.
-# Manual only: website/ is still the inherited DroidDeck site and has not been rewritten for
-# KZ Companion, so it must not be published automatically.
 on:
   workflow_dispatch:
 

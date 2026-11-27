@@ -31,18 +31,12 @@ using Xunit;
 
 namespace DroidDeck.Tests
 {
-    /// <summary>
-    /// Testes com rede de verdade e prazos curtos rodam em serie, depois dos outros. Numa maquina
-    /// de 2 nucleos (o CI), os testes em paralelo disputam o processador por muitos segundos, e o
-    /// prazo vencia sem nada estar errado.
-    /// </summary>
     [CollectionDefinition(Name, DisableParallelization = true)]
     public class RealTimeNetworkCollection
     {
         public const string Name = "Rede em tempo real";
     }
 
-    /// <summary>Servidor TCP de mentira, de protocolo em linhas: faz o papel do vMix e do Companion.</summary>
     internal sealed class FakeLineServer : IAsyncDisposable
     {
         private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
@@ -74,12 +68,10 @@ namespace DroidDeck.Tests
                             while ((line = await reader.ReadLineAsync(_cts.Token)) != null)
                             {
                                 Received.Enqueue(line);
-                                // Como o Companion: sem resposta ao PING, o cliente reconecta.
                                 if (line.StartsWith("PING ")) await SendAsync("PONG " + line[5..] + " \n");
                                 await onLine(line, this);
                             }
                         }
-                        // DropClient fechou esta conexao: volta a esperar a proxima.
                         catch (Exception e) when (e is IOException or ObjectDisposedException) { }
                     }
                 }
@@ -100,7 +92,6 @@ namespace DroidDeck.Tests
         }
     }
 
-    /// <summary>Servidor HTTP de mentira (mAirList, RadioDJ).</summary>
     internal sealed class FakeHttpServer : IAsyncDisposable
     {
         private readonly WebApplication _app;
@@ -137,14 +128,11 @@ namespace DroidDeck.Tests
         public HttpClient CreateClient(string name) => new();
     }
 
-    /// <summary>O HttpClient da factory registra a URL no log; o RadioDJ leva a senha na URL.</summary>
     internal sealed class ForbiddenHttpFactory : IHttpClientFactory
     {
         public HttpClient CreateClient(string name) =>
             throw new InvalidOperationException("O RadioDJ não pode usar o HttpClient da factory.");
     }
-
-    // ---- Rede: OSC, TCP e UDP ----
 
     [Collection(RealTimeNetworkCollection.Name)]
     public class NetworkProviderTests
@@ -165,7 +153,6 @@ namespace DroidDeck.Tests
         public void Osc_TextoComTamanhoMultiploDeQuatro_LevaQuatroZeros()
         {
             var bytes = OscMessage.Encode("/abc", new List<object> { "wxyz" });
-            // "/abc" + 4 zeros, ",s" + 2 zeros, "wxyz" + 4 zeros.
             Assert.Equal(8 + 4 + 8, bytes.Length);
             Assert.Equal(new byte[] { 0, 0, 0, 0 }, bytes[^4..]);
         }
@@ -175,7 +162,6 @@ namespace DroidDeck.Tests
         {
             var bytes = OscMessage.Encode("/a", new List<object> { 0.5f, true, false });
             Assert.Equal(",fTF", Encoding.ASCII.GetString(bytes, 4, 4));
-            // ",fTF" ocupa 4 bytes e ganha mais 4 zeros de terminador.
             Assert.Equal(new byte[] { 0x3F, 0x00, 0x00, 0x00 }, bytes[12..16]);
             Assert.Equal(16, bytes.Length);
         }
@@ -245,12 +231,9 @@ namespace DroidDeck.Tests
         }
     }
 
-    // ---- vMix ----
-
     [Collection(RealTimeNetworkCollection.Name)]
     public class VmixTests
     {
-        // Exemplo da documentacao da Web API do vMix, encurtado.
         private const string Xml = """
             <vmix>
               <version>29.0.0.1</version>
@@ -365,7 +348,6 @@ namespace DroidDeck.Tests
                 await Fakes.Until(() => vmix.IsConnected);
                 Assert.Equal("vMix 29.0.0.1", vmix.AccountName);
 
-                // A resposta binaria do XML nao pode bagunçar a leitura das linhas seguintes.
                 await Fakes.Until(() => vmix.TallyOf(1) == VmixIntegration.TallyPreview);
                 Assert.Equal(VmixIntegration.TallyOff, vmix.TallyOf(2));
                 Assert.Equal(VmixIntegration.TallyProgram, vmix.TallyOf(3));
@@ -383,7 +365,6 @@ namespace DroidDeck.Tests
                 Assert.Equal("1. Camera 1", options[0].Label);
                 Assert.Equal("aaa", options[0].Value);
 
-                // Caiu: reconecta sozinho e assina o tally de novo.
                 server.DropClient();
                 await Fakes.Until(() => server.Received.Count(l => l.StartsWith("SUBSCRIBE")) == 2);
             }
@@ -401,7 +382,6 @@ namespace DroidDeck.Tests
             await vmix.StartAsync(CancellationToken.None);
             try
             {
-                // Porta fechada.
                 var free = new TcpListener(IPAddress.Loopback, 0);
                 free.Start();
                 var port = ((IPEndPoint)free.LocalEndpoint).Port;
@@ -418,8 +398,6 @@ namespace DroidDeck.Tests
             }
         }
     }
-
-    // ---- Radio ----
 
     [Collection(RealTimeNetworkCollection.Name)]
     public class MairlistTests
@@ -490,7 +468,6 @@ namespace DroidDeck.Tests
                     await new MairlistProvider(mairlist).ExecuteAsync(Ctx.Of("mairlist", ("operation", "on_air")));
                     Assert.Contains("ON AIR", calls);
                     await Fakes.Until(() => mairlist.OnAir == true);
-                    // A senha nao volta para a tela.
                     Assert.False(mairlist.GetStatus().Fields.ContainsKey("password"));
                 }
                 finally
@@ -511,7 +488,7 @@ namespace DroidDeck.Tests
                 {
                     var status = await mairlist.ConfigureAsync(new() { ["url"] = server.Url, ["username"] = "dj", ["password"] = "outra" });
                     Assert.False(status.Connected);
-                    Assert.Equal("Usuário ou senha recusados pelo mAirList.", status.Message);
+                    Assert.Equal("mAirList refused the username or password.", status.Message);
                     Assert.Null(mairlist.OnAir);
                 }
                 finally
@@ -537,7 +514,6 @@ namespace DroidDeck.Tests
     [Collection(RealTimeNetworkCollection.Name)]
     public class RadioDjTests
     {
-        // Exemplo do /np no topico do plugin REST Server, encurtado.
         private const string NowPlaying = """
             <SongData xmlns="http://schemas.datacontract.org/2004/07/rdjInterface" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
               <Album>Disco</Album><Artist>Sia</Artist><ID>1</ID><Title>Extraordinary</Title><Remaining>59.5</Remaining>
@@ -551,7 +527,6 @@ namespace DroidDeck.Tests
         [InlineData("<?xml version=\"1.0\"?><b>false</b>", false)]
         [InlineData("OK", null)]
         [InlineData("", null)]
-        // Nome de tag nao conta como valor.
         [InlineData("<true>nada</true>", null)]
         public void Booleano(string text, bool? expected) => Assert.Equal(expected, RadioDjIntegration.ParseBool(text));
 
@@ -654,7 +629,7 @@ namespace DroidDeck.Tests
             {
                 var status = await radio.ConfigureAsync(new() { ["url"] = server.Url, ["password"] = "errada" });
                 Assert.False(status.Connected);
-                Assert.Contains("senha", status.Message);
+                Assert.Contains("password", status.Message);
                 Assert.Null(radio.Input);
             }
             finally
@@ -665,8 +640,6 @@ namespace DroidDeck.Tests
         }
     }
 
-    // ---- Corte de tosse e tally ----
-
     internal sealed class FakeVoicemeeter : IVoicemeeterApi
     {
         public readonly Dictionary<string, float> Values = new();
@@ -675,15 +648,15 @@ namespace DroidDeck.Tests
 
         public float Get(string parameter)
         {
-            if (Closed) throw new InvalidOperationException("O Voicemeeter não está aberto.");
+            if (Closed) throw new InvalidOperationException("Voicemeeter is not running.");
             var index = int.Parse(parameter["Strip[".Length..parameter.IndexOf(']')]);
-            if (index >= Strips) throw new InvalidOperationException("Parâmetro do Voicemeeter desconhecido.");
+            if (index >= Strips) throw new InvalidOperationException("Unknown Voicemeeter parameter.");
             return Values.GetValueOrDefault(parameter);
         }
 
         public void Set(string parameter, float value)
         {
-            if (Closed) throw new InvalidOperationException("O Voicemeeter não está aberto.");
+            if (Closed) throw new InvalidOperationException("Voicemeeter is not running.");
             Values[parameter] = value;
         }
 
@@ -810,13 +783,9 @@ namespace DroidDeck.Tests
         }
     }
 
-    // ---- Tally no resto do deck: botao, condicoes e automacoes ----
-
     [Collection(RealTimeNetworkCollection.Name)]
     public class TallyDeckTests
     {
-        // Uma instancia so: cada StreamDeckConfigService novo le todos os perfis do disco, e no
-        // Windows essa leitura faz falhar a gravacao de outro teste que rode ao mesmo tempo.
         private static readonly StreamDeckConfigService SharedConfig = Fakes.Config();
 
         private sealed class Recorder : IActionProvider
@@ -846,8 +815,6 @@ namespace DroidDeck.Tests
 
         private static TallyTarget Target(string id, string state) => new(id, "x", id, state);
 
-        // ---- Botao ----
-
         [Fact]
         public async Task SoMostrar_NoSinalManual_Alterna()
         {
@@ -867,8 +834,6 @@ namespace DroidDeck.Tests
             Assert.False(tally.Manual);
         }
 
-        // ---- Mudancas ----
-
         [Fact]
         public void Mudancas_AlvoNovoNaoConta_MudancaConta()
         {
@@ -885,17 +850,12 @@ namespace DroidDeck.Tests
         {
             var tally = Tally();
             tally.DetectChanges(new[] { Target("a", TallyTarget.Program) });
-            // Programa fechou: nao se sabe se saiu do ar.
             Assert.Empty(tally.DetectChanges(Array.Empty<TallyTarget>()));
-            // Voltou igual: nada aconteceu.
             Assert.Empty(tally.DetectChanges(new[] { Target("a", TallyTarget.Program) }));
             tally.DetectChanges(Array.Empty<TallyTarget>());
-            // Voltou diferente: agora se sabe que saiu.
             var change = Assert.Single(tally.DetectChanges(new[] { Target("a", TallyTarget.Idle) }));
             Assert.Equal(TallyTarget.Program, change.previous);
         }
-
-        // ---- Condicoes ----
 
         private static Conditions ConditionsWith(TallyService tally)
         {
@@ -934,8 +894,6 @@ namespace DroidDeck.Tests
             api.Values["Strip[0].Mute"] = 1;
             Assert.False(conditions.Evaluate(open));
         }
-
-        // ---- Automacoes ----
 
         private static (TriggerService service, Recorder rec, TallyService tally) Automation(params TriggerService.Trigger[] triggers)
         {
@@ -1024,7 +982,6 @@ namespace DroidDeck.Tests
             Assert.False(tally.WatchRequested!());
         }
 
-        /// <summary>O caminho inteiro, sem celular conectado: o laco do tally ve a mudanca e aperta o botao.</summary>
         [Fact]
         public async Task PontaAPonta_SinalManual_ApertaOBotao_SemCelular()
         {
@@ -1032,7 +989,6 @@ namespace DroidDeck.Tests
             await tally.StartAsync(CancellationToken.None);
             try
             {
-                // Da tempo da primeira leitura, que so serve de base.
                 await Task.Delay(400);
                 tally.SetManual(true);
                 await Fakes.Until(() => rec.Ran.Contains("on"));
@@ -1046,11 +1002,8 @@ namespace DroidDeck.Tests
         }
     }
 
-    // ---- Companion ----
-
     public class SatelliteCodecTests
     {
-        // Casos do satellite-protocol-corpus.json do Companion.
         [Fact]
         public void Parse_Corpus()
         {
@@ -1102,7 +1055,6 @@ namespace DroidDeck.Tests
         [Fact]
         public void Bitmap_RgbCru_ViraPng()
         {
-            // 2x2 vermelho.
             var rgb = Enumerable.Range(0, 4).SelectMany(_ => new byte[] { 255, 0, 0 }).ToArray();
             var png = Convert.FromBase64String(CompanionIntegration.RgbToPng(rgb)!);
             using var image = new System.Drawing.Bitmap(new MemoryStream(png));
@@ -1175,15 +1127,12 @@ namespace DroidDeck.Tests
                 await companion.SetKeyAsync("celular", 5, true);
                 await Fakes.Until(() => server.Received.Any(l => l.StartsWith("KEY-PRESS") && l.Contains("KEY=5") && l.Contains("PRESSED=1")));
 
-                // Tecla fora da grade nao vai para o Companion.
                 await companion.SetKeyAsync("celular", 99, true);
                 Assert.DoesNotContain(server.Received, l => l.Contains("KEY=99"));
 
-                // O celular caiu com o dedo em cima: a tecla e solta.
                 companion.ReleaseOwner("celular");
                 await Fakes.Until(() => server.Received.Any(l => l.StartsWith("KEY-PRESS") && l.Contains("KEY=5") && l.Contains("PRESSED=0")));
 
-                // Conexao caiu: a superficie apaga.
                 server.DropClient();
                 await Fakes.Until(() => !Snapshot().Contains("CAM 1"));
             }
@@ -1255,8 +1204,6 @@ namespace DroidDeck.Tests
         }
     }
 
-    // ---- Schema e traducoes ----
-
     public class StudioSchemaTests : IClassFixture<WebApplicationFactory<DroidDeck.Program>>
     {
         private static readonly string[] Types = { "network", "tally", "vmix", "companion", "mairlist", "radiodj" };
@@ -1269,7 +1216,6 @@ namespace DroidDeck.Tests
         {
             var client = _factory.CreateClient();
             client.DefaultRequestHeaders.Add("X-API-KEY", ApiKeyProvider.GetKey());
-            client.DefaultRequestHeaders.Add("Accept-Language", "pt-BR");
             var all = (await client.GetFromJsonAsync<List<ActionSchema>>("/api/actions/schema"))!;
             return all.Where(s => Types.Contains(s.Type) || s.Type == "voicemeeter").ToList();
         }
@@ -1281,32 +1227,6 @@ namespace DroidDeck.Tests
             Assert.All(Types, t => Assert.Contains(schemas, s => s.Type == t));
             Assert.All(schemas, s => Assert.Equal(s.Type == "network", s.Privileged));
             Assert.All(schemas.Where(s => s.Settings != null), s => Assert.NotNull(s.StateEvent));
-        }
-
-        [Fact]
-        public async Task TodoTextoTemInglesEEspanhol()
-        {
-            var en = L.StringsOf("en");
-            var es = L.StringsOf("es");
-            var texts = new List<string>();
-            foreach (var s in await Schemas())
-            {
-                texts.Add(s.Title);
-                texts.Add(s.Category);
-                if (s.Description != null) texts.Add(s.Description);
-                foreach (var f in s.Fields)
-                {
-                    texts.Add(f.Label);
-                    if (f.Help != null) texts.Add(f.Help);
-                    texts.AddRange((f.Options ?? new()).Select(o => o.Label));
-                }
-            }
-            // Nomes proprios ficam iguais em todo idioma.
-            var missing = texts.Distinct()
-                .Where(t => t is not ("vMix" or "mAirList" or "RadioDJ" or "Companion" or "Voicemeeter" or "OSC" or "UDP" or "TCP"))
-                .Where(t => !en.ContainsKey(t) || !es.ContainsKey(t))
-                .ToList();
-            Assert.True(missing.Count == 0, "Sem tradução: " + string.Join(" | ", missing));
         }
     }
 }

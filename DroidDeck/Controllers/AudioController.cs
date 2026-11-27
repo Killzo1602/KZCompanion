@@ -1,4 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using DroidDeck.Audio;
+using DroidDeck.Lib;
 using DroidDeck.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,15 +22,16 @@ namespace DroidDeck.Controllers
         public bool? Mute { get; set; }
     }
 
+    public class AudioOutputRequest
+    {
+        public string? Id { get; set; }
+    }
+
     public class DeafenRequest
     {
         public bool Enabled { get; set; }
     }
 
-    /// <summary>
-    /// Mixer do Windows para o celular. O Windows e a fonte da verdade: cada comando e validado
-    /// (0-100, sessao existente) e aplicado aqui; o estado novo volta pelo hub (ReceiveAudioState).
-    /// </summary>
     [Route("api/audio")]
     [ApiController]
     [Authorize]
@@ -38,6 +43,40 @@ namespace DroidDeck.Controllers
         [HttpGet]
         public IActionResult Get() => Ok(_audio.GetState(withIcons: true));
 
+        [HttpGet("outputs")]
+        public IActionResult Outputs()
+        {
+            try
+            {
+                var current = DefaultAudioEndpoint.GetDefault(input: false);
+                return Ok(DefaultAudioEndpoint.List(input: false)
+                    .Select(d => new { id = d.Id, name = d.Name, isDefault = d.Id == current }));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"Saidas de audio: {ex.Message}");
+                return Ok(Array.Empty<object>());
+            }
+        }
+
+        [HttpPut("output")]
+        public IActionResult Output([FromBody] AudioOutputRequest body)
+        {
+            if (string.IsNullOrEmpty(body.Id)) return BadRequest(new { error = "id is required." });
+            try
+            {
+                if (DefaultAudioEndpoint.List(input: false).All(d => d.Id != body.Id))
+                    return NotFound(new { error = "That output is no longer available." });
+                DefaultAudioEndpoint.Set(body.Id);
+                return Ok(_audio.GetState(false));
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"Troca de saida de audio: {ex.Message}");
+                return BadRequest(new { error = "Windows did not accept the change." });
+            }
+        }
+
         [HttpPut("master")]
         public IActionResult Master([FromBody] AudioChange body)
         {
@@ -46,7 +85,6 @@ namespace DroidDeck.Controllers
             return ok ? Ok(_audio.GetState(false)) : BadRequest(new { error });
         }
 
-        /// <summary>Mudo do microfone padrao (so ele; a saida e o volume nao mudam).</summary>
         [HttpPut("mic")]
         public IActionResult Mic([FromBody] AudioChange body)
         {
@@ -55,7 +93,6 @@ namespace DroidDeck.Controllers
             return ok ? Ok(_audio.GetState(false)) : BadRequest(new { error });
         }
 
-        /// <summary>Volume/mudo de varias sessoes (o grupo de um aplicativo), cada uma pelo seu id original.</summary>
         [HttpPut("sessions")]
         public IActionResult Sessions([FromBody] AudioGroupChange body)
         {

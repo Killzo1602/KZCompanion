@@ -21,7 +21,6 @@ namespace DroidDeck.Integrations
 {
     public record VmixInput(string Key, int Number, string Title, bool Muted);
 
-    /// <summary>O que o XML do vMix diz (programa, preview, gravando, entradas...).</summary>
     public class VmixSnapshot
     {
         public string? Version { get; init; }
@@ -34,16 +33,11 @@ namespace DroidDeck.Integrations
         public bool MultiCorder { get; init; }
         public bool FadeToBlack { get; init; }
 
-        /// <summary>Numero da entrada em cada overlay (o indice 0 e o overlay 1); 0 = vazio.</summary>
         public List<int> Overlays { get; init; } = new();
 
         public string? KeyOf(int number) => Inputs.FirstOrDefault(i => i.Number == number)?.Key;
     }
 
-    /// <summary>
-    /// vMix pela TCP API (porta fixa 8099, UTF-8, linhas com CRLF). Uma conexao so: o TALLY chega
-    /// sozinho pela assinatura e o resto e pedido e resposta, um de cada vez, como a API exige.
-    /// </summary>
     public class VmixIntegration : AccountIntegration
     {
         public const string Event = "ReceiveVmixState";
@@ -154,7 +148,7 @@ namespace DroidDeck.Integrations
                     if (!reconnect.IsCancellationRequested)
                     {
                         _error = ex is SocketException or IOException or OperationCanceledException or TimeoutException
-                            ? "Não foi possível conectar ao vMix. Confira se ele está aberto e o endereço."
+                            ? "Couldn't connect to vMix. Check that it's open and the address is right."
                             : ex.Message;
                         Logger.LogInformation("vMix: {Error}", ex.Message);
                     }
@@ -292,7 +286,6 @@ namespace DroidDeck.Integrations
             await BroadcastAsync();
         }
 
-        /// <summary>Executa uma funcao do vMix (nome e query string, como na Web API).</summary>
         public async Task FunctionAsync(string function, string query)
         {
             var client = _client;
@@ -305,7 +298,6 @@ namespace DroidDeck.Integrations
             Poke();
         }
 
-        /// <summary>Estado de tally de uma entrada, pelo numero dela (0 = apagado).</summary>
         public int TallyOf(int number)
         {
             var tally = _tally;
@@ -321,7 +313,6 @@ namespace DroidDeck.Integrations
                 .ToList());
         }
 
-        /// <summary>Le o XML do vMix. Campo ausente (versao antiga) fica no padrao.</summary>
         public static VmixSnapshot ParseXml(string xml)
         {
             using var reader = XmlReader.Create(new StringReader(xml.TrimStart('﻿')),

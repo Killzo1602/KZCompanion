@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:droiddeck/src/connection/constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Um PC pareado com este celular.
 class SavedPc {
   final String id;
   final String name;
@@ -41,20 +40,16 @@ class SavedPc {
       );
 }
 
-/// PCs pareados e qual está em uso. O PC atual também fica nas chaves antigas
-/// (IP, porta, chave), que o resto do app lê; o cache do deck é separado por PC.
 class PcStore {
   static const _listKey = 'pcs';
   static const _currentKey = 'pc_current';
 
-  /// Id do PC em uso, carregado na abertura do app ([load]).
   static String? currentId;
 
   static Future<List<SavedPc>> load() async {
     final prefs = await SharedPreferences.getInstance();
     var list = _decode(prefs.getString(_listKey));
     if (list.isEmpty) {
-      // Versões antigas guardavam um PC só, direto nas chaves de conexão.
       final ip = prefs.getString(Constants.ipAddrKey);
       if (ip != null && ip.isNotEmpty) {
         final pc = SavedPc(
@@ -67,7 +62,6 @@ class PcStore {
         list = [pc];
         await prefs.setString(_listKey, _encode(list));
         await prefs.setString(_currentKey, pc.id);
-        // O deck guardado passa a ser o deste PC.
         for (final key in ['deck_cache', 'deck_last_profile']) {
           final v = prefs.getString(key);
           if (v != null) await prefs.setString(scoped(key, pc.id), v);
@@ -87,7 +81,6 @@ class PcStore {
     return list.isEmpty ? null : list.first;
   }
 
-  /// Guarda um PC (o mesmo IP e porta atualiza o existente) e o deixa em uso.
   static Future<SavedPc> upsert({
     required String ip,
     required String port,
@@ -138,7 +131,6 @@ class PcStore {
     }
   }
 
-  /// Passa a usar este PC: grava nas chaves de conexão que o app lê ao abrir.
   static Future<void> select(SavedPc pc) async {
     final prefs = await SharedPreferences.getInstance();
     currentId = pc.id;
@@ -152,7 +144,6 @@ class PcStore {
     }
   }
 
-  /// Chave de preferência separada por PC (cache do deck, último perfil).
   static String scoped(String key, [String? pcId]) {
     final id = pcId ?? currentId;
     return id == null ? key : '${key}_$id';

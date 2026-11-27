@@ -6,12 +6,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace DroidDeck
 {
-    /// <summary>
-    /// Registro dos servicos do DroidDeck no DI, por area. O Program.cs so chama estes metodos.
-    /// </summary>
     public static class ServiceRegistration
     {
-        /// <summary>Deck, estado dos botoes e servicos do Windows (audio, midia, janelas).</summary>
         public static IServiceCollection AddDeckCore(this IServiceCollection services)
         {
             services.AddSingleton<IAudioControlService, AudioControlService>();
@@ -31,6 +27,7 @@ namespace DroidDeck
             services.AddSingleton<Lib.Input.MacroRecorder>();
             services.AddHostedSingleton<TimerService>();
             services.AddSingleton<AiUsageService>();
+            services.AddSingleton<DevStatusService>();
             services.AddHostedSingleton<InfoService>();
             services.AddHostedSingleton<ForegroundWatcher>();
             services.AddSingleton<RunningAppsService>();
@@ -39,10 +36,6 @@ namespace DroidDeck
             return services;
         }
 
-        /// <summary>
-        /// Tipos de acao do deck (ver Actions/IActionProvider.cs). A ordem aqui e a ordem do
-        /// seletor de tipo no editor; as integracoes entram em <see cref="AddIntegrations"/>.
-        /// </summary>
         public static IServiceCollection AddActionProviders(this IServiceCollection services)
         {
             services.AddSingleton<IActionProvider, KeyProvider>();
@@ -83,10 +76,8 @@ namespace DroidDeck
             return services;
         }
 
-        /// <summary>Integracoes: cada uma tambem entra na lista comum (<see cref="IIntegration"/>).</summary>
         public static IServiceCollection AddIntegrations(this IServiceCollection services)
         {
-            // Com controlador proprio e servico de reconexao.
             services.AddIntegration<DiscordRpcService>();
             services.AddHostedService<DiscordAutoConnect>();
             services.AddIntegration<ObsService>();
@@ -95,13 +86,11 @@ namespace DroidDeck
             services.AddHostedService<TuyaAutoConnect>();
             services.AddIntegration<SoundboardService>();
 
-            // Com conta: tela de configuracao comum em /api/integrations/{nome}.
             services.AddAccountIntegration<HomeAssistantIntegration>();
             services.AddAccountIntegration<SpotifyIntegration>();
             services.AddAccountIntegration<TwitchIntegration>();
             services.AddAccountIntegration<YouTubeIntegration>();
 
-            // Locais, sem conta na nuvem: com tela (pareamento, broker, endereco)...
             services.AddAccountIntegration<HueIntegration>();
             services.AddAccountIntegration<MqttIntegration>();
             services.AddAccountIntegration<StreamerBotIntegration>();
@@ -110,7 +99,6 @@ namespace DroidDeck
             services.AddAccountIntegration<CompanionIntegration>();
             services.AddAccountIntegration<MairlistIntegration>();
             services.AddAccountIntegration<RadioDjIntegration>();
-            // ...e sem tela nenhuma (o IP vai em cada botao, o Voicemeeter e o do PC).
             services.AddSingleton<IVoicemeeterApi, VoicemeeterRemote>();
             services.AddSingleton<MicHoldService>();
             services.AddHostedSingleton<TallyService>();
@@ -131,7 +119,6 @@ namespace DroidDeck
             services.AddHostedService(sp => sp.GetRequiredService<T>());
         }
 
-        /// <summary>Servico em segundo plano que outros tambem injetam (uma instancia so).</summary>
         private static void AddHostedSingleton<T>(this IServiceCollection services)
             where T : class, Microsoft.Extensions.Hosting.IHostedService
         {

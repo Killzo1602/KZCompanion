@@ -6,30 +6,14 @@ using System.Threading;
 
 namespace DroidDeck.Lib.Input
 {
-    /// <summary>
-    /// Envia toques de teclado com SendInput. Substitui o SendKeys do WinForms, que nao manda
-    /// a tecla Windows e gera so mensagens de virtual-key -- jogos que leem DirectInput/Raw
-    /// Input nao viam nada. Aqui cada tecla vai com o scancode (o que esses jogos leem) e e
-    /// segurada por alguns ms, porque quem le o teclado uma vez por frame perde um
-    /// aperta-solta instantaneo.
-    /// </summary>
     public static class KeyboardInput
     {
-        /// <summary>Quanto cada tecla fica apertada.</summary>
         public static int HoldMs { get; set; } = 20;
 
-        /// <summary>
-        /// Aperta uma tecla e deixa apertada (quem solta e o <see cref="KeyUp(ushort)"/>).
-        /// Quem precisa saber o que esta preso e o <see cref="HeldKeys"/>.
-        /// </summary>
         public static void KeyDown(ushort vk) => SendKey(vk, up: false);
 
         public static void KeyUp(ushort vk) => SendKey(vk, up: true);
 
-        /// <summary>
-        /// Nome de uma tecla so (UP, F5, SHIFT, {ENTER}, A, 0x41...) para virtual-key.
-        /// Combinacoes (^C) nao: para isso ha o <see cref="KeySequence"/>.
-        /// </summary>
         public static bool TryResolveKey(string keyName, out ushort vk)
         {
             vk = 0;
@@ -49,7 +33,6 @@ namespace DroidDeck.Lib.Input
                 if (c >= 'A' && c <= 'Z') { vk = (ushort)c; return true; }
                 if (c >= '0' && c <= '9') { vk = (ushort)c; return true; }
 
-                // Pontuacao: a tecla que produz o caractere no layout do app em foco.
                 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
                     var hwnd = GetForegroundWindow();
@@ -82,20 +65,17 @@ namespace DroidDeck.Lib.Input
 
         private const ushort VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_MENU = 0x12, VK_LWIN = 0x5B;
 
-        // Teclas que precisam da flag "estendida". O MapVirtualKeyEx devolve para setas,
-        // Home/End/PgUp/PgDn/Ins/Del o scancode do teclado numerico SEM o prefixo E0: sem esta
-        // lista, {UP} virava o 8 do numpad (e digitava "8" com o NumLock ligado).
         private static readonly HashSet<ushort> ExtendedKeys = new()
         {
-            0x03,                               // Break
-            0x21, 0x22, 0x23, 0x24,             // PgUp, PgDn, End, Home
-            0x25, 0x26, 0x27, 0x28,             // setas
-            0x2C, 0x2D, 0x2E,                   // PrintScreen, Insert, Delete
-            0x5B, 0x5C, 0x5D,                   // Win esq/dir, Menu
-            0x6F, 0x90,                         // / do numpad, NumLock
-            0xA3, 0xA5,                         // Ctrl e Alt da direita
-            0xAD, 0xAE, 0xAF,                   // volume
-            0xB0, 0xB1, 0xB2, 0xB3,             // midia
+            0x03,
+            0x21, 0x22, 0x23, 0x24,
+            0x25, 0x26, 0x27, 0x28,
+            0x2C, 0x2D, 0x2E,
+            0x5B, 0x5C, 0x5D,
+            0x6F, 0x90,
+            0xA3, 0xA5,
+            0xAD, 0xAE, 0xAF,
+            0xB0, 0xB1, 0xB2, 0xB3,
         };
 
         public static void Send(IReadOnlyList<KeyStroke> strokes)
@@ -103,7 +83,6 @@ namespace DroidDeck.Lib.Input
             if (strokes.Count == 0) return;
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
 
-            // O layout do app em foco, nao o do DroidDeck: e nele que o caractere precisa existir.
             var hwnd = GetForegroundWindow();
             var hkl = GetKeyboardLayout(hwnd == IntPtr.Zero ? 0 : GetWindowThreadProcessId(hwnd, out _));
 
@@ -124,16 +103,13 @@ namespace DroidDeck.Lib.Input
                 short scan = VkKeyScanEx(stroke.Char, hkl);
                 if (scan == -1)
                 {
-                    // Caractere que nao existe no layout atual: vai como Unicode.
                     keyDown = Unicode(stroke.Char, up: false);
                     keyUp = Unicode(stroke.Char, up: true);
                 }
                 else
                 {
                     ushort vk = (ushort)(scan & 0xFF);
-                    var implied = (KeyModifiers)((scan >> 8) & 0x07); // 1 Shift, 2 Ctrl, 4 Alt
-                    // Com Ctrl/Alt/Win, letra nao carrega Shift pela caixa: "^C" e Ctrl+C, como
-                    // a dica do editor sempre disse. Shift explicito continua sendo "+".
+                    var implied = (KeyModifiers)((scan >> 8) & 0x07);
                     bool isLetter = vk >= 'A' && vk <= 'Z';
                     if (isLetter && (mods & (KeyModifiers.Ctrl | KeyModifiers.Alt | KeyModifiers.Win)) != 0)
                         implied &= ~KeyModifiers.Shift;
@@ -172,7 +148,6 @@ namespace DroidDeck.Lib.Input
                 return;
             var arr = inputs.ToArray();
             uint sent = SendInput((uint)arr.Length, arr, Marshal.SizeOf<INPUT>());
-            // Bloqueio por UIPI (janela elevada) NAO aparece aqui: o Windows descarta calado.
             if (sent != arr.Length)
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "SendInput falhou");
         }
@@ -186,7 +161,6 @@ namespace DroidDeck.Lib.Input
                 flags |= KEYEVENTF_SCANCODE;
                 if ((scan & 0xFF00) is 0xE000 or 0xE100 || ExtendedKeys.Contains(vk)) flags |= KEYEVENTF_EXTENDEDKEY;
             }
-            // Sem scancode (teclas de midia/volume em alguns teclados): vai so pela virtual-key.
             return new INPUT
             {
                 type = INPUT_KEYBOARD,
@@ -200,7 +174,6 @@ namespace DroidDeck.Lib.Input
             u = new InputUnion { ki = new KEYBDINPUT { wVk = 0, wScan = c, dwFlags = KEYEVENTF_UNICODE | (up ? KEYEVENTF_KEYUP : 0) } },
         };
 
-        // ---- Win32 ----
         private const uint INPUT_KEYBOARD = 1;
         private const uint KEYEVENTF_EXTENDEDKEY = 0x1, KEYEVENTF_KEYUP = 0x2, KEYEVENTF_UNICODE = 0x4, KEYEVENTF_SCANCODE = 0x8;
         private const uint MAPVK_VK_TO_VSC_EX = 4;
@@ -212,8 +185,6 @@ namespace DroidDeck.Lib.Input
             public InputUnion u;
         }
 
-        // O union precisa do MOUSEINPUT (o maior membro) para o INPUT ter o tamanho que o
-        // SendInput espera; com so o KEYBDINPUT ele recusa tudo.
         [StructLayout(LayoutKind.Explicit)]
         private struct InputUnion
         {

@@ -7,10 +7,6 @@ using System.Threading.Tasks;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Conexao TCP de protocolos em linhas de texto (vMix, Companion): le linhas com limite de
-    /// tamanho, le blocos binarios depois de uma linha e serializa as escritas.
-    /// </summary>
     public sealed class TcpLineClient : IDisposable
     {
         private readonly TcpClient _tcp;
@@ -44,7 +40,6 @@ namespace DroidDeck.Integrations
             }
         }
 
-        /// <summary>Proxima linha, sem o fim de linha. Null quando o outro lado fechou.</summary>
         public async Task<string?> ReadLineAsync(int maxBytes, CancellationToken ct)
         {
             using var line = new MemoryStream();
@@ -62,7 +57,6 @@ namespace DroidDeck.Integrations
             }
         }
 
-        /// <summary>Exatamente <paramref name="count"/> bytes (o corpo de uma resposta binaria).</summary>
         public async Task<byte[]> ReadBytesAsync(int count, CancellationToken ct)
         {
             var result = new byte[count];
@@ -106,14 +100,13 @@ namespace DroidDeck.Integrations
             _writeLock.Dispose();
         }
 
-        /// <summary>"estudio.local" ou "192.168.0.10:8099" para host e porta.</summary>
         public static (string host, int port) ParseAddress(string? value, string defaultHost, int defaultPort)
         {
             var s = (value ?? "").Trim();
             if (s.Length == 0) return (defaultHost, defaultPort);
             if (!Uri.TryCreate("tcp://" + s, UriKind.Absolute, out var uri) || uri.Host.Length == 0 ||
                 uri.AbsolutePath != "/" || uri.Query.Length > 0)
-                throw new InvalidOperationException("Endereço inválido. Use um IP ou nome, com a porta se ela for outra.");
+                throw new InvalidOperationException("Invalid address. Use an IP or name, with the port if it is different.");
             return (uri.Host, uri.IsDefaultPort || uri.Port <= 0 ? defaultPort : uri.Port);
         }
     }

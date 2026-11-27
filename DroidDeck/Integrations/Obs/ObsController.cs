@@ -31,7 +31,7 @@ namespace DroidDeck.Controllers
             var cfg = _obs.LoadConfig();
             if (!string.IsNullOrWhiteSpace(dto?.Host)) cfg.Host = dto!.Host!;
             if (dto?.Port is int p && p > 0) cfg.Port = p;
-            cfg.Password = dto?.Password; // pode ser vazio/null (OBS sem senha)
+            cfg.Password = dto?.Password;
             _obs.SaveConfig(cfg);
             return Ok();
         }

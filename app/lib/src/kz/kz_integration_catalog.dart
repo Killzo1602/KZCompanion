@@ -1,18 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// Quanto do que o catalogo promete existe de verdade hoje. Nada aqui diz "funciona": o estado
-/// "Connected" so aparece quando o PC realmente informa que esta conectado.
 enum KzSupport {
-  /// Tem tela de configuracao neste app e o codigo do PC conecta; ainda sem teste ao vivo.
   setupAvailable('Setup available', Icons.tune_rounded),
 
-  /// O PC tem o codigo, mas o KZ Companion ainda nao tem tela nem painel para ele.
   backendOnly('Backend only', Icons.construction_rounded),
 
-  /// Ideia viavel sem prova: depende de um teste no PC antes de virar integracao.
   candidate('Candidate', Icons.science_outlined),
 
-  /// Parado de proposito (depende de algo que nao e nosso).
   onHold('On hold', Icons.pause_circle_outline_rounded);
 
   const KzSupport(this.label, this.icon);
@@ -40,17 +34,14 @@ class KzIntegration {
   final KzSupport support;
   final String summary;
 
-  /// O que a integracao pretende oferecer (nao e promessa de que ja funciona).
   final List<String> capabilities;
   final List<String> requirements;
   final List<String> caveats;
   final String verification;
 
-  /// Nome em /api/integrations, quando o PC a lista.
   final String? backendName;
 }
 
-/// Catalogo da auditoria da Fase 1 (docs/integration-audit-phase1.md). Ordem = prioridade.
 class KzCatalog {
   static const priority = <KzIntegration>[
     KzIntegration(

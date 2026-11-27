@@ -2,19 +2,17 @@ import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/kz/kz_audio.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:droiddeck/src/kz/kz_running_apps.dart';
+import 'package:droiddeck/src/kz/kz_ring.dart';
+import 'package:droiddeck/src/kz/kz_style.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:flutter/material.dart';
 
-/// "Running now": aplicativos abertos no PC, acima dos Favoritos na tela Apps.
-/// Tocar no cartao traz o app para a frente; minimizar e fechar ficam nos botoes
-/// (fechar sempre pergunta antes). O volume e o mudo vem do mixer, pela mesma identidade do app.
 class RunningAppsSection extends StatelessWidget {
   const RunningAppsSection({super.key, required this.store, required this.audio});
 
   final RunningAppsStore store;
   final AudioStore audio;
 
-  /// Largura minima de um cartao: na horizontal do Mate 20 Lite (~830 dp uteis) cabem dois.
   static const minCardWidth = 300.0;
 
   @override
@@ -28,13 +26,13 @@ class RunningAppsSection extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.fromLTRB(4, 6, 0, 8),
           child: Row(children: [
-            Icon(Icons.play_circle_outline_rounded, size: 14, color: scheme.primary),
+            const Icon(Icons.play_circle_outline_rounded, size: 14, color: KzColors.apps),
             const SizedBox(width: 6),
             Text('RUNNING NOW',
                 style: TextStyle(fontSize: 11, letterSpacing: 1.1, fontWeight: FontWeight.w600, color: muted)),
             if (apps.isNotEmpty)
               Text('  ${apps.length}',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: scheme.primary)),
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: KzColors.apps)),
           ]),
         ),
         if (!loaded && store.error.value == null)
@@ -120,16 +118,11 @@ class _RunningAppCardState extends State<RunningAppCard> {
     final muted = scheme.onSurface.withValues(alpha: 0.6);
     final locked = app.elevated;
     final sub = app.subtitle;
-    return Material(
-      color: scheme.surfaceContainer,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: app.foreground ? scheme.primary.withValues(alpha: 0.7) : Colors.transparent, width: 1.2),
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: locked ? null : () => _do(() => widget.store.focus(app)),
-        child: Padding(
+    return KzTile(
+      color: KzColors.apps,
+      active: app.foreground,
+      onTap: locked ? null : () => _do(() => widget.store.focus(app)),
+      child: Padding(
           padding: const EdgeInsets.fromLTRB(10, 9, 6, 6),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
@@ -188,7 +181,8 @@ class _RunningAppCardState extends State<RunningAppCard> {
                   child: SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
                 ),
               TextButton.icon(
-                style: TextButton.styleFrom(visualDensity: VisualDensity.compact, minimumSize: const Size(0, 34)),
+                style: TextButton.styleFrom(
+                    foregroundColor: KzColors.apps, visualDensity: VisualDensity.compact, minimumSize: const Size(0, 34)),
                 onPressed: locked ? null : () => _do(() => widget.store.focus(app)),
                 icon: Icon(app.minimized ? Icons.open_in_full_rounded : Icons.open_in_new_rounded, size: 16),
                 label: Text(app.minimized ? 'Restore' : 'Focus'),
@@ -208,7 +202,6 @@ class _RunningAppCardState extends State<RunningAppCard> {
             ]),
           ]),
         ),
-      ),
     );
   }
 }
@@ -227,7 +220,6 @@ class _Icon extends StatelessWidget {
   }
 }
 
-/// Volume e mudo do app, so quando ele tem sessao de audio (mesma identidade do .exe).
 class _Volume extends StatelessWidget {
   const _Volume({required this.app, required this.audio});
   final KzRunningApp app;
@@ -252,8 +244,7 @@ class _Volume extends StatelessWidget {
           ),
           Expanded(
             child: SliderTheme(
-              data: SliderTheme.of(context)
-                  .copyWith(trackHeight: 3, overlayShape: const RoundSliderOverlayShape(overlayRadius: 14)),
+              data: kzSliderTheme(context, color: muted ? const Color(0xFF64748B) : KzColors.audio, track: 7),
               child: Slider(
                 value: (muted ? 0 : volume).toDouble(),
                 min: 0,

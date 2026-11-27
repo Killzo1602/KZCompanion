@@ -7,11 +7,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Actions.Providers
 {
-    /// <summary>
-    /// Executa uma sequência de ações. parameters["steps"] = JSON de
-    /// [{type, parameters, delayMs, if}]; delayMs é aguardado ANTES de cada passo e "if"
-    /// (opcional) decide se o passo roda (ver Services/Conditions.cs).
-    /// </summary>
     public class MultiProvider : IActionProvider
     {
         private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
@@ -30,10 +25,10 @@ namespace DroidDeck.Actions.Providers
         public ActionSchema Describe() => new()
         {
             Type = Type,
-            Title = "Multi-ação",
+            Title = "Multi-action",
             Icon = "playlist_play",
-            Category = "Utilidades",
-            Description = "Vários passos em sequência, com espera entre eles.",
+            Category = "Utilities",
+            Description = "Several steps in sequence, with a wait between them.",
             Editor = "multi",
         };
 
@@ -58,10 +53,9 @@ namespace DroidDeck.Actions.Providers
             {
                 if (string.IsNullOrWhiteSpace(step.Type)) continue;
                 if (string.Equals(step.Type, Type, StringComparison.OrdinalIgnoreCase))
-                    continue; // não aninha multi
+                    continue;
                 if (step.DelayMs > 0)
                     await Task.Delay(step.DelayMs);
-                // "So se...": a condicao e olhada na hora do passo (depois da espera).
                 if (!_conditions.Evaluate(step.If)) continue;
                 await c.ExecuteAsync(new DeckAction
                 {

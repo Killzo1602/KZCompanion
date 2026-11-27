@@ -6,11 +6,10 @@ import 'package:droiddeck/core/core.dart';
 import 'package:droiddeck/src/kz/config/drop_import.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
+import 'package:droiddeck/src/kz/kz_ring.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-/// Biblioteca de aplicativos no configurador do PC: Add Application abre o seletor de
-/// arquivos do Windows (no PC), puxa nome e ícone sozinho e salva. Nada de digitar caminho.
 class AppsConfigPage extends StatefulWidget {
   const AppsConfigPage({super.key});
 
@@ -35,7 +34,6 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
     _client.getPing().then((p) {
       if (mounted) setState(() => _elevated = p['elevated'] == true);
     }).catchError((_) {});
-    // Arrastar .exe/.lnk do Explorer para ca (so no WebView2 do app do PC).
     DropImport.start();
     _dropSub = DropImport.files.listen(_importDropped);
     _dragSub = DropImport.dragging.listen((v) {
@@ -50,12 +48,9 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
     super.dispose();
   }
 
-  /// Cada arquivo solto: valida (.exe/.lnk) no servidor, pega nome e icone sozinho e salva pela
-  /// mesma API do botao Add Application. Duplicata (mesmo caminho ou atalho do mesmo programa) e recusada.
   Future<void> _importDropped(DroppedFiles dropped) async {
     var added = 0;
     final problems = <String>[...dropped.rejected.map((n) => '$n: only .exe and .lnk files are supported')];
-    // Itens sem caminho (Menu Iniciar do Windows 11 / apps da Loja): o seletor de instalados resolve pelo nome.
     final unresolved = dropped.unresolved.isEmpty ? null : dropped.unresolved.first;
     for (final path in dropped.paths) {
       try {
@@ -88,7 +83,6 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
     }
   }
 
-  /// Reordena os favoritos (arrastando) e grava a ordem; os demais ficam depois, como estavam.
   Future<void> _reorderFavorites(int oldIndex, int newIndex) async {
     final favs = _apps.where((a) => a.favorite).toList();
     if (newIndex > oldIndex) newIndex -= 1;
@@ -145,7 +139,6 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
     if (mounted) _load();
   }
 
-  /// [draft] = {path, name, iconBase64} de um arquivo recém-escolhido; [existing] = edição.
   Future<void> _edit({Map<String, dynamic>? draft, KzApp? existing}) async {
     final groups = {for (final a in _apps) if (a.group.isNotEmpty) a.group}.toList()..sort();
     final saved = await showDialog<bool>(
@@ -290,7 +283,6 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
     });
   }
 
-  /// Windows (UIPI) nao deixa arrastar do Explorer/Menu Iniciar para uma janela de administrador.
   Widget _elevatedNotice(ColorScheme scheme) => Container(
         margin: const EdgeInsets.only(bottom: 16),
         padding: const EdgeInsets.all(12),
@@ -317,7 +309,8 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
         padding: const EdgeInsets.only(bottom: 10),
         child: Row(crossAxisAlignment: CrossAxisAlignment.baseline, textBaseline: TextBaseline.alphabetic, children: [
           Text(title.toUpperCase(),
-              style: TextStyle(fontSize: 12, letterSpacing: 1.1, fontWeight: FontWeight.w700, color: scheme.primary)),
+              style: const TextStyle(
+                  fontSize: 12, letterSpacing: 1.1, fontWeight: FontWeight.w700, color: KzColors.apps)),
           const SizedBox(width: 10),
           Text(hint, style: TextStyle(fontSize: 11.5, color: scheme.onSurface.withValues(alpha: 0.5))),
         ]),
@@ -328,9 +321,10 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
       width: width,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
+        color: Color.alphaBlend(
+            KzColors.apps.withValues(alpha: a.favorite ? 0.09 : 0.03), scheme.surfaceContainerLow),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: scheme.outlineVariant),
+        border: Border.all(color: KzColors.apps.withValues(alpha: a.favorite ? 0.40 : 0.16)),
       ),
       child: Row(children: [
         if (handle != null) handle,
@@ -352,7 +346,7 @@ class _AppsConfigPageState extends State<AppsConfigPage> {
             visualDensity: VisualDensity.compact,
             tooltip: a.favorite ? 'Remove from favorites' : 'Add to favorites',
             icon: Icon(a.favorite ? Icons.star_rounded : Icons.star_border_rounded,
-                color: a.favorite ? scheme.primary : null),
+                color: a.favorite ? KzColors.apps : null),
             onPressed: () => _toggleFavorite(a),
           ),
           Row(mainAxisSize: MainAxisSize.min, children: [
@@ -383,9 +377,6 @@ class _InstalledDialog extends StatefulWidget {
   State<_InstalledDialog> createState() => _InstalledDialogState();
 }
 
-/// Seletor de aplicativos instalados: Menu Iniciar (usuario e sistema), programas registrados e
-/// apps da Loja. Busca, icone, Adicionar e "Added". Cada item abre pelo mecanismo certo (atalho
-/// com argumentos, .exe ou AppUserModelID); duplicatas sao reconhecidas pela identidade do programa.
 class _InstalledDialogState extends State<_InstalledDialog> {
   List<Map<String, dynamic>>? _all;
   late final TextEditingController _search;
@@ -493,7 +484,7 @@ class _InstalledDialogState extends State<_InstalledDialog> {
                         itemBuilder: (_, i) {
                           final item = list[i];
                           final key = '${item['key']}';
-                          _icon(key); // so as linhas visiveis pedem o icone
+                          _icon(key);
                           final added = item['added'] == true;
                           final icon = _icons[key];
                           final detail = '${item['detail']}'.isNotEmpty ? '${item['detail']}' : '${item['source']}';
@@ -563,8 +554,8 @@ class _AppEditDialogState extends State<_AppEditDialog> {
   late final TextEditingController _name;
   late final TextEditingController _group;
   late bool _favorite;
-  String? _iconB64; // ícone atual (do programa ou o trocado)
-  String? _customIcon; // só preenchido quando o usuário troca
+  String? _iconB64;
+  String? _customIcon;
   bool _saving = false;
 
   @override

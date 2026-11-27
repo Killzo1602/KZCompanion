@@ -22,11 +22,6 @@ namespace DroidDeck.Services
         public string? Password { get; set; }
     }
 
-    /// <summary>
-    /// Cliente obs-websocket v5 (embutido no OBS 28+). Conecta no OBS local, troca cenas,
-    /// grava/transmite, câmera virtual, replay, muta fontes — e reflete o estado ao vivo.
-    /// Mesma ideia do DiscordRpcService, mas sobre WebSocket em vez de named pipe.
-    /// </summary>
     public class ObsService : Integrations.IIntegration
     {
         private readonly ILogger<ObsService> _logger;
@@ -46,7 +41,6 @@ namespace DroidDeck.Services
         public bool IsConnected => Connected;
         public string? CurrentScene { get; private set; }
 
-        /// <summary>Cena no preview (so com o Modo Estudio ligado).</summary>
         public string? PreviewScene { get; private set; }
         public bool StudioMode { get; private set; }
         public IReadOnlyList<string> Scenes => _scenes;
@@ -64,7 +58,6 @@ namespace DroidDeck.Services
             _hub = hub;
         }
 
-        // ---- Config em %LocalAppData%\DroidDeck\obs.json ----
         private static string ConfigPath
         {
             get
@@ -81,7 +74,6 @@ namespace DroidDeck.Services
             return new ObsConfig();
         }
 
-        /// <summary>True se o usuário já configurou o OBS alguma vez (usado pelo auto-connect).</summary>
         public bool HasSavedConfig() => File.Exists(ConfigPath);
 
         public void SaveConfig(ObsConfig c)
@@ -104,9 +96,6 @@ namespace DroidDeck.Services
             audioInputs = _audioInputs,
         };
 
-        // ---- Conexão + handshake (Hello -> Identify -> Identified) ----
-        // Serializado por _connectLock: o watchdog (ObsAutoConnect) e o "Conectar"
-        // manual podem disparar ao mesmo tempo, e dois connects concorrentes corromperiam o _ws.
         public async Task ConnectAsync()
         {
             await _connectLock.WaitAsync();
@@ -120,8 +109,6 @@ namespace DroidDeck.Services
                 using (var connectCts = new CancellationTokenSource(5000))
                     await _ws.ConnectAsync(uri, connectCts.Token);
 
-                // Mesmo padrão do DiscordRpcService: o CTS é descartado pelo próprio loop ao
-                // terminar (último usuário do token). Antes cada reconexão vazava um CTS.
                 var readCts = new CancellationTokenSource();
                 _readCts = readCts;
                 _identifiedTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -133,7 +120,7 @@ namespace DroidDeck.Services
 
                 await Task.WhenAny(_identifiedTcs.Task, Task.Delay(6000));
                 if (!_identifiedTcs.Task.IsCompletedSuccessfully)
-                    throw new Exception("OBS não respondeu (handshake). O obs-websocket está ativo?");
+                    throw new Exception("OBS didn't respond (handshake). Is obs-websocket enabled?");
 
                 Connected = true;
                 await RefreshStateAsync();
@@ -147,9 +134,6 @@ namespace DroidDeck.Services
 
         private async Task HandleHelloAsync(JsonElement d)
         {
-            // Chamado como fire-and-forget do read loop. Se algo falhar (ex.: JSON de auth
-            // sem challenge/salt), NAO deixa a excecao subir sem observador: sinaliza o TCS
-            // pra ConnectAsync falhar na hora em vez de esperar o timeout de 6s.
             try
             {
                 var cfg = LoadConfig();
@@ -178,7 +162,6 @@ namespace DroidDeck.Services
             return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(secret + challenge)));
         }
 
-        // ---- Estado: lê tudo de uma vez (após conectar / sob demanda) ----
         public async Task RefreshStateAsync()
         {
             try
@@ -205,7 +188,6 @@ namespace DroidDeck.Services
                     foreach (var i in ia.EnumerateArray())
                     {
                         var kind = i.TryGetProperty("inputKind", out var k) ? k.GetString() ?? "" : "";
-                        // só fontes com áudio (mic/desktop/captura)
                         if (kind.Contains("audio") || kind.Contains("wasapi") || kind.Contains("capture"))
                             inputs.Add(new { name = i.TryGetProperty("inputName", out var nn) ? nn.GetString() : null });
                     }
@@ -215,7 +197,6 @@ namespace DroidDeck.Services
             await BroadcastAsync();
         }
 
-        /// <summary>O OBS recusa o pedido fora do Modo Estudio.</summary>
         private async Task RefreshPreviewSceneAsync()
         {
             if (!StudioMode)
@@ -237,7 +218,6 @@ namespace DroidDeck.Services
             catch { return false; }
         }
 
-        // ---- Ações ----
         public Task SetSceneAsync(string scene) => RequestVoid("SetCurrentProgramScene", new { sceneName = scene });
         public Task ToggleRecordAsync() => RequestVoid("ToggleRecord");
         public Task StartRecordAsync() => RequestVoid("StartRecord");
@@ -247,10 +227,6 @@ namespace DroidDeck.Services
         public Task ToggleReplayBufferAsync() => RequestVoid("ToggleReplayBuffer");
         public Task SaveReplayAsync() => RequestVoid("SaveReplayBuffer");
         public Task ToggleInputMuteAsync(string input) => RequestVoid("ToggleInputMute", new { inputName = input });
-        /// <summary>
-        /// Evento RecordStateChanged. Pausar chega com outputActive=false (visto no OBS 32), mas a
-        /// gravacao continua: o que vale e o outputState.
-        /// </summary>
         public void ApplyRecordState(JsonElement data)
         {
             var state = data.TryGetProperty("outputState", out var rs) ? rs.GetString() : null;
@@ -272,11 +248,9 @@ namespace DroidDeck.Services
 
         public Task ToggleRecordPauseAsync() => RequestVoid("ToggleRecordPause");
 
-        /// <summary>Marcador de capitulo na gravacao (OBS 30.2+, formato Hybrid MP4).</summary>
         public Task CreateRecordChapterAsync(string? name) =>
             RequestVoid("CreateRecordChapter", string.IsNullOrWhiteSpace(name) ? null : new { chapterName = name });
 
-        /// <summary>Mostra/oculta uma fonte dentro de uma cena.</summary>
         public async Task ToggleSceneItemAsync(string scene, string source)
         {
             var id = await SceneItemIdAsync(scene, source);
@@ -297,7 +271,6 @@ namespace DroidDeck.Services
             return r.GetProperty("sceneItemId").GetInt32();
         }
 
-        /// <summary>Liga/desliga um filtro de uma fonte (ou cena).</summary>
         public async Task ToggleFilterAsync(string source, string filter)
         {
             var r = await RequestAsync("GetSourceFilter", new { sourceName = source, filterName = filter });
@@ -305,10 +278,6 @@ namespace DroidDeck.Services
             await RequestVoid("SetSourceFilterEnabled", new { sourceName = source, filterName = filter, filterEnabled = !enabled });
         }
 
-        /// <summary>
-        /// Captura da cena do programa em PNG, na pasta de gravacao do OBS (a mesma onde ficam
-        /// os videos e os replays).
-        /// </summary>
         public async Task<string> ScreenshotAsync()
         {
             var scene = (await RequestAsync("GetCurrentProgramScene")).GetProperty("currentProgramSceneName").GetString() ?? "";
@@ -318,9 +287,6 @@ namespace DroidDeck.Services
             return path;
         }
 
-        // ---- Listas para o editor ----
-
-        /// <summary>Fontes de uma cena (nomes), na ordem do OBS.</summary>
         public async Task<List<string>> GetSceneItemsAsync(string scene)
         {
             EnsureConnected();
@@ -332,7 +298,6 @@ namespace DroidDeck.Services
             return items;
         }
 
-        /// <summary>Todas as fontes (entradas) e cenas: o que pode ter filtro.</summary>
         public async Task<List<string>> GetSourcesAsync()
         {
             EnsureConnected();
@@ -362,10 +327,9 @@ namespace DroidDeck.Services
         private void EnsureConnected()
         {
             if (!Connected || _ws is not { State: WebSocketState.Open })
-                throw new InvalidOperationException("OBS não está conectado.");
+                throw new InvalidOperationException("OBS is not connected.");
         }
 
-        // ---- WebSocket: request/resposta com requestId, leitura e eventos ----
         private async Task<JsonElement> RequestAsync(string type, object? data = null, int timeoutMs = 8000)
         {
             EnsureConnected();
@@ -384,7 +348,6 @@ namespace DroidDeck.Services
 
         private async Task RequestVoid(string type, object? data = null) { await RequestAsync(type, data); }
 
-        /// <summary>Volume de uma fonte de audio, como multiplicador (0 = mudo, 1 = 100%).</summary>
         public async Task<double> GetInputVolumeAsync(string inputName)
         {
             var r = await RequestAsync("GetInputVolume", new { inputName });
@@ -443,21 +406,21 @@ namespace DroidDeck.Services
 
                 switch (op)
                 {
-                    case 0: // Hello
+                    case 0:
                         _ = HandleHelloAsync(d.Clone());
                         break;
-                    case 2: // Identified
+                    case 2:
                         _identifiedTcs?.TrySetResult(true);
                         break;
-                    case 5: // Event
+                    case 5:
                         HandleEvent(d);
                         break;
-                    case 7: // RequestResponse
+                    case 7:
                         if (d.TryGetProperty("requestId", out var rid) && _pending.TryRemove(rid.GetString()!, out var tcs))
                         {
                             bool ok = d.TryGetProperty("requestStatus", out var st) && st.TryGetProperty("result", out var rs) && rs.ValueKind == JsonValueKind.True;
                             if (ok) tcs.TrySetResult(d.TryGetProperty("responseData", out var rd) ? rd.Clone() : default);
-                            else tcs.TrySetException(new Exception("OBS recusou o pedido."));
+                            else tcs.TrySetException(new Exception("OBS refused the request."));
                         }
                         break;
                 }

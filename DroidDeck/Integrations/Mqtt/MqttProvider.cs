@@ -3,10 +3,6 @@ using DroidDeck.Actions;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Acao "mqtt": publica uma mensagem num topico do broker configurado. Nao e privilegiada:
-    /// so fala com o broker que o usuario escolheu, do mesmo jeito que o Home Assistant.
-    /// </summary>
     public class MqttProvider : IStatefulActionProvider
     {
         public const string TypeName = "mqtt";
@@ -24,19 +20,19 @@ namespace DroidDeck.Integrations
             Type = TypeName,
             Title = "MQTT",
             Icon = "hub",
-            Category = "Casa",
-            Description = "Publica uma mensagem num tópico do seu broker MQTT (Mosquitto, Home Assistant, Node-RED, Zigbee2MQTT...).",
+            Category = "Home",
+            Description = "Publishes a message to a topic on your MQTT broker (Mosquitto, Home Assistant, Node-RED, Zigbee2MQTT...).",
             Settings = "mqtt",
             StateEvent = StateEvent,
             Fields =
             {
-                ActionField.Text("topic", "Tópico", "casa/sala/luz/set", required: true),
-                ActionField.Multiline("payload", "Mensagem", "ON", "Texto ou JSON. Pode ficar vazia."),
+                ActionField.Text("topic", "Topic", "home/living-room/light/set", required: true),
+                ActionField.Multiline("payload", "Message", "ON", "Text or JSON. Can be empty."),
                 ActionField.Select("qos", "QoS",
-                    ("0", "0 — no máximo uma vez"),
-                    ("1", "1 — pelo menos uma vez"),
-                    ("2", "2 — exatamente uma vez")),
-                ActionField.Toggle("retain", "Reter (retain)", false, "O broker guarda a última mensagem do tópico para quem assinar depois."),
+                    ("0", "0 — at most once"),
+                    ("1", "1 — at least once"),
+                    ("2", "2 — exactly once")),
+                ActionField.Toggle("retain", "Retain", false, "The broker keeps the topic's last message for whoever subscribes later."),
             },
         };
 

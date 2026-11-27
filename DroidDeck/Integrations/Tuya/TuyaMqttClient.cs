@@ -11,23 +11,12 @@ using MQTTnet.Packets;
 
 namespace DroidDeck.Services.Tuya
 {
-    /// <summary>Um relato de mudanca de estado vindo do push.</summary>
     public class TuyaStatusReport
     {
         public string DeviceId { get; set; } = "";
         public Dictionary<string, object?> Changes { get; set; } = new();
     }
 
-    /// <summary>
-    /// Push de estado da Tuya por MQTT. E o que permite o botao do deck refletir o estado real
-    /// do aparelho sem polling -- e polling aqui e inviavel: o tier gratuito da 26k chamadas/mes
-    /// (~0,6/min), enquanto as mensagens de push tem cota propria de 68k/mes.
-    ///
-    /// As credenciais do broker expiram (expireTime, tipicamente 2h) e sao reemitidas a cada
-    /// reconexao; por isso o auto-reconnect do cliente MQTT fica DESLIGADO e a reconexao e
-    /// nossa -- reconectar com credencial velha so gera rejeicao em laco. Uma queda (troca de
-    /// rede, roteador reiniciado) acorda o laco na hora, com credencial nova.
-    /// </summary>
     public class TuyaMqttClient : IAsyncDisposable
     {
         private const int ProtocolDeviceReport = 4;
@@ -39,10 +28,8 @@ namespace DroidDeck.Services.Tuya
         private CancellationTokenSource? _cts;
         private Task? _loop;
 
-        // Liberado quando a conexao atual cai sem a gente pedir: interrompe a espera da renovacao.
         private readonly SemaphoreSlim _dropped = new(0, 1);
 
-        /// <summary>devId -> (dpId -> code), para traduzir relatos de aparelho com suporte local.</summary>
         private Dictionary<string, Dictionary<string, string>> _dpMaps = new();
         private List<string> _ownerIds = new();
         private Dictionary<string, bool> _supportLocal = new();
@@ -100,15 +87,12 @@ namespace DroidDeck.Services.Tuya
                     continue;
                 }
 
-                // Renova ~60s antes de expirar. Credencial nova exige conexao nova. Se a conexao
-                // cair antes, reconecta ja -- esperar a renovacao deixava ate 2h sem estado.
                 var wait = TimeSpan.FromSeconds(Math.Max(expireSeconds - 60, 30));
                 try
                 {
                     if (await _dropped.WaitAsync(wait, ct))
                     {
                         _logger.LogWarning("Tuya MQTT: conexao caiu; reconectando");
-                        // Evita laco apertado se o broker derrubar logo apos aceitar.
                         await Task.Delay(TimeSpan.FromSeconds(2), ct);
                     }
                 }
@@ -132,7 +116,6 @@ namespace DroidDeck.Services.Tuya
             var ownerTopic = topic.GetProperty("ownerId").GetProperty("sub").GetString() ?? "";
             var devTopic = topic.GetProperty("devId").GetProperty("sub").GetString() ?? "";
 
-            // url chega como "ssl://host:porta" (ou tcp://).
             var uri = new Uri(url.Replace("ssl://", "ssls://").Replace("tcp://", "tcps://"));
             var useTls = url.StartsWith("ssl://", StringComparison.OrdinalIgnoreCase);
 
@@ -143,8 +126,6 @@ namespace DroidDeck.Services.Tuya
             client.ApplicationMessageReceivedAsync += OnMessageAsync;
             client.DisconnectedAsync += _ =>
             {
-                // A troca de conexao na renovacao derruba o cliente antigo de proposito; so a
-                // queda do cliente em uso conta.
                 if (ReferenceEquals(client, _client))
                 {
                     ConnectionChanged?.Invoke(false);
@@ -172,7 +153,6 @@ namespace DroidDeck.Services.Tuya
 
             foreach (var kv in _dpMaps)
             {
-                // /pen para aparelho com suporte local (relata por dpId), /sta para os demais.
                 var suffix = _supportLocal.TryGetValue(kv.Key, out var sl) && sl ? "/pen" : "/sta";
                 filters.Add(new MqttTopicFilterBuilder()
                     .WithTopic(devTopic.Replace("{devId}", kv.Key) + suffix).Build());
@@ -230,7 +210,6 @@ namespace DroidDeck.Services.Tuya
                     }
                     else if (item.TryGetProperty("dpId", out var dp) && dpMap != null)
                     {
-                        // Relato local: chega o dpId numerico, traduzido pelo mapa da enumeracao.
                         dpMap.TryGetValue(dp.ToString(), out code);
                     }
 

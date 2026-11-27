@@ -46,19 +46,17 @@ namespace DroidDeck.Controllers
         {
             _logger.LogDebug("SetOutput called for {id}", id);
             var device = new MixerMaster(id);
-            if (device.Id == null) return NotFound(); // id inexistente/desconectado
+            if (device.Id == null) return NotFound();
 
             MixerMaster? result;
             try { result = device.SetOptions(id, data); }
             catch (Exception ex)
             {
-                // Ex.: COMException se o device sumiu entre a checagem e o SetOptions.
                 _logger.LogWarning(ex, "SetOutput falhou para {id}", id);
                 return BadRequest();
             }
             if (result == null) return NotFound();
 
-            // Broadcast volume change to all connected clients
             await _hubContext.Clients.All.SendAsync("ReceiveVolumeChange", new
             {
                 deviceId = id,
@@ -90,7 +88,7 @@ namespace DroidDeck.Controllers
         {
             _logger.LogDebug("SetInput called for {id}", id);
             var device = new MixerMaster(id);
-            if (device.Id == null) return NotFound(); // id inexistente/desconectado
+            if (device.Id == null) return NotFound();
 
             MixerMaster? result;
             try { result = device.SetOptions(id, data); }
@@ -101,7 +99,6 @@ namespace DroidDeck.Controllers
             }
             if (result == null) return NotFound();
 
-            // Broadcast volume change to all connected clients
             await _hubContext.Clients.All.SendAsync("ReceiveVolumeChange", new
             {
                 deviceId = id,

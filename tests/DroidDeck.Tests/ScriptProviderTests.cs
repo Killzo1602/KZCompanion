@@ -15,7 +15,7 @@ namespace DroidDeck.Tests
         [Theory]
         [InlineData("", new string[0])]
         [InlineData("a b  c", new[] { "a", "b", "c" })]
-        [InlineData("\"meu jogo\" 2", new[] { "meu jogo", "2" })]
+        [InlineData("\"my game\" 2", new[] { "my game", "2" })]
         [InlineData("x \"\" y", new[] { "x", "", "y" })]
         public void SplitArguments_ComoALinhaDeComando(string text, string[] expected) =>
             Assert.Equal(expected, ScriptProvider.SplitArguments(text));

@@ -17,3 +17,7 @@ app/LICENSE. Which license governs app/ has not been confirmed by the upstream a
 app/LICENSE is preserved unmodified. See docs/license-audit.md.
 
 Third-party components and their licenses are listed in THIRD_PARTY_NOTICES.md.
+
+Several behaviours (section swiping, the 12 x 6 widget grid rules, the Claude usage "limits" format and
+bounded tool processes) follow ideas from PhoneBox (https://github.com/ersinkoc/phonebox),
+MIT License, Copyright (c) 2026 Ersin KOC. No PhoneBox source files are included.

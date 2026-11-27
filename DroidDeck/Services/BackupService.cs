@@ -8,14 +8,6 @@ using DroidDeck.Models;
 
 namespace DroidDeck.Services
 {
-    /// <summary>
-    /// Backup dos perfis num arquivo .droiddeck: um zip com manifest.json e um JSON por
-    /// perfil (os icones personalizados vao junto, em base64, dentro dos botoes).
-    ///
-    /// Importar e restaurar: um perfil com o mesmo id substitui o atual, os demais sao
-    /// adicionados. Os ids sao mantidos para os botoes "abrir perfil" continuarem apontando
-    /// para as pastas certas.
-    /// </summary>
     public class BackupService
     {
         public const int FormatVersion = 1;
@@ -52,7 +44,6 @@ namespace DroidDeck.Services
             return ms.ToArray();
         }
 
-        /// <summary>Le os perfis de um backup. Lanca InvalidDataException se o arquivo nao for um.</summary>
         public static List<DeckProfile> Read(Stream stream)
         {
             ZipArchive zip;
@@ -62,21 +53,21 @@ namespace DroidDeck.Services
             }
             catch (InvalidDataException)
             {
-                throw new InvalidDataException("Não é um backup do DroidDeck (o arquivo não é um .droiddeck válido).");
+                throw new InvalidDataException("Not a KZ Companion backup (the file is not a valid .droiddeck).");
             }
 
             try
             {
                 using var _ = zip;
                 var manifestEntry = zip.GetEntry("manifest.json")
-                    ?? throw new InvalidDataException("Não é um backup do DroidDeck (falta o manifest.json).");
+                    ?? throw new InvalidDataException("Not a KZ Companion backup (manifest.json is missing).");
                 Manifest? manifest;
                 using (var s = manifestEntry.Open())
                     manifest = JsonSerializer.Deserialize<Manifest>(s, Json);
                 if (manifest == null || manifest.App != "DroidDeck")
-                    throw new InvalidDataException("Não é um backup do DroidDeck.");
+                    throw new InvalidDataException("Not a KZ Companion backup.");
                 if (manifest.Format > FormatVersion)
-                    throw new InvalidDataException("Backup de uma versão mais nova do DroidDeck. Atualize o DroidDeck no PC.");
+                    throw new InvalidDataException("Backup from a newer KZ Companion version. Update KZ Companion on the PC.");
 
                 var profiles = new List<DeckProfile>();
                 foreach (var entry in zip.Entries.Where(e => e.FullName.StartsWith("profiles/") && e.FullName.EndsWith(".json")))
@@ -94,7 +85,7 @@ namespace DroidDeck.Services
             }
             catch (Exception ex) when (ex is JsonException or IOException)
             {
-                throw new InvalidDataException("Arquivo de backup corrompido.", ex);
+                throw new InvalidDataException("Corrupted backup file.", ex);
             }
         }
 

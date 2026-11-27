@@ -15,7 +15,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>Acao "youtube": mensagem no chat da live e mostrar ao vivo/espectadores.</summary>
     public class YouTubeProvider : IStatefulActionProvider
     {
         public const string TypeName = "youtube";
@@ -34,16 +33,16 @@ namespace DroidDeck.Integrations
             Title = "YouTube",
             Icon = "smart_display",
             Category = "Streaming",
-            Description = "Manda mensagens no chat da sua live e mostra se está ao vivo e quantos assistem.",
+            Description = "Sends messages to your live chat and shows whether you're live and how many are watching.",
             Stateful = true,
             Settings = "youtube",
             StateEvent = StateEvent,
             Fields =
             {
-                ActionField.Select("operation", "O que fazer",
-                    ("chat", "Mandar mensagem no chat"),
-                    ("status", "Só mostrar ao vivo/espectadores")),
-                ActionField.Multiline("message", "Mensagem", "Obrigado por assistir!").When("operation", "chat"),
+                ActionField.Select("operation", "What to do",
+                    ("chat", "Send chat message"),
+                    ("status", "Only show live/viewers")),
+                ActionField.Multiline("message", "Message", "Thanks for watching!").When("operation", "chat"),
             },
         };
 

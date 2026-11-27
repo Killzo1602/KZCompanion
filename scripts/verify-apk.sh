@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Verifies a release APK: signature valid, NOT the debug key, expected package, version and ARM64-only.
-# Usage: scripts/verify-apk.sh <apk> <expected-version> [expected-package] [expected-cert-sha256]
-# The optional fingerprint is hex, with or without colons, any case. It is public information.
-# Needs apksigner and aapt2 (Android build-tools) on PATH, or ANDROID_HOME / ANDROID_SDK_ROOT set.
 set -euo pipefail
 apk="${1:?apk path}"; want_ver="${2:?expected version, e.g. 1.0.0}"; want_pkg="${3:-dev.kzstudio.kzcompanion}"; want_fp="${4:-}"
 

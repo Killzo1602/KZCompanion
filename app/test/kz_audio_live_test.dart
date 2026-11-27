@@ -1,4 +1,3 @@
-// Teste manual contra um backend de verdade (KZ_LIVE_URL / KZ_LIVE_KEY). Fica fora do CI.
 import 'dart:io';
 
 import 'package:droiddeck/core/core.dart';
@@ -11,11 +10,11 @@ void main() {
   final key = Platform.environment['KZ_LIVE_KEY'];
 
   test('Android client code -> real backend -> state', () async {
-    HttpOverrides.global = null; // flutter test bloqueia HTTP por padrao
+    HttpOverrides.global = null;
     final client = DroidDeckClient(baseUrl: url!);
     client.setApiKey(key);
     final signalR = SignalRService();
-    signalR.connectionStatus.value = 'Connected'; // o painel so libera os controles online
+    signalR.connectionStatus.value = 'Connected';
     expect(signalR.linkState.value, 'online');
 
     final store = AudioStore(client: client, signalR: signalR);
@@ -29,7 +28,6 @@ void main() {
     expect(s0.sessions, isNotEmpty);
     expect(store.icons.value, isNotEmpty);
 
-    // Master: o celular manda, o Windows muda de verdade (confere por um GET independente).
     final v0 = s0.volume!;
     store.setMasterVolume(v0 - 1, commit: true);
     await Future<void>.delayed(const Duration(milliseconds: 600));
@@ -40,7 +38,6 @@ void main() {
     real = AudioState.fromJson(await client.getAudio());
     expect(real.volume, v0);
 
-    // Sessao: Sons do sistema (inofensiva) muda so ela.
     final sys = s0.sessions.firstWhere((x) => x.system);
     store.setSessionVolume(sys.id, 80, commit: true);
     await Future<void>.delayed(const Duration(milliseconds: 600));
@@ -56,7 +53,6 @@ void main() {
     store.setSessionVolume(sys.id, sys.volume, commit: true);
     await Future<void>.delayed(const Duration(milliseconds: 600));
 
-    // Master mute ida e volta.
     store.toggleMasterMute();
     await Future<void>.delayed(const Duration(milliseconds: 600));
     expect(AudioState.fromJson(await client.getAudio()).muted, !s0.muted);
@@ -64,7 +60,6 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 600));
     expect(AudioState.fromJson(await client.getAudio()).muted, s0.muted);
 
-    // Mute (microfone) e Deafen pelo codigo do app: o estado exibido e o confirmado pelo Windows.
     final out0 = s0.muted;
     final mic0 = s0.inputMuted!;
     store.toggleMicMute();
@@ -85,7 +80,6 @@ void main() {
     expect(store.state.value!.muted, out0);
     expect(store.state.value!.inputMuted, mic0);
 
-    // Windows -> Android: um push (como o hub entrega) atualiza o estado local.
     signalR.audioPush.value = {
       'outputName': s0.outputName,
       'volume': 33,
@@ -97,7 +91,6 @@ void main() {
           {'id': x.id, 'name': x.name, 'volume': x.volume, 'muted': x.muted, 'active': x.active, 'system': x.system}
       ],
     };
-    // O slider acabou de ser solto: por ~1 s o push nao pode empurrar valor velho de volta.
     await Future<void>.delayed(const Duration(milliseconds: 1200));
     signalR.audioPush.value = {
       'outputName': s0.outputName,
@@ -109,11 +102,9 @@ void main() {
     };
     expect(store.state.value!.volume, 34);
 
-    // Sessao que sumiu enquanto o dedo estava no slider: 404, sem excecao para a tela.
     store.setSessionVolume('deadbeef0000', 10, commit: true);
     await Future<void>.delayed(const Duration(milliseconds: 600));
 
-    // Chave errada: erro de auth vira mensagem, nao um travamento.
     final bad = DroidDeckClient(baseUrl: url);
     bad.setApiKey('wrong');
     final badStore = AudioStore(client: bad, signalR: signalR);

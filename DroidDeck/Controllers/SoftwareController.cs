@@ -34,7 +34,6 @@ namespace DroidDeck.Controllers
                 return Forbid();
             }
 
-            // perform activation via injected activator (if available)
             if (!string.IsNullOrEmpty(data.Name) && _activator != null)
             {
                 _activator.ActivateWindow(data.Name);

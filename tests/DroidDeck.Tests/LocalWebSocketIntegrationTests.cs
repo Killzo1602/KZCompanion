@@ -25,10 +25,6 @@ using Xunit;
 
 namespace DroidDeck.Tests
 {
-    /// <summary>
-    /// Servidor WebSocket de mentira (Kestrel numa porta livre de 127.0.0.1) que responde cada
-    /// mensagem JSON com o que <c>reply</c> devolver. Faz o papel do Streamer.bot e do VTube Studio.
-    /// </summary>
     internal sealed class FakeWsServer : IAsyncDisposable
     {
         private readonly WebApplication _app;
@@ -43,8 +39,6 @@ namespace DroidDeck.Tests
             Url = url;
         }
 
-        /// <param name="hello">Mensagem mandada logo ao conectar (null = nenhuma).</param>
-        /// <param name="reply">Resposta a cada mensagem recebida (null = nao responde).</param>
         public static async Task<FakeWsServer> StartAsync(JsonNode? hello, Func<JsonNode, JsonNode?> reply)
         {
             var builder = WebApplication.CreateSlimBuilder();
@@ -223,7 +217,7 @@ namespace DroidDeck.Tests
             {
                 var status = await bot.ConfigureAsync(new() { ["url"] = server.Url, ["password"] = "errada" });
                 Assert.False(status.Connected);
-                Assert.Equal("Senha recusada pelo Streamer.bot.", status.Message);
+                Assert.Equal("Streamer.bot rejected the password.", status.Message);
             }
             finally
             {
@@ -320,9 +314,8 @@ namespace DroidDeck.Tests
             try
             {
                 await vts.ConfigureAsync(new() { ["url"] = server.Url });
-                await Fakes.Until(() => vts.GetStatus().Message == "O VTube Studio negou o acesso. Toque em Conectar para pedir de novo.");
+                await Fakes.Until(() => vts.GetStatus().Message == "VTube Studio denied access. Tap Connect to ask again.");
                 Assert.False(vts.GetStatus().Connected);
-                // Passado o intervalo de reconexao, continua um pedido so.
                 await Task.Delay(TimeSpan.FromSeconds(6));
                 Assert.Single(server.Received, m => m["messageType"]?.GetValue<string>() == "AuthenticationTokenRequest");
             }

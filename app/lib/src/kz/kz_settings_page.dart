@@ -3,6 +3,7 @@ import 'package:droiddeck/src/connection/constants.dart';
 import 'package:droiddeck/src/kz/kz_appearance_page.dart';
 import 'package:droiddeck/src/kz/kz_controller.dart';
 import 'package:droiddeck/src/kz/kz_integrations_page.dart';
+import 'package:droiddeck/src/kz/kz_ring.dart';
 import 'package:droiddeck/src/kz/kz_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -39,6 +40,7 @@ class _KzSettingsPageState extends State<KzSettingsPage> {
         Expanded(
           child: Column(children: [
             KzCard(
+                            accent: KzColors.audio,
               title: 'Connected PC',
               icon: Icons.computer_rounded,
               child: Watch((context) {
@@ -93,6 +95,7 @@ class _KzSettingsPageState extends State<KzSettingsPage> {
         Expanded(
           child: Column(children: [
             KzCard(
+                            accent: KzColors.ram,
               title: 'Settings',
               icon: Icons.tune_rounded,
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -103,6 +106,7 @@ class _KzSettingsPageState extends State<KzSettingsPage> {
             ),
             const SizedBox(height: 12),
             const KzCard(
+                            accent: KzColors.cpu,
               title: 'About',
               icon: Icons.info_outline_rounded,
               child: Text(

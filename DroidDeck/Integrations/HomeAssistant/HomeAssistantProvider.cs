@@ -17,7 +17,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>Acao "homeassistant": liga/desliga, brilho, cenas, scripts, servicos e mostrar o estado.</summary>
     public class HomeAssistantProvider : IStatefulActionProvider
     {
         public const string TypeName = "homeassistant";
@@ -35,26 +34,26 @@ namespace DroidDeck.Integrations
             Type = TypeName,
             Title = "Home Assistant",
             Icon = "home",
-            Category = "Casa",
-            Description = "Luzes, tomadas, cenas, scripts e sensores do Home Assistant, com o estado real.",
+            Category = "Home",
+            Description = "Home Assistant lights, plugs, scenes, scripts and sensors, with their real state.",
             Stateful = true,
             Settings = "homeassistant",
             StateEvent = StateEvent,
             Fields =
             {
-                ActionField.Select("operation", "O que fazer",
-                    ("toggle", "Liga/desliga"),
-                    ("turn_on", "Ligar"),
-                    ("turn_off", "Desligar"),
-                    ("brightness", "Brilho (+/-)"),
-                    ("scene", "Ativar cena"),
-                    ("script", "Rodar script"),
-                    ("display", "Só mostrar o estado"),
-                    ("service", "Chamar um serviço")),
-                ActionField.Dynamic("entityId", "Entidade", "/api/integrations/homeassistant/options/entities?operation={operation}", allowCustom: true),
-                ActionField.Number("step", "Passo do brilho", 10, -100, 100, "%").When("operation", "brightness"),
-                ActionField.Text("service", "Serviço", "light.turn_on", "domínio.serviço", required: true).When("operation", "service"),
-                ActionField.Multiline("data", "Dados (JSON, opcional)", "{\"brightness_pct\": 40}").When("operation", "service"),
+                ActionField.Select("operation", "What to do",
+                    ("toggle", "Toggle on/off"),
+                    ("turn_on", "Turn on"),
+                    ("turn_off", "Turn off"),
+                    ("brightness", "Brightness (+/-)"),
+                    ("scene", "Activate scene"),
+                    ("script", "Run script"),
+                    ("display", "Only show the state"),
+                    ("service", "Call a service")),
+                ActionField.Dynamic("entityId", "Entity", "/api/integrations/homeassistant/options/entities?operation={operation}", allowCustom: true),
+                ActionField.Number("step", "Brightness step", 10, -100, 100, "%").When("operation", "brightness"),
+                ActionField.Text("service", "Service", "light.turn_on", "domain.service", required: true).When("operation", "service"),
+                ActionField.Multiline("data", "Data (JSON, optional)", "{\"brightness_pct\": 40}").When("operation", "service"),
             },
         };
 
@@ -86,13 +85,12 @@ namespace DroidDeck.Integrations
                     break;
                 case "service":
                     var parts = ctx.Get("service").Trim().Split('.', 2);
-                    if (parts.Length != 2) throw new InvalidOperationException("Serviço no formato domínio.serviço");
+                    if (parts.Length != 2) throw new InvalidOperationException("Service in domain.service format");
                     var data = string.IsNullOrWhiteSpace(ctx.Get("data")) ? null
                         : System.Text.Json.Nodes.JsonNode.Parse(ctx.Get("data")) as System.Text.Json.Nodes.JsonObject;
                     await _ha.CallServiceAsync(parts[0], parts[1], entity.Length > 0 ? entity : null, data);
                     break;
                 default:
-                    // Cenas e scripts nao tem "toggle": o toque ativa.
                     if (domain is "scene" or "script") await _ha.CallServiceAsync(domain, "turn_on", entity);
                     else if (domain == "lock")
                         await _ha.CallServiceAsync("lock", _ha.Find(entity)?.State == "locked" ? "unlock" : "lock", entity);
@@ -101,7 +99,6 @@ namespace DroidDeck.Integrations
             }
         }
 
-        /// <summary>Dominios com servico proprio de liga/desliga; o resto vai pelo "homeassistant".</summary>
         private static string OnOffDomain(string domain) =>
             domain is "light" or "switch" or "fan" or "input_boolean" or "media_player" or "climate" or "automation"
                 or "siren" or "humidifier" or "cover" or "vacuum"

@@ -6,14 +6,8 @@ using System.Runtime.InteropServices;
 
 namespace DroidDeck.Lib
 {
-    /// <summary>
-    /// Brilho dos monitores, de 0 a 100. Monitor externo: DDC/CI (o mesmo canal dos botões
-    /// do próprio monitor; alguns vêm com DDC/CI desligado no menu OSD). Tela de notebook:
-    /// WMI. Mexe em todos os monitores juntos; ler devolve a média.
-    /// </summary>
     public static class MonitorBrightness
     {
-        /// <summary>Brilho atual (média dos monitores que respondem), ou null se nenhum responde.</summary>
         public static int? Get()
         {
             var values = new List<int>();
@@ -27,7 +21,6 @@ namespace DroidDeck.Lib
             return values.Count == 0 ? null : (int)Math.Round(values.Average());
         }
 
-        /// <summary>Muda o brilho de todos os monitores. False se nenhum aceitou.</summary>
         public static bool Set(int percent)
         {
             percent = Math.Clamp(percent, 0, 100);
@@ -41,8 +34,6 @@ namespace DroidDeck.Lib
             if (SetWmi(percent)) any = true;
             return any;
         }
-
-        // ---- DDC/CI (dxva2) ----
 
         private delegate bool MonitorAction(IntPtr physical, uint min, uint cur, uint max);
 
@@ -64,7 +55,6 @@ namespace DroidDeck.Lib
                 {
                     foreach (var pm in physical)
                     {
-                        // Ler antes também serve de teste: monitor sem DDC/CI falha aqui.
                         if (GetMonitorBrightness(pm.Handle, out var min, out var cur, out var max))
                             action(pm.Handle, min, cur, max);
                     }
@@ -105,8 +95,6 @@ namespace DroidDeck.Lib
 
         [DllImport("dxva2.dll", SetLastError = true)]
         private static extern bool SetMonitorBrightness(IntPtr monitor, uint brightness);
-
-        // ---- WMI (tela interna do notebook) ----
 
         private static int? GetWmi()
         {

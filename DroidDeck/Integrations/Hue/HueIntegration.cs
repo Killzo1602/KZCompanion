@@ -16,11 +16,6 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>
-    /// Philips Hue pela API local (v1) do Hue Bridge, sem conta na nuvem. O pareamento e o
-    /// do proprio Hue: aperta o botao do bridge e, em ate 30 s, o DroidDeck pede um usuario
-    /// (POST /api). O usuario fica cifrado com o resto da configuracao.
-    /// </summary>
     public class HueIntegration : AccountIntegration
     {
         public const string Event = "ReceiveHueState";
@@ -62,10 +57,9 @@ namespace DroidDeck.Integrations
             if (bridge.Length == 0)
             {
                 bridge = await DiscoverAsync()
-                    ?? throw new InvalidOperationException("Nenhum Hue Bridge encontrado. Digite o IP dele (aparece no app Hue, em Configurações → Bridges).");
+                    ?? throw new InvalidOperationException("No Hue Bridge found. Type its IP (shown in the Hue app, under Settings → Bridges).");
             }
 
-            // Mesmo bridge e usuario que ainda funciona: so confere.
             if (bridge != Bridge || Username == null || !await CheckAsync())
             {
                 var username = await PairAsync(bridge);
@@ -88,8 +82,6 @@ namespace DroidDeck.Integrations
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            // Sem conexao permanente: confere o bridge ao abrir e de tempos em tempos, para o
-            // aviso de "desconectado" do editor ficar certo.
             while (!stoppingToken.IsCancellationRequested)
             {
                 _recheck = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
@@ -98,7 +90,6 @@ namespace DroidDeck.Integrations
             }
         }
 
-        /// <summary>Le a configuracao do bridge (so responde com nome a um usuario valido).</summary>
         private async Task<bool> CheckAsync()
         {
             var was = _connected;
@@ -107,13 +98,13 @@ namespace DroidDeck.Integrations
                 var config = await SendAsync(HttpMethod.Get, "config");
                 _bridgeName = config?["name"]?.GetValue<string>();
                 _connected = _bridgeName != null || config?["bridgeid"] != null;
-                _error = _connected ? null : "O Hue Bridge recusou o acesso. Pareie de novo.";
+                _error = _connected ? null : "The Hue Bridge refused access. Pair again.";
             }
             catch (Exception ex)
             {
                 _connected = false;
                 _error = ex is HttpRequestException or TaskCanceledException
-                    ? "Não foi possível falar com o Hue Bridge. Confira o IP."
+                    ? "Couldn't reach the Hue Bridge. Check the IP."
                     : ex.Message;
             }
             if (was != _connected) await BroadcastAsync();
@@ -136,7 +127,6 @@ namespace DroidDeck.Integrations
             }
         }
 
-        /// <summary>Pede um usuario ao bridge. So funciona logo depois de apertar o botao dele.</summary>
         private async Task<string> PairAsync(string bridge)
         {
             var client = _http.CreateClient();
@@ -147,27 +137,25 @@ namespace DroidDeck.Integrations
             try { response = await client.PostAsync($"http://{bridge}/api", content); }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
-                throw new InvalidOperationException("Não foi possível falar com o Hue Bridge. Confira o IP.");
+                throw new InvalidOperationException("Couldn't reach the Hue Bridge. Check the IP.");
             }
             using (response)
                 return ParsePairing(await response.Content.ReadAsStringAsync());
         }
 
-        /// <summary>Nome do PC no "devicetype" (o Hue aceita ate 19 caracteres depois do #).</summary>
         private static string DeviceName()
         {
             var name = new string(Environment.MachineName.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
             return name.Length == 0 ? "pc" : name[..Math.Min(name.Length, 19)];
         }
 
-        /// <summary>Resposta do POST /api: o usuario, ou o erro (101 = botao nao apertado).</summary>
         public static string ParsePairing(string body)
         {
             var first = (JsonNode.Parse(body) as JsonArray)?.FirstOrDefault();
             if (first?["success"]?["username"]?.GetValue<string>() is { Length: > 0 } user) return user;
             var type = first?["error"]?["type"]?.GetValue<int>();
-            if (type == 101) throw new InvalidOperationException("Aperte o botão redondo do Hue Bridge e toque em Parear de novo (em até 30 segundos).");
-            throw new InvalidOperationException(first?["error"]?["description"]?.GetValue<string>() ?? "O Hue Bridge recusou o pareamento.");
+            if (type == 101) throw new InvalidOperationException("Press the round button on the Hue Bridge and tap Pair again (within 30 seconds).");
+            throw new InvalidOperationException(first?["error"]?["description"]?.GetValue<string>() ?? "The Hue Bridge refused the pairing.");
         }
 
         public static string NormalizeHost(string? value)
@@ -178,16 +166,11 @@ namespace DroidDeck.Integrations
             return h.Trim('/');
         }
 
-        // ---- Chamadas da API ----
-
-        /// <summary>
-        /// Chamada em /api/{usuario}/{caminho}. Erros do bridge (lista com "error") viram excecao.
-        /// </summary>
         public async Task<JsonNode?> SendAsync(HttpMethod method, string path, JsonObject? body = null)
         {
             var bridge = Bridge;
             var user = Username;
-            if (bridge == null || user == null) throw new InvalidOperationException("Philips Hue não está pareado.");
+            if (bridge == null || user == null) throw new InvalidOperationException("Philips Hue is not paired.");
             var client = _http.CreateClient();
             client.Timeout = TimeSpan.FromSeconds(8);
             using var request = new HttpRequestMessage(method, $"http://{bridge}/api/{user}/{path}");
@@ -199,17 +182,15 @@ namespace DroidDeck.Integrations
             return node;
         }
 
-        /// <summary>O bridge responde 200 mesmo com erro: [{"error":{"type":1,"description":"..."}}].</summary>
         public static void ThrowIfError(JsonNode? node)
         {
             if (node is not JsonArray list) return;
             var error = list.Select(i => i?["error"]).FirstOrDefault(e => e != null);
             if (error == null) return;
-            if (error["type"]?.GetValue<int>() == 1) throw new InvalidOperationException("O Hue Bridge recusou o acesso. Pareie de novo.");
-            throw new InvalidOperationException(error["description"]?.GetValue<string>() ?? "O Hue Bridge recusou.");
+            if (error["type"]?.GetValue<int>() == 1) throw new InvalidOperationException("The Hue Bridge refused access. Pair again.");
+            throw new InvalidOperationException(error["description"]?.GetValue<string>() ?? "The Hue Bridge refused.");
         }
 
-        /// <summary>Executa e atualiza o "conectado" conforme o bridge respondeu.</summary>
         public async Task<JsonNode?> CallAsync(HttpMethod method, string path, JsonObject? body = null)
         {
             try
@@ -221,37 +202,31 @@ namespace DroidDeck.Integrations
             catch (HttpRequestException)
             {
                 if (_connected) { _connected = false; await BroadcastAsync(); }
-                _error = "Não foi possível falar com o Hue Bridge. Confira o IP.";
+                _error = "Couldn't reach the Hue Bridge. Check the IP.";
                 throw new InvalidOperationException(_error);
             }
         }
-
-        // ---- Listas do editor ----
 
         public override async Task<List<FieldOption>> OptionsAsync(string list, IQueryCollection query)
         {
             if (list == "items") list = query["target"] == "group" ? "groups" : "lights";
             if (list is not ("lights" or "groups" or "scenes")) return await base.OptionsAsync(list, query);
             var node = await CallAsync(HttpMethod.Get, list) as JsonObject;
-            // Cenas levam o nome da sala: "Relaxar" existe em cada uma.
             var groups = list == "scenes" ? await CallAsync(HttpMethod.Get, "groups") as JsonObject : null;
             return ParseOptions(list, node, groups);
         }
 
-        /// <summary>Luzes, grupos ou cenas como opcoes do select (id e nome).</summary>
         public static List<FieldOption> ParseOptions(string list, JsonObject? node, JsonObject? groups = null)
         {
             var options = new List<FieldOption>();
-            if (list == "groups") options.Add(new FieldOption("0", L.T("Todas as luzes")));
+            if (list == "groups") options.Add(new FieldOption("0", L.T("All lights")));
             if (node == null) return options;
             foreach (var (id, item) in node)
             {
                 var name = item?["name"]?.GetValue<string>() ?? id;
-                // Grupos de entretenimento e internos nao fazem sentido no deck.
                 if (list == "groups" && item?["type"]?.GetValue<string>() is "Entertainment" or "LightSource" or "Luminaire") continue;
                 if (list == "scenes")
                 {
-                    // Cenas temporarias que os apps criam e o bridge apaga sozinho.
                     if (item?["recycle"]?.GetValue<bool>() == true) continue;
                     if (item?["group"]?.GetValue<string>() is { } group &&
                         groups?[group]?["name"]?.GetValue<string>() is { } room)

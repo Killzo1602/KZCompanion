@@ -38,7 +38,7 @@ namespace DroidDeck.Tests
         [InlineData("5-1", DayOfWeek.Sunday, true)]
         public void Weekday(string days, DayOfWeek day, bool expected)
         {
-            var date = new DateTime(2026, 10, 18); // domingo
+            var date = new DateTime(2026, 10, 18);
             while (date.DayOfWeek != day) date = date.AddDays(1);
             Assert.Equal(expected, Conditions.Weekday(days, date));
         }
@@ -51,7 +51,6 @@ namespace DroidDeck.Tests
             Assert.True(c.Evaluate(new StepCondition { Check = "nao_existe" }));
             Assert.True(c.Evaluate(new StepCondition { Check = "time_between", Value = "09:00-11:00" }));
             Assert.False(c.Evaluate(new StepCondition { Check = "time_between", Value = "09:00-11:00", Negate = true }));
-            // Sem OBS registrado: a live nao esta no ar.
             Assert.False(c.Evaluate(new StepCondition { Check = "obs_streaming" }));
             Assert.True(c.Evaluate(new StepCondition { Check = "obs_streaming", Negate = true }));
             Assert.False(c.Evaluate(new StepCondition { Check = "app_running", Value = "processo-que-nao-existe-123" }));

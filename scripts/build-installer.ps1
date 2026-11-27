@@ -1,11 +1,3 @@
-# Packs a verified publish folder (from scripts\publish-windows.ps1) into the Velopack installer and
-# checks that the installer really contains that publish's front-end.
-#
-# Usage:  .\scripts\build-installer.ps1 -PublishDir dist\KZCompanion-win-x64-rc -Version 1.0.0 [-OutDir dist\installer-1.0.0]
-# Needs the Velopack CLI:  dotnet tool install -g vpk --version 1.2.161
-#
-# Output (in OutDir): KZCompanion-Setup-<version>.exe plus the update files the installed app downloads
-# (KZCompanionPC-<version>-full.nupkg, releases.win.json, assets.win.json, RELEASES).
 param(
     [Parameter(Mandatory)][string]$PublishDir,
     [Parameter(Mandatory)][string]$Version,
@@ -21,7 +13,6 @@ if (-not (Test-Path (Join-Path $PublishDir "KZCompanion.exe"))) { throw "$Publis
 if (-not (Test-Path (Join-Path $PublishDir "wwwroot\main.dart.js"))) { throw "$PublishDir has no embedded web front-end" }
 if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) { throw "vpk not found. Run: dotnet tool install -g vpk --version 1.2.161" }
 
-# The exe inside must carry the version we are about to publish (a stale publish folder would not).
 $fv = (Get-Item (Join-Path $PublishDir "KZCompanion.exe")).VersionInfo
 if (-not $fv.ProductVersion.StartsWith($Version)) { throw "KZCompanion.exe is version '$($fv.ProductVersion)', expected $Version. Re-run publish-windows.ps1 -Version $Version" }
 
@@ -37,7 +28,6 @@ if (-not (Test-Path $setup)) { throw "vpk did not produce $setup" }
 Move-Item $setup (Join-Path $OutDir "KZCompanion-Setup-$Version.exe")
 Remove-Item (Join-Path $OutDir "KZCompanionPC-win-Portable.zip") -ErrorAction SilentlyContinue
 
-# The update package must contain exactly the front-end that was published.
 $nupkg = Join-Path $OutDir "KZCompanionPC-$Version-full.nupkg"
 if (-not (Test-Path $nupkg)) { throw "missing $nupkg" }
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ("kzpkg-" + [guid]::NewGuid())

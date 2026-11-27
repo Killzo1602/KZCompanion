@@ -5,22 +5,8 @@ using System.Text;
 
 namespace DroidDeck.Services.Tuya
 {
-    /// <summary>
-    /// Primitivas do "device sharing" da Tuya (o mesmo esquema do tuya-device-sharing-sdk).
-    /// Diferente da Cloud API classica: aqui a query e o corpo vao CIFRADOS em AES-GCM com um
-    /// segredo derivado por requisicao, e a assinatura cobre os headers + o ciphertext.
-    ///
-    /// Cadeia por requisicao:
-    ///   rid     = guid novo
-    ///   hashKey = md5(rid + refreshToken)
-    ///   secret  = hmacSha256(key: rid, msg: hashKey).hex[..16]   <- ATENCAO: a chave e o rid
-    ///   encdata = b64(nonce) + b64(ciphertext||tag)
-    ///   X-sign  = hmacSha256(key: hashKey, msg: headers + queryEnc + bodyEnc).hex
-    /// </summary>
     internal static class TuyaCrypto
     {
-        // Alfabeto do nonce no SDK de origem: o nonce sao 12 CARACTERES (bytes ASCII), nao 12
-        // bytes aleatorios. Trocar isso quebra a decifragem do lado da Tuya.
         private const string NonceAlphabet = "ABCDEFGHJKMNPQRSTWXYZabcdefhijkmnprstwxyz2345678";
 
         private static readonly string[] SignedHeaders =
@@ -41,10 +27,6 @@ namespace DroidDeck.Services.Tuya
 
         public static string HashKey(string rid, string refreshToken) => Md5Hex(rid + refreshToken);
 
-        /// <summary>
-        /// Deriva o segredo AES da requisicao. O sid e sempre vazio no nosso fluxo, entao o
-        /// bloco de mistura do sid do SDK original nao se aplica; mantido aqui so por paridade.
-        /// </summary>
         public static string GenerateSecret(string rid, string sid, string hashKey)
         {
             var message = hashKey;
@@ -57,7 +39,6 @@ namespace DroidDeck.Services.Tuya
                 message += "_" + sb;
             }
 
-            // A chave do HMAC e o rid e a mensagem e o hashKey (invertido em relacao ao intuitivo).
             return HmacSha256Hex(rid, message)[..16];
         }
 
@@ -69,11 +50,6 @@ namespace DroidDeck.Services.Tuya
             return sb.ToString();
         }
 
-        /// <summary>
-        /// Sai como b64(nonce) concatenado com b64(ciphertext||tag). Os dois base64 grudados
-        /// decodificam como um bloco unico porque b64 de 12 bytes da 16 chars sem padding --
-        /// e e exatamente disso que o Decrypt depende.
-        /// </summary>
         public static string Encrypt(string plaintext, string secret)
         {
             var nonce = Encoding.UTF8.GetBytes(RandomNonce());
@@ -108,10 +84,6 @@ namespace DroidDeck.Services.Tuya
             return Encoding.UTF8.GetString(plain);
         }
 
-        /// <summary>
-        /// Headers na ordem fixa, "chave=valor" unidos por "||", pulando os vazios, seguidos do
-        /// ciphertext da query e do corpo. Ordem e omissao importam: qualquer desvio da 401.
-        /// </summary>
         public static string Sign(string hashKey, string queryEnc, string bodyEnc,
                                   IReadOnlyDictionary<string, string> headers)
         {

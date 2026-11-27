@@ -8,40 +8,40 @@ import 'package:signalr_netcore/signalr_client.dart';
 import 'package:signalr_netcore/iretry_policy.dart';
 import 'package:logging/logging.dart';
 
-/// Reconecta indefinidamente com backoff limitado. A politica padrao do
-/// signalr_netcore desiste apos ~30s ([0,2,10,30]s), entao um celular que perde
-/// a rede por mais que isso nunca reconectava sozinho (so reabrindo a tela).
 class _InfiniteRetryPolicy implements IRetryPolicy {
   @override
   int? nextRetryDelayInMilliseconds(RetryContext retryContext) {
     const steps = [0, 1000, 2000, 4000, 8000, 16000, 30000];
     final n = retryContext.previousRetryCount;
-    return n < steps.length ? steps[n] : 30000; // depois, 30s pra sempre
+    return n < steps.length ? steps[n] : 30000;
   }
 }
 
 class SystemStats {
-  final double cpuUsage; // % (0-100)
-  final double ramUsage; // % usada (0-100)
-  final double ramTotal; // MB
-  final double ramAvailable; // MB
-  final double netUp; // KB/s
-  final double netDown; // KB/s
-  final double gpuUsage; // % (0-100)
-  final List<DiskStat> disks; // unidades fixas, em ordem de letra
-  // Sensores: null = o PC não expõe (mostrar "Unavailable", nunca inventar).
+  final double cpuUsage;
+  final double ramUsage;
+  final double ramTotal;
+  final double ramAvailable;
+  final double netUp;
+  final double netDown;
+  final double gpuUsage;
+  final List<DiskStat> disks;
   final double? cpuTemp;
   final double? cpuPower;
   final double? gpuTemp;
   final double? gpuHotspot;
   final double? gpuPower;
   final double? ssdTemp;
+  final double? cpuClock;
+  final double? gpuClock;
+  final double? gpuMemUsed;
+  final double? gpuMemTotal;
   final List<FanStat> fans;
-  final List<DriveTemp> drives; // temperatura por unidade (modelo), sem casar com letra
-  final bool sensorsElevated; // o PC roda como administrador?
-  final bool cpuDriverMissing; // driver PawnIO ausente (CPU temp/potencia)
+  final List<DriveTemp> drives;
+  final bool sensorsElevated;
+  final bool cpuDriverMissing;
   final int cpuSensorCount;
-  final String netAdapter; // adaptador com mais trafego agora
+  final String netAdapter;
 
   SystemStats({
     this.cpuUsage = 0,
@@ -58,6 +58,10 @@ class SystemStats {
     this.gpuHotspot,
     this.gpuPower,
     this.ssdTemp,
+    this.cpuClock,
+    this.gpuClock,
+    this.gpuMemUsed,
+    this.gpuMemTotal,
     this.fans = const [],
     this.drives = const [],
     this.sensorsElevated = false,
@@ -66,7 +70,6 @@ class SystemStats {
     this.netAdapter = '',
   });
 
-  /// % de RAM em uso (usa o valor do backend; se faltar, calcula de total/disponível).
   double get ramUsedPercent => ramUsage > 0
       ? ramUsage
       : (ramTotal > 0 ? (ramTotal - ramAvailable) / ramTotal * 100 : 0);
@@ -102,6 +105,10 @@ class SystemStats {
       gpuHotspot: opt('gpuHotspot'),
       gpuPower: opt('gpuPower'),
       ssdTemp: opt('ssdTemp'),
+      cpuClock: opt('cpuClock'),
+      gpuClock: opt('gpuClock'),
+      gpuMemUsed: opt('gpuMemUsed'),
+      gpuMemTotal: opt('gpuMemTotal'),
       fans: ((json['fans'] ?? json['Fans']) as List? ?? const [])
           .whereType<Map>()
           .map((f) => FanStat('${f['name'] ?? f['Name'] ?? ''}',
@@ -127,21 +134,18 @@ class SystemStats {
   }
 }
 
-/// Temperatura de uma unidade de armazenamento (pelo modelo).
 class DriveTemp {
   final String name;
   final double temp;
   const DriveTemp(this.name, this.temp);
 }
 
-/// Uma ventoinha com leitura de RPM.
 class FanStat {
   final String name;
   final int rpm;
   const FanStat(this.name, this.rpm);
 }
 
-/// Uma unidade de disco do PC ("C:").
 class DiskStat {
   final String name;
   final String label;
@@ -167,26 +171,19 @@ class SignalRService {
 
   HubConnection? _hubConnection;
   final _logger = Logger('SignalRService');
-  // Signals
   final systemStats = signal<SystemStats>(SystemStats());
   final connectionStatus = signal<String>("Disconnected");
   final lastDebugData = signal<String>("No Data");
   final currentUrl =
-      signal<String>("Not Initialized"); // DEBUG: Track current URL
+      signal<String>("Not Initialized");
 
-  // NEW: Real-time Volume/Media signals
   final volumeUpdates = signal<Map<String, dynamic>>({});
   final mediaStateUpdates = signal<Map<String, dynamic>?>(null);
 
-  // Incrementa quando o backend avisa que um perfil do deck mudou (sync ao vivo).
   final deckUpdated = signal<int>(0);
 
-  // ---- Saude da conexao (KZ Companion) ----
-  // online / reconnecting / offline: o que a interface mostra (o texto cru fica em connectionStatus).
   final linkState = signal<String>('reconnecting');
-  // Ultimas linhas do diario de conexao (aparece em Settings, ajuda a achar a causa de quedas).
   final diagLog = signal<List<String>>([]);
-  // Nome e versao do Windows do PC (vem do /api/ping).
   final pcName = signal<String>('');
   final pcOs = signal<String>('');
   DateTime _lastMessageAt = DateTime.now();
@@ -209,7 +206,6 @@ class SignalRService {
       return;
     }
     _failingSince ??= DateTime.now();
-    // Uma queda curta e "reconnecting"; depois de 15 s sem conseguir, "offline".
     linkState.value = DateTime.now().difference(_failingSince!) > const Duration(seconds: 15)
         ? 'offline'
         : 'reconnecting';
@@ -219,9 +215,6 @@ class SignalRService {
     _watchdog ??= Timer.periodic(const Duration(seconds: 5), (_) => _healthCheck());
   }
 
-  /// A cada 5 s: com o hub "conectado" mas sem nenhum dado ha mais de 12 s (o PC manda
-  /// estatisticas todo segundo), o socket morreu sem avisar (Wi-Fi que dormiu, adb reverse
-  /// que caiu): refaz a conexao. Sem conexao e sem tentativa agendada, agenda uma.
   void _healthCheck() {
     if (_stopped || _lastBaseUrl == null) return;
     final conn = _hubConnection;
@@ -238,8 +231,6 @@ class SignalRService {
     _updateLink();
   }
 
-  /// O app voltou ao primeiro plano (tela ligou, saiu de outro app): nao espera o proximo
-  /// ciclo de tentativa; confere a conexao ja.
   void onAppResumed() {
     diag('app resumed');
     final conn = _hubConnection;
@@ -249,7 +240,6 @@ class SignalRService {
       _restart();
       return;
     }
-    // Conectado no papel: se em 3 s nao chegou dado novo, o socket esta morto.
     Timer(const Duration(seconds: 3), () {
       if (_stopped || connectionStatus.value != 'Connected') return;
       if (DateTime.now().difference(_lastMessageAt) > const Duration(milliseconds: 3500)) {
@@ -259,11 +249,26 @@ class SignalRService {
     });
   }
 
-  /// Derruba a conexao atual e abre outra ja (backoff zerado).
+  Future<void> _preferUsb() async {
+    final url = _lastBaseUrl;
+    if (_stopped || _probingUsb || url == null || url.isEmpty || UsbRoute.isUsb(url)) return;
+    if (_hubConnection?.state != HubConnectionState.Connected) return;
+    _probingUsb = true;
+    try {
+      final route = await UsbRoute.pick(url, apiKey: _lastApiKey);
+      if (!_stopped && _lastBaseUrl == url && UsbRoute.isUsb(route)) {
+        diag('USB available: switching');
+        await _restart();
+      }
+    } finally {
+      _probingUsb = false;
+    }
+  }
+
   Future<void> _restart() async {
     final url = _lastBaseUrl;
     if (url == null || url.isEmpty) return;
-    _stopped = true; // o onclose deste stop() nao agenda outra tentativa
+    _stopped = true;
     _retryTimer?.cancel();
     _retryTimer = null;
     final dead = _hubConnection;
@@ -277,59 +282,41 @@ class SignalRService {
     await init(route, apiKey: _lastApiKey);
   }
 
-  // Estado de audio empurrado pelo PC (volume mestre, mudo, sessoes) sempre que o Windows muda.
   final audioPush = signal<Map<String, dynamic>?>(null);
 
-  // Incrementa quando a biblioteca de aplicativos mudou no PC (configurador).
   final appsChanged = signal<int>(0);
 
-  // Aplicativos abertos no PC (push do PC enquanto a tela Apps observa). Null = nada recebido ainda.
   final runningAppsPush = signal<List<Map<String, dynamic>>?>(null);
   bool _watchingRunningApps = false;
 
-  // Estado de mute por processo (para botões toggle refletirem a realidade).
   final muteStates = signal<Map<String, bool>>({});
 
-  // Estado do Discord (connected/mute/deaf) para botões de Discord refletirem.
   final discordState =
       signal<Map<String, dynamic>>({'connected': false, 'mute': false, 'deaf': false});
 
-  // Grade física do deck (rows/cols) reportada pelo celular; usada pelo configurador web.
   final deckLayout = signal<Map<String, int>>({'rows': 3, 'columns': 5});
 
-  // Mídia tocando agora no PC (pra botões play/pause do deck refletirem o estado).
   final mediaPlaying = signal<bool>(false);
 
-  // Estado do OBS (connected/currentScene/recording/streaming/...) pros botões refletirem.
   final obsState = signal<Map<String, dynamic>>({'connected': false});
 
-  // Estado do plugin Tuya + os dispositivos. O backend só manda o snapshot completo em
-  // eventos raros (conectou, reenumerou); mudança de estado de aparelho chega em
-  // ReceiveTuyaDeviceState e é fundida aqui, pra não repassar a lista inteira a cada clique.
   final tuyaState = signal<Map<String, dynamic>>({'paired': false, 'devices': []});
 
-  // Perfil do app em foco no PC ({profileId, app}); profileId nulo = app sem perfil.
   final autoProfile = signal<Map<String, dynamic>>({});
 
-  // Estado dos demais provedores de ação (timers...), por evento SignalR. Os eventos
-  // vêm do schema (stateEvent) e são assinados sob demanda via [listenState].
   final actionStates = signal<Map<String, Map<String, dynamic>>>({});
   final Set<String> _stateEvents = {
-    // Botões de dois estados ligados e botões de informação (não vêm do schema).
     'ReceiveButtonToggles',
     'ReceiveInfoState',
     'ReceiveNowPlaying',
   };
 
-  /// Assina um evento de estado de provedor. Idempotente; vale também depois de
-  /// reconectar (init re-registra tudo).
   void listenState(String event) {
     if (!_stateEvents.add(event)) return;
     _registerStateHandler(event);
   }
 
   void _registerStateHandler(String event) {
-    // Os eventos que já têm signal próprio continuam nele.
     if (const {'ReceiveObsState', 'ReceiveDiscordState', 'ReceiveTuyaState'}
         .contains(event)) {
       return;
@@ -344,8 +331,6 @@ class SignalRService {
     });
   }
 
-  /// Guarda o estado de um provedor. `_receivedAt` (ms) deixa o app extrapolar valores
-  /// que andam sozinhos, como o tempo de um timer, sem o PC mandar a cada segundo.
   void seedState(String event, Map<String, dynamic> state) {
     actionStates.value = {
       ...actionStates.value,
@@ -353,7 +338,6 @@ class SignalRService {
     };
   }
 
-  /// Estado atual publicado num evento de provedor ({} se nada chegou ainda).
   Map<String, dynamic> stateOf(String event) {
     switch (event) {
       case 'ReceiveObsState':
@@ -367,30 +351,24 @@ class SignalRService {
     }
   }
 
-  // ---- Reconexao quando o hub nunca chegou a conectar ----
-  //
-  // O withAutomaticReconnect do signalr_netcore so vale para conexoes que FORAM
-  // estabelecidas e cairam depois. Se o start() inicial falha (backend fora do ar
-  // na hora em que o app abriu, ou queda enquanto o app ficou aberto), nao existe
-  // nenhuma nova tentativa: o servico ficava morto ate reiniciar o app, enquanto o
-  // REST voltava sozinho — dando o sintoma "os controles funcionam mas os dados
-  // nao atualizam", porque comando e REST e todo estado ao vivo e hub.
   String? _lastBaseUrl;
   String? _lastApiKey;
+
+  final activeBaseUrl = signal<String>('');
+
+  Timer? _usbTimer;
+  bool _probingUsb = false;
   Timer? _retryTimer;
   int _retryCount = 0;
 
-  /// Parada deliberada (updateUrl/dispose): nao reagendar reconexao.
   bool _stopped = false;
 
   void _scheduleRetry() {
     if (_stopped) return;
     final url = _lastBaseUrl;
     if (url == null || url.isEmpty) return;
-    if (_retryTimer?.isActive ?? false) return; // ja tem uma tentativa agendada
+    if (_retryTimer?.isActive ?? false) return;
 
-    // Backoff exponencial (1, 2, 4, 8, 16, 30 s) com 20% de variacao: varios aparelhos
-    // nao batem no PC juntos quando ele volta.
     const steps = [1000, 2000, 4000, 8000, 16000, 30000];
     final base = steps[_retryCount < steps.length ? _retryCount : steps.length - 1];
     final delay = (base * (0.9 + Random().nextDouble() * 0.2)).round();
@@ -399,27 +377,24 @@ class SignalRService {
     connectionStatus.value = 'Reconnecting in ${delay ~/ 1000}s...';
 
     _retryTimer = Timer(Duration(milliseconds: delay), () async {
-      // init() e no-op enquanto _hubConnection nao for null, entao a instancia
-      // morta precisa sair da frente antes da nova tentativa.
       final dead = _hubConnection;
       _hubConnection = null;
       try {
         await dead?.stop();
       } catch (_) {
-        // Conexao ja estava quebrada; nada a fazer.
       }
-      // O cabo USB pode ter entrado ou saído: escolhe o caminho de novo e leva o REST junto.
       final route = await UsbRoute.pick(url, apiKey: _lastApiKey);
       if (route != url) Injector.get<DroidDeckClient>().setBaseUrl(route);
       await init(route, apiKey: _lastApiKey);
     });
   }
 
-  /// Encerra a conexao e cancela reconexoes pendentes.
   Future<void> dispose() async {
     _stopped = true;
     _retryTimer?.cancel();
     _retryTimer = null;
+    _usbTimer?.cancel();
+    _usbTimer = null;
     final conn = _hubConnection;
     _hubConnection = null;
     try {
@@ -427,23 +402,21 @@ class SignalRService {
     } catch (_) {}
   }
 
-  /// Mascara o access_token da URL para log/exibição (a chave é um segredo).
   static String _redactUrl(String url) =>
       url.replaceAll(RegExp(r'access_token=[^&]+'), 'access_token=***');
 
   Future<void> init(String baseUrl, {String? apiKey}) async {
     if (_hubConnection != null) return;
 
-    // Guardado para as retentativas — sem isto nao ha como refazer a conexao.
     _lastBaseUrl = baseUrl;
     _lastApiKey = apiKey;
     _stopped = false;
+    activeBaseUrl.value = baseUrl;
+    _usbTimer ??= Timer.periodic(const Duration(seconds: 10), (_) => _preferUsb());
 
-    // Normalize Base URL (handle relative path)
     String hubUrl = baseUrl;
     if (hubUrl.isEmpty) {
       if (kIsWeb) {
-        // Use current window origin
         hubUrl = '${Uri.base.origin}/deckHub';
       } else {
         _logger.warning('SignalR init skipped: Base URL is empty on mobile');
@@ -455,18 +428,13 @@ class SignalRService {
       hubUrl = '$baseUrl/deckHub';
     }
 
-    // Idioma das mensagens que o PC monta (erros dos botões de informação).
     hubUrl += '${hubUrl.contains('?') ? '&' : '?'}lang=${AppLanguage.current.value}';
 
-    // SignalR via WebSocket autentica pela query string (?access_token=).
     if (apiKey != null && apiKey.isNotEmpty) {
       final sep = hubUrl.contains('?') ? '&' : '?';
       hubUrl += '${sep}access_token=${Uri.encodeQueryComponent(apiKey)}';
     }
 
-    // SEGURANÇA: a chave vai na query string (?access_token=) por exigência do
-    // WebSocket do SignalR, mas NÃO deve vazar em log nem no diálogo de debug (que
-    // mostra currentUrl). Guarda/loga só a versão com a chave mascarada.
     currentUrl.value = _redactUrl(hubUrl);
     _logger.info('Connecting to SignalR Hub at ${_redactUrl(hubUrl)}');
     connectionStatus.value = "Connecting...";
@@ -479,7 +447,6 @@ class SignalRService {
           .withUrl(hubUrl)
           .withAutomaticReconnect(reconnectPolicy: _InfiniteRetryPolicy())
           .build();
-      // Ping do cliente a cada 10 s e 60 s de tolerancia para o PC (par do ajuste do servidor).
       _hubConnection!.keepAliveIntervalInMilliseconds = 10000;
       _hubConnection!.serverTimeoutInMilliseconds = 60000;
     } catch (e) {
@@ -515,11 +482,9 @@ class SignalRService {
       _lastMessageAt = DateTime.now();
       if (arguments != null && arguments.isNotEmpty) {
         try {
-          // Debug Raw Data
           final raw = arguments[0].toString();
           lastDebugData.value = "Data: $raw";
 
-          // SignalR parses JSON for us roughly, but we check type
           final data = arguments[0] as Map<String, dynamic>;
           systemStats.value = SystemStats.fromJson(data);
         } catch (e) {
@@ -531,7 +496,6 @@ class SignalRService {
       }
     });
 
-    // NEW: Listen for Volume updates
     _hubConnection?.on('ReceiveVolumeChange', (arguments) {
       if (arguments != null && arguments.isNotEmpty) {
         try {
@@ -555,7 +519,6 @@ class SignalRService {
       }
     });
 
-    // NEW: Listen for Media State updates
     _hubConnection?.on('ReceiveMediaState', (arguments) {
       if (arguments != null && arguments.isNotEmpty) {
         try {
@@ -568,13 +531,11 @@ class SignalRService {
       }
     });
 
-    // Deck mudou em outro cliente (ex.: editor no PC) → sinaliza para recarregar.
     _hubConnection?.on('ReceiveDeckUpdate', (arguments) {
       deckUpdated.value = deckUpdated.value + 1;
       _logger.info('Deck update recebido');
     });
 
-    // Estado de mute de um processo mudou → atualiza para os botões toggle.
     _hubConnection?.on('ReceiveMuteState', (arguments) {
       if (arguments != null && arguments.isNotEmpty) {
         try {
@@ -592,7 +553,6 @@ class SignalRService {
       }
     });
 
-    // Estado do Discord mudou (mute/deaf) → atualiza para os botões de Discord.
     _hubConnection?.on('ReceiveDiscordState', (arguments) {
       if (arguments != null && arguments.isNotEmpty) {
         try {
@@ -604,7 +564,6 @@ class SignalRService {
       }
     });
 
-    // Grade física mudou (o celular reportou) → o configurador web reage.
     _hubConnection?.on('ReceiveLayoutUpdate', (arguments) {
       if (arguments != null && arguments.isNotEmpty) {
         try {
@@ -619,7 +578,6 @@ class SignalRService {
       }
     });
 
-    // Estado de reprodução de mídia (tocando?) → botões play/pause do deck refletem.
     _hubConnection?.on('ReceiveMediaStatus', (arguments) {
       if (arguments != null && arguments.isNotEmpty) {
         try {
@@ -631,7 +589,6 @@ class SignalRService {
       }
     });
 
-    // Estado do OBS mudou (cena/gravando/transmitindo) → botões do deck refletem.
     _hubConnection?.on('ReceiveObsState', (arguments) {
       if (arguments != null && arguments.isNotEmpty) {
         try {
@@ -642,7 +599,6 @@ class SignalRService {
       }
     });
 
-    // Snapshot completo do plugin Tuya (conectou, reenumerou dispositivos).
     _hubConnection?.on('ReceiveTuyaState', (arguments) {
       if (arguments != null && arguments.isNotEmpty) {
         try {
@@ -653,8 +609,6 @@ class SignalRService {
       }
     });
 
-    // Um aparelho mudou de estado (push MQTT). Chega só o que mudou; fundimos no
-    // snapshot pra que o botão do deck repinte sem uma nova ida ao servidor.
     _hubConnection?.on('ReceiveTuyaDeviceState', (arguments) {
       if (arguments == null || arguments.isEmpty) return;
       try {
@@ -666,7 +620,7 @@ class SignalRService {
         final devices = List<dynamic>.from(snapshot['devices'] as List? ?? const []);
 
         final index = devices.indexWhere((d) => (d as Map)['id'] == deviceId);
-        if (index < 0) return; // aparelho fora do cache: ignora até a próxima enumeração
+        if (index < 0) return;
 
         final device = Map<String, dynamic>.from(devices[index] as Map);
         device['status'] = {
@@ -675,7 +629,6 @@ class SignalRService {
         };
         devices[index] = device;
 
-        // Reatribui o mapa inteiro: mutar em profundidade não dispara o signal.
         snapshot['devices'] = devices;
         tuyaState.value = snapshot;
       } catch (e) {
@@ -699,8 +652,6 @@ class SignalRService {
     _hubConnection?.onclose(({error}) {
       connectionStatus.value = "Disconnected: $error";
       diag('connection closed${error == null ? '' : ': $error'}');
-      // Cai aqui quando o servidor fecha a conexao ou o reconnect automatico
-      // desiste. Sem reagendar, o estado ao vivo nunca mais voltava.
       _scheduleRetry();
     });
 
@@ -714,7 +665,6 @@ class SignalRService {
       _lastMessageAt = DateTime.now();
       diag('reconnected');
       _retryCount = 0;
-      // A URL da reconexão ainda tem o idioma de quando conectou.
       _sendLanguage();
       _resubscribeRunningApps();
     });
@@ -737,11 +687,10 @@ class SignalRService {
     }
   }
 
-  /// A tela Apps abriu (true) ou fechou (false): o PC so observa janelas enquanto alguem olha.
   Future<void> watchRunningApps(bool watch) async {
     _watchingRunningApps = watch;
     final conn = _hubConnection;
-    if (conn == null || conn.state != HubConnectionState.Connected) return; // reenvia ao conectar
+    if (conn == null || conn.state != HubConnectionState.Connected) return;
     try {
       await conn.invoke(watch ? 'WatchRunningApps' : 'UnwatchRunningApps');
     } catch (e) {
@@ -749,30 +698,23 @@ class SignalRService {
     }
   }
 
-  /// A conexao nova nao herda a observacao da antiga (o PC a solta ao desconectar).
   void _resubscribeRunningApps() {
     if (_watchingRunningApps) watchRunningApps(true);
   }
 
-  /// Avisa o PC do idioma do app (mudou nas configurações ou reconectou).
   Future<void> _sendLanguage() async {
     final conn = _hubConnection;
     if (conn == null || conn.state != HubConnectionState.Connected) return;
     try {
       await conn.invoke('SetLanguage', args: [AppLanguage.current.value]);
     } catch (_) {
-      // PC antigo sem SetLanguage: fica no idioma da conexão.
     }
   }
 
-  /// Tecla em modo "segurar": aperta no PC a tecla salva no botão (o PC lê qual é pelo
-  /// id). Devolve false sem conexão com o hub, para quem chamou cair no /press.
   bool holdKey(String buttonId) => _invokeKey("HoldKey", buttonId);
 
-  /// Solta a tecla do [holdKey]. Se a conexão cair antes, o PC solta sozinho.
   bool releaseKey(String buttonId) => _invokeKey("ReleaseKey", buttonId);
 
-  /// Tecla da superfície do Companion. Se a conexão cair, o PC solta sozinho.
   void companionKey(int key, bool pressed) {
     final conn = _hubConnection;
     if (conn == null || conn.state != HubConnectionState.Connected) return;
@@ -785,7 +727,6 @@ class SignalRService {
   bool _invokeKey(String method, String buttonId) {
     final conn = _hubConnection;
     if (conn == null || conn.state != HubConnectionState.Connected) return false;
-    // Sem await: a ordem aperta/solta é a do envio, e o dedo não espera a resposta.
     conn.invoke(method, args: [buttonId]).catchError((e) {
       _logger.warning("Error invoking $method: $e");
       return null;
@@ -794,8 +735,6 @@ class SignalRService {
   }
 
   Future<void> updateUrl(String baseUrl, {String? apiKey}) async {
-    // Marca como parada deliberada para o onclose do stop() abaixo nao agendar
-    // uma reconexao para a URL ANTIGA; o init() em seguida limpa a flag.
     _stopped = true;
     _retryTimer?.cancel();
     _retryTimer = null;

@@ -40,7 +40,6 @@ namespace DroidDeck.Actions.Providers
                     await _discord.SetMuteAsync(false);
                     break;
 
-                // Canal de voz
                 case "joinchannel":
                     if (c.Get("channelId").Length > 0)
                         await _discord.SelectVoiceChannelAsync(c.Get("channelId"));
@@ -50,7 +49,6 @@ namespace DroidDeck.Actions.Providers
                     await _discord.SelectVoiceChannelAsync(null);
                     break;
 
-                // Volume de mic / saída
                 case "inputvolumeup":
                     await _discord.NudgeInputVolumeAsync(c.Number("delta", 10));
                     break;
@@ -70,7 +68,6 @@ namespace DroidDeck.Actions.Providers
                     await _discord.SetOutputVolumeAsync(c.Number("value", 100));
                     break;
 
-                // Modo de voz
                 case "togglevoicemode":
                 case "toggleptt":
                     await _discord.ToggleVoiceModeAsync();
@@ -79,7 +76,6 @@ namespace DroidDeck.Actions.Providers
                     await _discord.SetVoiceModeAsync(c.Get("mode", "VOICE_ACTIVITY"));
                     break;
 
-                // Por usuário
                 case "usermute":
                 case "usermutetoggle":
                     if (c.Get("userId").Length > 0)
@@ -90,7 +86,7 @@ namespace DroidDeck.Actions.Providers
                         await _discord.SetUserVoiceAsync(c.Get("userId"), null, c.Number("value", 100));
                     break;
 
-                default: // toggleMute
+                default:
                     await _discord.SetMuteAsync(null);
                     break;
             }

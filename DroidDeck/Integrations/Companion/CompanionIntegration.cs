@@ -19,12 +19,10 @@ using Microsoft.Extensions.Logging;
 
 namespace DroidDeck.Integrations
 {
-    /// <summary>Uma tecla da superficie, como o Companion mandou desenhar.</summary>
     public class CompanionKeyState
     {
         public int Key { get; set; }
 
-        /// <summary>PNG em base64.</summary>
         public string? Image { get; set; }
         public string? Color { get; set; }
         public string? TextColor { get; set; }
@@ -32,11 +30,6 @@ namespace DroidDeck.Integrations
         public bool Pressed { get; set; }
     }
 
-    /// <summary>
-    /// Os celulares como superficie do Bitfocus Companion, pela Satellite API (TCP 16622): o PC
-    /// aparece no Companion como um aparelho com a grade escolhida, recebe o desenho de cada tecla
-    /// e repassa os toques. Todos os celulares mostram a mesma superficie.
-    /// </summary>
     public class CompanionIntegration : AccountIntegration
     {
         public const string Event = "ReceiveCompanionState";
@@ -45,10 +38,8 @@ namespace DroidDeck.Integrations
         public const int DefaultColumns = 8, DefaultRows = 4;
         public const int BitmapSize = 144;
 
-        /// <summary>Limite de uma linha na Satellite API.</summary>
         private const int MaxLine = 2 * 1024 * 1024;
 
-        /// <summary>O Companion derruba a conexao depois de 5 s sem nada.</summary>
         private static readonly TimeSpan PingEvery = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan SilenceLimit = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan CapsWait = TimeSpan.FromSeconds(1);
@@ -92,7 +83,6 @@ namespace DroidDeck.Integrations
 
         public override object GetState() => new { connected = _connected, columns = Columns, rows = Rows };
 
-        /// <summary>Todas as teclas (ao abrir a tela; depois chegam so as que mudam).</summary>
         public object Snapshot() => new
         {
             connected = _connected,
@@ -119,13 +109,12 @@ namespace DroidDeck.Integrations
         {
             if (string.IsNullOrWhiteSpace(value)) return fallback;
             if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) || v < min || v > max)
-                throw new InvalidOperationException("Tamanho da grade inválido.");
+                throw new InvalidOperationException("Invalid grid size.");
             return v;
         }
 
         public override Task LogoutAsync()
         {
-            // O id do aparelho fica: voltar a conectar reencontra a mesma superficie no Companion.
             Clear("device");
             Restart();
             return Task.CompletedTask;
@@ -172,7 +161,7 @@ namespace DroidDeck.Integrations
                     if (!reconnect.IsCancellationRequested)
                     {
                         _error = ex is SocketException or IOException or OperationCanceledException or TimeoutException
-                            ? "Não foi possível conectar ao Companion. Confira se ele está aberto e o endereço."
+                            ? "Couldn't connect to Companion. Check that it's open and the address is right."
                             : ex.Message;
                         Logger.LogInformation("Companion: {Error}", ex.Message);
                     }
@@ -239,7 +228,6 @@ namespace DroidDeck.Integrations
             {
                 case "BEGIN":
                     _version = SatelliteCodec.Parse(body).GetValueOrDefault("CompanionVersion");
-                    // Versoes antigas nao mandam CAPS.
                     _ = Task.Run(async () =>
                     {
                         try
@@ -330,7 +318,6 @@ namespace DroidDeck.Integrations
             catch (FormatException) { return null; }
         }
 
-        /// <summary>BITMAP: data URL (formato negociado) ou RGB cru (Companion antigo), que vira PNG aqui.</summary>
         public static string? ImageFrom(string? bitmap)
         {
             if (string.IsNullOrEmpty(bitmap)) return null;
@@ -343,7 +330,6 @@ namespace DroidDeck.Integrations
             catch (FormatException) { return null; }
         }
 
-        /// <summary>RGB cru de uma tecla quadrada para PNG em base64. Null se o tamanho nao bater.</summary>
         public static string? RgbToPng(byte[] rgb)
         {
             var side = (int)Math.Round(Math.Sqrt(rgb.Length / 3.0));
@@ -355,7 +341,6 @@ namespace DroidDeck.Integrations
                 var row = new byte[side * 3];
                 for (var y = 0; y < side; y++)
                 {
-                    // O Bitmap guarda BGR.
                     for (var x = 0; x < side; x++)
                     {
                         var i = (y * side + x) * 3;
@@ -382,7 +367,6 @@ namespace DroidDeck.Integrations
             _clearPending = true;
         }
 
-        /// <summary>Junta as teclas que mudaram (uma troca de pagina muda todas de uma vez).</summary>
         private async Task FlushLoopAsync(CancellationToken ct)
         {
             while (!ct.IsCancellationRequested)
@@ -410,7 +394,6 @@ namespace DroidDeck.Integrations
             }
         }
 
-        /// <summary>Encostou ou soltou o dedo numa tecla (o dono e a conexao do celular).</summary>
         public async Task SetKeyAsync(string owner, int key, bool pressed)
         {
             var client = _client;
@@ -424,7 +407,6 @@ namespace DroidDeck.Integrations
             await client.WriteAsync(SatelliteCodec.Format("KEY-PRESS", DeviceId, ("KEY", key), ("PRESSED", pressed)));
         }
 
-        /// <summary>Celular caiu com o dedo numa tecla: solta, senao ela fica apertada no Companion.</summary>
         public void ReleaseOwner(string owner)
         {
             if (!_pressedBy.TryRemove(owner, out var held)) return;
@@ -441,7 +423,6 @@ namespace DroidDeck.Integrations
         }
     }
 
-    /// <summary>Acao "companion": abre a superficie (a tela e do app).</summary>
     public class CompanionProvider : IStatefulActionProvider
     {
         private readonly CompanionIntegration _companion;
@@ -457,10 +438,10 @@ namespace DroidDeck.Integrations
             Type = Type,
             Title = "Companion",
             Icon = "grid_view",
-            Category = "Estúdio",
+            Category = "Studio",
             Settings = "companion",
             StateEvent = StateEvent,
-            Description = "Abre a superfície do Bitfocus Companion: as teclas e páginas configuradas lá, em tela cheia.",
+            Description = "Opens the Bitfocus Companion surface: the keys and pages set up there, in full screen.",
         };
 
         public Task ExecuteAsync(ActionContext context) => Task.CompletedTask;

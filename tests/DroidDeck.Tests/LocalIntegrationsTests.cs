@@ -30,8 +30,6 @@ namespace DroidDeck.Tests
         }
     }
 
-    // ---- Voicemeeter ----
-
     public class VoicemeeterTests
     {
         private class FakeApi : IVoicemeeterApi
@@ -128,8 +126,6 @@ namespace DroidDeck.Tests
         }
     }
 
-    // ---- Elgato ----
-
     public class KeyLightTests
     {
         private class FakeHandler : HttpMessageHandler
@@ -224,8 +220,6 @@ namespace DroidDeck.Tests
         }
     }
 
-    // ---- Philips Hue ----
-
     public class HueTests
     {
         [Fact]
@@ -237,7 +231,7 @@ namespace DroidDeck.Tests
         {
             var ex = Assert.Throws<InvalidOperationException>(() => HueIntegration.ParsePairing(
                 """[{"error":{"type":101,"address":"","description":"link button not pressed"}}]"""));
-            Assert.Contains("botão", ex.Message);
+            Assert.Contains("button", ex.Message);
         }
 
         [Fact]
@@ -261,7 +255,6 @@ namespace DroidDeck.Tests
             Assert.Equal("""{"on":false}""", HueProvider.BuildState("toggle", true, 0, 0).ToJsonString());
             Assert.Equal("""{"on":true}""", HueProvider.BuildState("toggle", false, 0, 0).ToJsonString());
             Assert.Equal("""{"on":true,"bri":254}""", HueProvider.BuildState("brightness", null, 100, 0).ToJsonString());
-            // Minimo de 1 %.
             Assert.Equal("""{"on":true,"bri":3}""", HueProvider.BuildState("brightness", null, 0, 0).ToJsonString());
             Assert.Equal("""{"on":true,"bri_inc":25}""", HueProvider.BuildState("brightness_step", null, 0, 10).ToJsonString());
             Assert.Equal("""{"bri_inc":-25}""", HueProvider.BuildState("brightness_step", null, 0, -10).ToJsonString());
@@ -279,7 +272,7 @@ namespace DroidDeck.Tests
         public void Opcoes_FiltramGruposInternosECenasTemporarias()
         {
             var groups = JsonNode.Parse("""
-                {"1":{"name":"Sala","type":"Room"},"2":{"name":"Jogo","type":"Entertainment"},"3":{"name":"Andar de cima","type":"Zone"}}
+                {"1":{"name":"Sala","type":"Room"},"2":{"name":"Game","type":"Entertainment"},"3":{"name":"Andar de cima","type":"Zone"}}
                 """)!.AsObject();
             var g = HueIntegration.ParseOptions("groups", groups);
             Assert.Equal(new[] { "0", "3", "1" }, g.Select(o => o.Value));
@@ -293,8 +286,6 @@ namespace DroidDeck.Tests
             Assert.Equal(new[] { "Leitura", "Relaxar (Sala)" }, s.Select(o => o.Label));
         }
     }
-
-    // ---- Govee ----
 
     public class GoveeTests
     {
@@ -344,8 +335,6 @@ namespace DroidDeck.Tests
         public void IpInvalido_Lanca(string ip) => Assert.Throws<InvalidOperationException>(() => GoveeLan.ParseIp(ip));
     }
 
-    // ---- MQTT ----
-
     public class MqttTests
     {
         [Theory]
@@ -383,8 +372,6 @@ namespace DroidDeck.Tests
             Assert.Throws<InvalidOperationException>(() => MqttIntegration.BuildMessage(topic, "", 0, false));
     }
 
-    // ---- Schema e traducoes ----
-
     public class LocalIntegrationsSchemaTests : IClassFixture<WebApplicationFactory<DroidDeck.Program>>
     {
         private static readonly string[] Types = { "voicemeeter", "keylight", "hue", "govee", "mqtt", "streamerbot", "vtubestudio" };
@@ -397,8 +384,6 @@ namespace DroidDeck.Tests
         {
             var client = _factory.CreateClient();
             client.DefaultRequestHeaders.Add("X-API-KEY", ApiKeyProvider.GetKey());
-            // Os textos de origem (portugues): sem cabecalho o PC responde em ingles.
-            client.DefaultRequestHeaders.Add("Accept-Language", "pt-BR");
             var all = (await client.GetFromJsonAsync<List<ActionSchema>>("/api/actions/schema"))!;
             return all.Where(s => Types.Contains(s.Type)).ToList();
         }
@@ -409,28 +394,7 @@ namespace DroidDeck.Tests
             var schemas = await Schemas();
             Assert.Equal(Types.OrderBy(t => t), schemas.Select(s => s.Type).OrderBy(t => t));
             Assert.All(schemas, s => Assert.False(s.Privileged));
-            // Os que dependem de configuracao avisam quando estao desconectados.
             Assert.All(schemas.Where(s => s.Settings != null), s => Assert.NotNull(s.StateEvent));
-        }
-
-        [Fact]
-        public async Task TodoTextoTemInglesEEspanhol()
-        {
-            var en = L.StringsOf("en");
-            var es = L.StringsOf("es");
-            var texts = new List<string>();
-            foreach (var s in await Schemas())
-            {
-                if (s.Description != null) texts.Add(s.Description);
-                foreach (var f in s.Fields)
-                {
-                    texts.Add(f.Label);
-                    if (f.Help != null) texts.Add(f.Help);
-                    texts.AddRange((f.Options ?? new()).Select(o => o.Label));
-                }
-            }
-            Assert.Empty(texts.Where(t => !en.ContainsKey(t)));
-            Assert.Empty(texts.Where(t => !es.ContainsKey(t)));
         }
     }
 }

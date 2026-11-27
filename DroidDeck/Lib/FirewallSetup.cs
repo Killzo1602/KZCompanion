@@ -3,15 +3,6 @@ using System.Diagnostics;
 
 namespace DroidDeck.Lib
 {
-    /// <summary>
-    /// Regras de entrada no Firewall do Windows para a API (TCP) e o discovery (UDP).
-    ///
-    /// Sem elas o aviso do Windows aparece no primeiro uso e, se o usuario fechar ou a rede
-    /// estiver marcada como Publica, o celular recebe timeout -- a causa mais comum de "nao
-    /// conecta". As regras valem so para a sub-rede local (remoteip=localsubnet), em qualquer
-    /// perfil de rede: redes de casa marcadas como Publica continuam funcionando, sem abrir
-    /// as portas para fora da LAN.
-    /// </summary>
     public static class FirewallSetup
     {
         public const int DiscoveryPort = 7573;
@@ -19,7 +10,6 @@ namespace DroidDeck.Lib
         private static string TcpRule => $"DroidDeck (TCP {PairingInfo.Port})";
         private static string UdpRule => $"DroidDeck discovery (UDP {DiscoveryPort})";
 
-        /// <summary>As duas regras ja existem? Consultar nao exige administrador.</summary>
         public static bool RulesExist() => RuleExists(TcpRule) && RuleExists(UdpRule);
 
         private static bool RuleExists(string name)
@@ -44,10 +34,6 @@ namespace DroidDeck.Lib
             }
         }
 
-        /// <summary>
-        /// Cria (ou recria) as regras. Pede elevacao (UAC); devolve false se o usuario
-        /// recusar ou algo falhar.
-        /// </summary>
         public static bool AddRules()
         {
             var commands = string.Join(" & ",
@@ -57,7 +43,6 @@ namespace DroidDeck.Lib
             return RunElevated(commands);
         }
 
-        /// <summary>Remove as regras (desinstalacao). Tambem pede elevacao.</summary>
         public static bool RemoveRules() => RunElevated(string.Join(" & ", Delete(TcpRule), Delete(UdpRule)));
 
         private static string Delete(string name) =>
@@ -83,7 +68,6 @@ namespace DroidDeck.Lib
             }
             catch (Exception ex)
             {
-                // ERROR_CANCELLED (1223): o usuario recusou o UAC.
                 Log.Info($"Firewall: elevacao recusada ou falhou ({ex.Message})");
                 return false;
             }

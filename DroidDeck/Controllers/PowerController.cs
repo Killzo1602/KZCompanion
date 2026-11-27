@@ -9,11 +9,9 @@ namespace DroidDeck.Controllers
     public class PowerRequest
     {
         public string? Operation { get; set; }
-        /// <summary>Reiniciar e desligar exigem confirmacao explicita (o app mostra o dialogo).</summary>
         public bool Confirm { get; set; }
     }
 
-    /// <summary>Energia do Windows pelo celular. Nada aqui executa codigo escolhido por quem chama.</summary>
     [Route("api/power")]
     [ApiController]
     [Authorize]
@@ -28,7 +26,6 @@ namespace DroidDeck.Controllers
                     LockWorkStation();
                     return Ok(new { done = "lock" });
                 case "sleep":
-                    // false,false,false = suspender (nao hibernar), sem forcar.
                     SetSuspendState(false, false, false);
                     return Ok(new { done = "sleep" });
                 case "restart":
@@ -43,11 +40,10 @@ namespace DroidDeck.Controllers
                     Shutdown("/a");
                     return Ok(new { done = "cancel" });
                 default:
-                    return BadRequest(new { error = "Operação desconhecida." });
+                    return BadRequest(new { error = "Unknown operation." });
             }
         }
 
-        // 10 s de margem: da para cancelar pelo proprio app (ou 'shutdown /a') se foi um toque errado.
         private static void Shutdown(string flag) =>
             Process.Start(new ProcessStartInfo("shutdown.exe", flag == "/a" ? "/a" : $"{flag} /t 10")
             {
